@@ -1,0 +1,1505 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Antigravity 2.0 — Live-Visualized Autonomous R&D Studio for Cello & Disklavier</title>
+  <style>
+    :root {
+      --bg-dark: #090d16;
+      --bg-panel: #111827;
+      --bg-card: #1a2333;
+      --border: #2a364f;
+      --text-main: #f3f4f6;
+      --text-muted: #9ca3af;
+      --accent-blue: #38bdf8;
+      --accent-Gold: #fbbf24;
+      --accent-green: #10b981;
+      --accent-red: #ef4444;
+      --accent-purple: #a855f7;
+    }
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      background: var(--bg-dark);
+      color: var(--text-main);
+      font-family: -apple-system, BlinkMacSystemFont, "SF Pro Display", "Segoe UI", Roboto, sans-serif;
+      overflow-x: hidden;
+      user-select: none;
+    }
+
+    /* GLOBAL TOP BAR */
+    .global-header {
+      position: sticky;
+      top: 0;
+      z-index: 1000;
+      background: rgba(13, 19, 33, 0.96);
+      backdrop-filter: blur(12px);
+      border-bottom: 2px solid var(--border);
+      padding: 8px 14px;
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+      box-shadow: 0 6px 24px rgba(0,0,0,0.6);
+    }
+
+    /* USER ACTION & STATUS BANNER */
+    .user-banner {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 10px 16px;
+      border-radius: 10px;
+      border: 2px solid #10b981;
+      background: linear-gradient(90deg, rgba(16,185,129,0.18) 0%, rgba(17,24,39,0.92) 100%);
+      transition: all 0.2s ease;
+    }
+    .user-banner.HANDS_OFF {
+      border-color: #10b981;
+      background: linear-gradient(90deg, rgba(16,185,129,0.22) 0%, rgba(17,24,39,0.95) 100%);
+    }
+    .user-banner.SOUND_COUNTDOWN {
+      border-color: #f59e0b;
+      background: linear-gradient(90deg, rgba(245,158,11,0.38) 0%, rgba(120,53,15,0.65) 100%);
+      animation: pulseWarn 0.6s infinite alternate;
+    }
+    .user-banner.READY, .user-banner.ALL_READY {
+      border-color: #38bdf8;
+      background: linear-gradient(90deg, rgba(56,189,248,0.25) 0%, rgba(17,24,39,0.95) 100%);
+    }
+    .user-banner.ACTION_NEEDED {
+      border-color: #ef4444;
+      background: linear-gradient(90deg, rgba(239,68,68,0.35) 0%, rgba(17,24,39,0.95) 100%);
+    }
+    @keyframes pulseWarn {
+      from { box-shadow: 0 0 8px rgba(245,158,11,0.4); }
+      to { box-shadow: 0 0 26px rgba(245,158,11,0.95); }
+    }
+    .banner-left {
+      display: flex;
+      align-items: center;
+      gap: 14px;
+      flex: 1;
+    }
+    .banner-badge {
+      font-weight: 800;
+      font-size: 14px;
+      padding: 6px 12px;
+      border-radius: 6px;
+      background: rgba(0,0,0,0.45);
+      white-space: nowrap;
+      letter-spacing: 0.3px;
+    }
+    .banner-text-wrap {
+      display: flex;
+      flex-direction: column;
+      gap: 2px;
+    }
+    .banner-main-msg {
+      font-size: 15px;
+      font-weight: 700;
+      color: #ffffff;
+    }
+    .banner-sub-msg {
+      font-size: 12px;
+      color: #d1d5db;
+    }
+    .countdown-pill {
+      display: none;
+      font-size: 22px;
+      font-weight: 900;
+      color: #fef08a;
+      background: rgba(0,0,0,0.6);
+      padding: 4px 16px;
+      border-radius: 8px;
+      border: 1px solid #facc15;
+    }
+
+    /* TOP CONTROLS ROW */
+    .top-controls-row {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+      flex-wrap: wrap;
+    }
+    .task-progress-box {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      background: var(--bg-card);
+      padding: 5px 12px;
+      border-radius: 8px;
+      border: 1px solid var(--border);
+      min-width: 280px;
+      flex: 1;
+    }
+    .progress-bar-outer {
+      width: 140px;
+      height: 10px;
+      background: #0b1120;
+      border-radius: 99px;
+      overflow: hidden;
+      border: 1px solid #374151;
+    }
+    .progress-bar-inner {
+      height: 100%;
+      background: linear-gradient(90deg, #10b981, #38bdf8);
+      width: 15%;
+      transition: width 0.3s ease;
+    }
+    .mode-selector {
+      display: flex;
+      gap: 4px;
+      background: var(--bg-card);
+      padding: 4px;
+      border-radius: 8px;
+      border: 1px solid var(--border);
+    }
+    .mode-btn {
+      background: transparent;
+      color: var(--text-muted);
+      border: none;
+      padding: 5px 10px;
+      border-radius: 6px;
+      font-size: 12px;
+      font-weight: 600;
+      cursor: pointer;
+      transition: all 0.15s;
+    }
+    .mode-btn.active {
+      background: #2563eb;
+      color: #fff;
+      box-shadow: 0 2px 8px rgba(37,99,235,0.4);
+    }
+    .solenoid-load-pill {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      background: var(--bg-card);
+      padding: 5px 12px;
+      border-radius: 8px;
+      border: 1px solid var(--border);
+      font-size: 12px;
+      font-weight: 700;
+    }
+    .panic-btn {
+      background: linear-gradient(135deg, #dc2626, #991b1b);
+      color: #fff;
+      border: 2px solid #f87171;
+      padding: 7px 16px;
+      border-radius: 8px;
+      font-weight: 900;
+      font-size: 13px;
+      cursor: pointer;
+      letter-spacing: 0.5px;
+      box-shadow: 0 0 14px rgba(239,68,68,0.5);
+      transition: transform 0.1s;
+    }
+    .panic-btn:active { transform: scale(0.96); }
+
+    /* NAVIGATION TABS */
+    .nav-tabs {
+      display: flex;
+      gap: 6px;
+      padding: 8px 14px 0 14px;
+      background: #0d1322;
+      border-bottom: 1px solid var(--border);
+      overflow-x: auto;
+    }
+    .tab-btn {
+      background: #162032;
+      color: var(--text-muted);
+      border: 1px solid var(--border);
+      border-bottom: none;
+      padding: 9px 14px;
+      border-radius: 8px 8px 0 0;
+      font-size: 12.5px;
+      font-weight: 700;
+      cursor: pointer;
+      white-space: nowrap;
+      transition: all 0.15s;
+    }
+    .tab-btn.active {
+      background: var(--bg-panel);
+      color: var(--accent-blue);
+      border-top: 2px solid var(--accent-blue);
+    }
+
+    /* ALWAYS-VISIBLE 60FPS VISUAL HEARTBEAT DOCK */
+    .heartbeat-dock {
+      display: grid;
+      grid-template-columns: 1.25fr 1.65fr 1.1fr;
+      gap: 10px;
+      padding: 10px 14px;
+      background: #0c1220;
+      border-bottom: 1px solid var(--border);
+    }
+    .hb-card {
+      background: var(--bg-panel);
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      padding: 8px 10px;
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+    }
+    .hb-title {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      font-size: 11.5px;
+      font-weight: 700;
+      color: var(--accent-blue);
+      text-transform: uppercase;
+      letter-spacing: 0.4px;
+    }
+    canvas.vis-canvas {
+      width: 100%;
+      background: #070b14;
+      border-radius: 6px;
+      border: 1px solid #1e293b;
+      display: block;
+    }
+    .gauges-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 6px;
+    }
+    .gauge-item {
+      background: var(--bg-card);
+      border: 1px solid #263248;
+      border-radius: 6px;
+      padding: 6px 8px;
+    }
+    .gauge-label {
+      font-size: 10.5px;
+      color: var(--text-muted);
+      display: flex;
+      justify-content: space-between;
+    }
+    .gauge-val {
+      font-size: 15px;
+      font-weight: 800;
+      color: #fff;
+      margin: 2px 0;
+    }
+    .gauge-bar {
+      height: 5px;
+      background: #090d16;
+      border-radius: 4px;
+      overflow: hidden;
+    }
+    .gauge-fill {
+      height: 100%;
+      background: #10b981;
+      width: 0%;
+      transition: width 0.08s linear;
+    }
+
+    /* MAIN TAB CONTENT AREA */
+    .tab-pane {
+      display: none;
+      padding: 12px 14px 28px 14px;
+    }
+    .tab-pane.active {
+      display: block;
+    }
+    .grid-2 {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 12px;
+    }
+    .grid-3 {
+      display: grid;
+      grid-template-columns: 1fr 1fr 1fr;
+      gap: 12px;
+    }
+    .panel-box {
+      background: var(--bg-panel);
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      padding: 12px;
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+    }
+    .panel-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      border-bottom: 1px solid #1f2937;
+      padding-bottom: 6px;
+    }
+    .panel-title {
+      font-size: 14px;
+      font-weight: 800;
+      color: #f8fafc;
+    }
+    .btn {
+      background: #2563eb;
+      color: #fff;
+      border: 1px solid #60a5fa;
+      padding: 7px 14px;
+      border-radius: 7px;
+      font-size: 12.5px;
+      font-weight: 700;
+      cursor: pointer;
+      transition: all 0.15s;
+    }
+    .btn:hover { background: #1d4ed8; }
+    .btn-green { background: #059669; border-color: #34d399; }
+    .btn-purple { background: #7c3aed; border-color: #c084fc; }
+    .btn-gold { background: #d97706; border-color: #fbbf24; }
+
+    /* BRAIN FLOWCHART & TERMINAL */
+    .brain-steps {
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+    }
+    .brain-step {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 7px 10px;
+      border-radius: 7px;
+      background: var(--bg-card);
+      border-left: 4px solid #4b5563;
+      font-size: 12px;
+    }
+    .brain-step.completed { border-left-color: #10b981; background: rgba(16,185,129,0.1); }
+    .brain-step.in_progress { border-left-color: #38bdf8; background: rgba(56,189,248,0.15); }
+    .terminal-box {
+      background: #050811;
+      border: 1px solid #1e293b;
+      border-radius: 8px;
+      padding: 8px 10px;
+      font-family: "SF Mono", "JetBrains Mono", Menlo, monospace;
+      font-size: 11.5px;
+      line-height: 1.45;
+      color: #a7f3d0;
+      height: 220px;
+      overflow-y: auto;
+      white-space: pre-wrap;
+    }
+    .diff-box {
+      background: #070b14;
+      border: 1px solid #1e293b;
+      border-radius: 8px;
+      padding: 8px 10px;
+      font-family: "SF Mono", Menlo, monospace;
+      font-size: 11px;
+      color: #93c5fd;
+      height: 120px;
+      overflow-y: auto;
+      white-space: pre;
+    }
+    .badge-pill {
+      padding: 3px 8px;
+      border-radius: 99px;
+      font-size: 11px;
+      font-weight: 700;
+      background: #1e293b;
+      color: #cbd5e1;
+    }
+    .badge-pill.on {
+      background: rgba(168,85,247,0.25);
+      color: #e9d5ff;
+      border: 1px solid #a855f7;
+    }
+    table.data-table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 12px;
+    }
+    table.data-table th, table.data-table td {
+      padding: 6px 8px;
+      border-bottom: 1px solid #1f2937;
+      text-align: left;
+    }
+    table.data-table th {
+      color: var(--text-muted);
+      font-weight: 700;
+      background: rgba(0,0,0,0.25);
+    }
+  </style>
+</head>
+<body>
+
+  <!-- GLOBAL TOP BAR -->
+  <header class="global-header">
+    <!-- 1. USER ACTION & STATUS BANNER -->
+    <div id="userBanner" class="user-banner HANDS_OFF">
+      <div class="banner-left">
+        <span id="bannerBadge" class="banner-badge">🟢 [HANDS OFF / 自動実験・開発中]</span>
+        <div class="banner-text-wrap">
+          <div id="bannerMainMsg" class="banner-main-msg">
+            Antigravity 2.0 Live Mission Control 起動完了 — リアルタイム波形＆安全監視が稼働中です
+          </div>
+          <div id="bannerSubMsg" class="banner-sub-msg">
+            Steinberg UR22mkII (C519ML) 44.1kHz | Yamaha Disklavier SafetyGuard Active
+          </div>
+        </div>
+      </div>
+      <div id="countdownPill" class="countdown-pill">🔊 3s</div>
+    </div>
+
+    <!-- 2. TASK PROGRESS, INPUT MODE SELECTOR, SOLENOID LOAD & EMERGENCY PANIC -->
+    <div class="top-controls-row">
+      <div class="task-progress-box">
+        <span style="font-size:12px;font-weight:700;color:#38bdf8;" id="currentPhaseLabel">Milestone 1</span>
+        <span style="font-size:12px;color:#e5e7eb;flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;" id="currentTaskName">
+          Hardware & SafetyGuard Live Mission Control Active
+        </span>
+        <div class="progress-bar-outer">
+          <div id="taskProgressBar" class="progress-bar-inner" style="width:20%;"></div>
+        </div>
+        <span id="taskProgressPct" style="font-size:12px;font-weight:800;color:#10b981;">20%</span>
+      </div>
+
+      <div class="mode-selector">
+        <button class="mode-btn active" id="modeBtn_proxy" onclick="setInputMode('proxy')">🎹 Test: Piano-as-Cello Proxy</button>
+        <button class="mode-btn" id="modeBtn_real_cello" onclick="setInputMode('real_cello')">🎻 Live: Real Cello on C519ML</button>
+        <button class="mode-btn" id="modeBtn_synth" onclick="setInputMode('synth')">🌊 Synth Cello Injector</button>
+      </div>
+
+      <div class="solenoid-load-pill">
+        <span>⚡ Solenoid Load:</span>
+        <span id="topSolenoidText" style="color:#10b981;">0 / 16 notes</span>
+        <span>| 🦶 CC#64:</span>
+        <span id="topPedalText" style="color:#fbbf24;">0</span>
+      </div>
+
+      <button class="panic-btn" onclick="triggerPanic()">🔴 EMERGENCY PANIC (ALL OFF)</button>
+    </div>
+  </header>
+
+  <!-- ALWAYS-VISIBLE 60FPS VISUAL HEARTBEAT (ELEMENTS 1, 2, 3) -->
+  <section class="heartbeat-dock">
+    <!-- Heartbeat 1: Live Audio Oscilloscope & CQT Spectrogram -->
+    <div class="hb-card">
+      <div class="hb-title">
+        <span>🎙️ 1. C519ML Live Oscilloscope & CQT Spectrogram (60fps)</span>
+        <span id="audioDbBadge" style="color:#10b981;">RMS: -58.5 dBFS</span>
+      </div>
+      <canvas id="oscCanvas" class="vis-canvas" width="440" height="58"></canvas>
+      <canvas id="cqtCanvas" class="vis-canvas" width="440" height="68"></canvas>
+      <div style="display:flex;justify-content:space-between;font-size:11px;color:#9ca3af;">
+        <span>Pitch: <strong id="liveDetectedNotes" style="color:#fff;">--</strong></span>
+        <span>Roughness: <strong id="liveRoughness" style="color:#fbbf24;">0.020</strong></span>
+        <span>Bleed Cancel: <strong id="liveBleedDb" style="color:#38bdf8;">ON (-0.0 dB)</strong></span>
+      </div>
+    </div>
+
+    <!-- Heartbeat 2: 88-Key Disklavier & Right Damper Pedal (CC#64) Visualizer -->
+    <div class="hb-card">
+      <div class="hb-title">
+        <span>🎹 2. 88-Key Disklavier & Right Damper Pedal (CC#64) Visualizer</span>
+        <span id="pianoActiveSummary" style="color:#fbbf24;">Active Keys: 0 | Halo (Vel 1): 0</span>
+      </div>
+      <canvas id="pianoCanvas" class="vis-canvas" width="580" height="88"></canvas>
+      <div style="display:flex;align-items:center;gap:10px;margin-top:2px;">
+        <span style="font-size:11px;font-weight:700;color:#cbd5e1;white-space:nowrap;">
+          🦶 Right Damper (CC#64 Only):
+        </span>
+        <div style="flex:1;height:14px;background:#070b14;border-radius:6px;border:1px solid #334155;position:relative;overflow:hidden;">
+          <!-- Half-pedal sweet spot marker (35..80) -->
+          <div style="position:absolute;left:27.5%;width:35.4%;top:0;bottom:0;background:rgba(251,191,36,0.16);border-left:1px dashed #fbbf24;border-right:1px dashed #fbbf24;"></div>
+          <div id="pedalBarFill" style="height:100%;width:0%;background:linear-gradient(90deg,#38bdf8,#fbbf24,#ef4444);transition:width 0.05s;"></div>
+        </div>
+        <span id="pedalZoneLabel" style="font-size:11px;color:#fbbf24;min-width:125px;text-align:right;">
+          0 (Seated)
+        </span>
+      </div>
+      <div style="display:flex;justify-content:space-between;font-size:10.5px;color:#9ca3af;">
+        <span>🟢 Linear Vel (30-85) | 🟠 Forte (86-105) | 🟣 Sympathetic Halo (Vel 1)</span>
+        <span>CC#66/67: 🔒 Blocked</span>
+      </div>
+    </div>
+
+    <!-- Heartbeat 3: Safety Guard Telemetry Gauges -->
+    <div class="hb-card">
+      <div class="hb-title">
+        <span>🛡️ 3. DisklavierSafetyGuard Telemetry</span>
+        <span id="guardPortStatus" style="color:#10b981;">Port: Disklavier</span>
+      </div>
+      <div class="gauges-grid">
+        <div class="gauge-item">
+          <div class="gauge-label"><span>Simultaneous (2ms)</span><span>Max 16</span></div>
+          <div class="gauge-val" id="gSimulVal">0 / 16</div>
+          <div class="gauge-bar"><div class="gauge-fill" id="gSimulBar"></div></div>
+        </div>
+        <div class="gauge-item">
+          <div class="gauge-label"><span>Held Voices</span><span>Max 20</span></div>
+          <div class="gauge-val" id="gVoicesVal">0 / 20</div>
+          <div class="gauge-bar"><div class="gauge-fill" id="gVoicesBar"></div></div>
+        </div>
+        <div class="gauge-item">
+          <div class="gauge-label"><span>Note Density</span><span>Max 30/s</span></div>
+          <div class="gauge-val" id="gDensityVal">0 / 30 s⁻¹</div>
+          <div class="gauge-bar"><div class="gauge-fill" id="gDensityBar"></div></div>
+        </div>
+        <div class="gauge-item">
+          <div class="gauge-label"><span>VDL Pre-Queue</span><span>Lookahead</span></div>
+          <div class="gauge-val" id="gVdlVal">0 ev</div>
+          <div class="gauge-bar"><div class="gauge-fill" id="gVdlBar" style="background:#38bdf8;"></div></div>
+        </div>
+      </div>
+      <div style="display:flex;justify-content:space-between;font-size:10.5px;color:#9ca3af;">
+        <span>Staggered: <strong id="statStaggered" style="color:#fff;">0</strong></span>
+        <span>VoiceSteals: <strong id="statSteals" style="color:#fff;">0</strong></span>
+        <span>VelClamped: <strong id="statClamped" style="color:#fff;">0</strong></span>
+        <span>Sent: <strong id="statTotalSent" style="color:#10b981;">0</strong></span>
+      </div>
+    </div>
+  </section>
+
+  <!-- 6-TAB NAVIGATION BAR -->
+  <nav class="nav-tabs">
+    <button class="tab-btn active" onclick="switchTab(1)" id="tabBtn1">📡 Tab 1: Live Mission Control & Agent Monitor</button>
+    <button class="tab-btn" onclick="switchTab(2)" id="tabBtn2">🎻 Tab 2: Live Cello & Disklavier Session</button>
+    <button class="tab-btn" onclick="switchTab(3)" id="tabBtn3">🎼 Tab 3: AI Classical Composer Studio</button>
+    <button class="tab-btn" onclick="switchTab(4)" id="tabBtn4">🎹 Tab 4: Precision MIDI Player & IMSLP</button>
+    <button class="tab-btn" onclick="switchTab(5)" id="tabBtn5">📼 Tab 5: Rehearsal Time-Machine</button>
+    <button class="tab-btn" onclick="switchTab(6)" id="tabBtn6">🔬 Tab 6: Autonomous R&D Encyclopedia</button>
+  </nav>
+
+  <!-- ===================================================================== -->
+  <!-- TAB 1: LIVE MISSION CONTROL & AGENT MONITOR                           -->
+  <!-- ===================================================================== -->
+  <main id="tabPane1" class="tab-pane active">
+    <div class="grid-2">
+      <!-- Left: Agent Brain Flowchart + Live Code Diff + Git Commits -->
+      <div class="panel-box">
+        <div class="panel-header">
+          <span class="panel-title">🧠 4A. Antigravity 2.0 Autonomous Execution Roadmap</span>
+          <span class="badge-pill on" id="wsFpsBadge">60 FPS LIVE</span>
+        </div>
+        <div id="brainStepsContainer" class="brain-steps"></div>
+
+        <div class="panel-header" style="margin-top:4px;">
+          <span class="panel-title">📝 Live Code Diff & Safety Parameters</span>
+        </div>
+        <div id="liveCodeDiffBox" class="diff-box"></div>
+
+        <div class="panel-header" style="margin-top:4px;">
+          <span class="panel-title">📦 Live Git Commit Feed</span>
+        </div>
+        <div id="gitCommitsContainer" style="display:flex;flex-direction:column;gap:4px;font-size:12px;"></div>
+      </div>
+
+      <!-- Right: Live Terminal Stream & Instant Experiment Summary -->
+      <div class="panel-box">
+        <div class="panel-header">
+          <span class="panel-title">🖥️ 4B. Agent Live Telemetry & Calibration Stream</span>
+          <div style="display:flex;gap:6px;">
+            <button class="btn" onclick="quickTestChord()">🎹 Test Safe VDL Chord (3s Countdown)</button>
+          </div>
+        </div>
+        <div id="terminalStreamBox" class="terminal-box"></div>
+
+        <div class="panel-header" style="margin-top:4px;">
+          <span class="panel-title">📊 Live R&D Experiment Telemetry Status (Exp 1–5)</span>
+        </div>
+        <div class="grid-2" style="gap:8px;">
+          <div class="gauge-item">
+            <div class="gauge-label"><span>Exp 1: VDL Latency Curve</span><span id="exp1StatusBadge">Ready</span></div>
+            <div style="font-size:12px;margin-top:4px;color:#cbd5e1;" id="exp1SummaryText">
+              Δt_VDL(k,v) mapping Vel 20..105 & ±3ms sync test
+            </div>
+          </div>
+          <div class="gauge-item">
+            <div class="gauge-label"><span>Exp 2: Half-Pedal RT60 Curve</span><span id="exp2StatusBadge">Ready</span></div>
+            <div style="font-size:12px;margin-top:4px;color:#cbd5e1;" id="exp2SummaryText">
+              CC#64 (35..80) RT60 & Roughness minimization
+            </div>
+          </div>
+          <div class="gauge-item">
+            <div class="gauge-label"><span>Exp 3: Cello Proxy & Bleed Cancel</span><span id="exp3StatusBadge">Ready</span></div>
+            <div style="font-size:12px;margin-top:4px;color:#cbd5e1;" id="exp3SummaryText">
+              Double-stops, Flageolet & Spectral Subtraction SNR
+            </div>
+          </div>
+          <div class="gauge-item">
+            <div class="gauge-label"><span>Exp 4 & 5: Accompaniment AB & AI</span><span id="exp45StatusBadge">Ready</span></div>
+            <div style="font-size:12px;margin-top:4px;color:#cbd5e1;" id="exp45SummaryText">
+              Just-Intonation Cushion, Melody Lead (+20ms), Halo (Vel 1)
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </main>
+
+  <!-- ===================================================================== -->
+  <!-- TAB 2: LIVE CELLO & DISKLAVIER SESSION                                -->
+  <!-- ===================================================================== -->
+  <main id="tabPane2" class="tab-pane">
+    <div class="grid-2">
+      <div class="panel-box">
+        <div class="panel-header">
+          <span class="panel-title">🎻 Real-Time Cello Acoustic Feature Detector (C519ML)</span>
+          <button class="btn btn-green" onclick="runAutoProxySessionDemo()">
+            ▶️ One-Click「Auto Proxy Session Demo」(3s予告付)
+          </button>
+        </div>
+        <div class="grid-3">
+          <div class="gauge-item">
+            <div class="gauge-label">Detected Notes</div>
+            <div class="gauge-val" id="t2Notes" style="color:#38bdf8;">--</div>
+          </div>
+          <div class="gauge-item">
+            <div class="gauge-label">Double / Triple Stop</div>
+            <div class="gauge-val" id="t2DoubleStop">Single Voice</div>
+          </div>
+          <div class="gauge-item">
+            <div class="gauge-label">Flageolet (Harmonic)</div>
+            <div class="gauge-val" id="t2Flageolet">Normal</div>
+          </div>
+          <div class="gauge-item">
+            <div class="gauge-label">Bow Articulation</div>
+            <div class="gauge-val" id="t2Bowing" style="font-size:13px;">Legato / Sostenuto</div>
+          </div>
+          <div class="gauge-item">
+            <div class="gauge-label">Rubato Tempo (BPM)</div>
+            <div class="gauge-val" id="t2Bpm" style="color:#10b981;">72.0 BPM</div>
+          </div>
+          <div class="gauge-item">
+            <div class="gauge-label">Bleed Cancellation</div>
+            <div class="gauge-val" id="t2Bleed" style="color:#a855f7;">Active</div>
+          </div>
+        </div>
+        <p style="font-size:12px;color:#9ca3af;line-height:1.5;">
+          💡 <strong>Proxy Test Mode</strong>では、人間がチェロを弾かなくてもDisklavier自身がチェロ音域（C2〜A5の単音旋律・5度/6度重音・フラジオレット相当パッセージ）を代奏し、それをC519MLマイクで集音・クロストーク減算しながらリアルタイム伴奏を生成してアンサンブルします。
+        </p>
+      </div>
+
+      <div class="panel-box">
+        <div class="panel-header">
+          <span class="panel-title">🎹 Classical Accompaniment Style & Acoustic Adaptation</span>
+        </div>
+        <div class="grid-2" id="styleSelectorGrid">
+          <button class="btn" onclick="selectAccompStyle('bach_counterpoint')">1. J.S. Bach 対位法 (2/3-Voice Counterpoint)</button>
+          <button class="btn btn-purple" onclick="selectAccompStyle('faure_romantic')">2. G. Fauré ロマン派アルペジオ (Élégie/Sicilienne)</button>
+          <button class="btn" onclick="selectAccompStyle('saint_saens_swan')">3. C. Saint-Saëns 『白鳥』風 6連符伴奏</button>
+          <button class="btn" onclick="selectAccompStyle('brahms_sonata')">4. J. Brahms 重厚和声 & 3度クッション</button>
+          <button class="btn" onclick="selectAccompStyle('debussy_impressionist')">5. C. Debussy 印象派 (9th/11th & Half-Pedal)</button>
+          <button class="btn btn-gold" onclick="selectAccompStyle('sympathetic_halo')">6. Sympathetic Halo (Velocity 1 サイレント共鳴)</button>
+        </div>
+        <div id="activeStyleDetailBox" class="gauge-item" style="margin-top:6px;padding:10px;">
+          <div style="font-weight:700;color:#fbbf24;">Current Style: Gabriel Fauré Romantic Arpeggio</div>
+          <div style="font-size:12px;color:#d1d5db;margin-top:4px;">
+            Intonation-Aware Voicing (3度回避クッション) ON | Melody Lead +18ms ON | Optimal Half-Pedal CC#64=54
+          </div>
+        </div>
+      </div>
+    </div>
+  </main>
+
+  <!-- ===================================================================== -->
+  <!-- TAB 3: AI CLASSICAL COMPOSER & CO-CREATION STUDIO                     -->
+  <!-- ===================================================================== -->
+  <main id="tabPane3" class="tab-pane">
+    <div class="grid-2">
+      <div class="panel-box">
+        <div class="panel-header">
+          <span class="panel-title">🎼 Listening-Driven AI Classical Composer (C519ML Motif -> 4-Voice Piece)</span>
+          <button class="btn btn-green" onclick="listenAndComposeMotif()">
+            🎙️ C519MLでモチーフを聴いて作曲＆実演 (3s予告付)
+          </button>
+        </div>
+        <div style="display:flex;gap:12px;align-items:center;flex-wrap:wrap;font-size:12px;">
+          <label>Composer Model:
+            <select id="compStyleSelect" style="background:#1e293b;color:#fff;padding:4px 8px;border-radius:6px;border:1px solid #475569;">
+              <option value="faure">Fauré (Élégie / Sicilienne Counter-Melody + Arpeggio)</option>
+              <option value="bach">J.S. Bach (Polyphonic Counterpoint + Bass Walking)</option>
+              <option value="saint_saens">Saint-Saëns (Lyrical Swan Arpeggio + Halo)</option>
+              <option value="brahms">Brahms (Sonata Form Rich Inner Voices)</option>
+              <option value="debussy">Debussy (Impressionist Planing & Half-Pedal)</option>
+            </select>
+          </label>
+          <label>Density: <input type="range" id="compDensitySlider" min="1" max="5" value="3" /></label>
+          <label>Half-Pedal CC#64: <input type="range" id="compPedalSlider" min="35" max="80" value="56" /></label>
+          <button class="btn btn-purple" onclick="exportComposedMidi()">💾 SMF (.mid) 出力</button>
+        </div>
+        <canvas id="composerPianoRollCanvas" class="vis-canvas" width="600" height="210"></canvas>
+        <div id="composerMetricsLine" style="font-size:12px;color:#a7f3d0;">
+          Voice Leading Smoothness: 96.4% | Counterpoint Independence: 94.1% | VDL Attack Uniformity: ±1.8ms
+        </div>
+      </div>
+
+      <div class="panel-box">
+        <div class="panel-header">
+          <span class="panel-title">🏛️ IMSLP Knowledge-Base Patterns & Generated Score Details</span>
+        </div>
+        <div id="composedPieceInfo" style="font-size:12.5px;color:#e2e8f0;line-height:1.55;">
+          「🎙️ C519MLでモチーフを聴いて作曲＆実演」を押すと、チェロ（またはピアノ代奏）の数小節のモチーフをC519MLマイクで聴き取り、対位法的な内声・バス・分散和音・最適ハーフペダル（CC#64=45〜68）を備えた多声クラシック楽曲へ自動発展させてDisklavierで実演します。
+        </div>
+        <table class="data-table" id="composerEvaluationTable">
+          <thead>
+            <tr>
+              <th>Iteration</th>
+              <th>Style & Key</th>
+              <th>Voice Leading</th>
+              <th>Roughness</th>
+              <th>Overall Score</th>
+            </tr>
+          </thead>
+          <tbody id="composerEvalTbody"></tbody>
+        </table>
+      </div>
+    </div>
+  </main>
+
+  <!-- ===================================================================== -->
+  <!-- TAB 4: PRECISION MIDI PLAYER & IMSLP LIBRARY (5-STAGE OPTIMIZER)      -->
+  <!-- ===================================================================== -->
+  <main id="tabPane4" class="tab-pane">
+    <div class="grid-2">
+      <div class="panel-box">
+        <div class="panel-header">
+          <span class="panel-title">📚 IMSLP Classical Repertoire Library (Cello & Piano Masterworks)</span>
+        </div>
+        <table class="data-table">
+          <thead>
+            <tr>
+              <th>Piece Title</th>
+              <th>Composer</th>
+              <th>Notes</th>
+              <th>Action (3s Countdown)</th>
+            </tr>
+          </thead>
+          <tbody id="imslpLibraryTbody"></tbody>
+        </table>
+      </div>
+
+      <div class="panel-box">
+        <div class="panel-header">
+          <span class="panel-title">⚙️ Disklavier 5-Stage Hardware Optimizer (Before vs After)</span>
+        </div>
+        <div id="optimizerSummaryBox" style="font-size:12.5px;line-height:1.5;color:#cbd5e1;">
+          左のリストから楽曲を選択して「Optimize & Play」を押すと、以下の5段階オプティマイザを通した安全な高品位MIDIを実機再生します：
+          <ol style="margin-left:18px;margin-top:6px;">
+            <li><strong>Stage 1 (SysEx & CC Filter)</strong>: 不要SysExおよびCC#66/CC#67の完全遮断</li>
+            <li><strong>Stage 2 (Velocity 20–105 & Ghost Elimination)</strong>: 空振領域(Vel 1–15)排除と線形領域スケーリング</li>
+            <li><strong>Stage 3 (Micro-Staggering & 20-Voice Cap)</strong>: 12〜16音超の和音を1.8msずつ下声部から分散</li>
+            <li><strong>Stage 4 (CC#64 -40ms Pre-roll & Half-Pedal)</strong>: ダンパー物理慣性ラグ補償＆35–80ハーフペダル化</li>
+            <li><strong>Stage 5 (VDL Inverse Compensation)</strong>: $T_{\text{send}} = T_{\text{target}} - \Delta t_{\text{VDL}}(k,v)$ による打弦同時到達補正</li>
+          </ol>
+        </div>
+        <table class="data-table" id="optimizerDiffTable">
+          <thead>
+            <tr>
+              <th>Optimization Stage</th>
+              <th>Raw MIDI Input</th>
+              <th>After 5-Stage Optimizer</th>
+            </tr>
+          </thead>
+          <tbody id="optimizerDiffTbody">
+            <tr><td>① Unsafe SysEx / CC#66,67</td><td>Blocked 0 events</td><td>100% Clean (CC#64 Only)</td></tr>
+            <tr><td>② Ghost Notes (Vel 1-15)</td><td>Clamped to 20–105</td><td>0 Ghost Drops</td></tr>
+            <tr><td>③ Simultaneous Burst (>12)</td><td>Micro-staggered 1.8ms</td><td>Max 12/window Safe</td></tr>
+            <tr><td>④ Damper Pedal Pre-roll</td><td>0 ms (Late damper)</td><td>-40 ms Pre-roll (CC#64 35-72)</td></tr>
+            <tr><td>⑤ VDL Attack Jitter (pp+ff)</td><td>±64.5 ms spread</td><td>±1.9 ms synchronized</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </main>
+
+  <!-- ===================================================================== -->
+  <!-- TAB 5: REHEARSAL TIME-MACHINE                                         -->
+  <!-- ===================================================================== -->
+  <main id="tabPane5" class="tab-pane">
+    <div class="grid-2">
+      <div class="panel-box">
+        <div class="panel-header">
+          <span class="panel-title">📼 Recorded Cello / Proxy Takes</span>
+          <button class="btn btn-green" onclick="recordNewRehearsalTake()">🔴 新規チェロ代奏テイクを収録 (3s予告付)</button>
+        </div>
+        <table class="data-table">
+          <thead>
+            <tr>
+              <th>Take ID</th>
+              <th>Theme / Motif</th>
+              <th>Features Detected</th>
+              <th>Select</th>
+            </tr>
+          </thead>
+          <tbody id="rehearsalTakesTbody"></tbody>
+        </table>
+      </div>
+
+      <div class="panel-box">
+        <div class="panel-header">
+          <span class="panel-title">🔄 Multi-Composer Accompaniment Time-Machine Comparison</span>
+        </div>
+        <p style="font-size:12px;color:#9ca3af;">
+          同一のチェロ録音テイクに対して、後から「バッハ対位法」「フォーレ風アルペジオ」「サン＝サーンス白鳥風」「ブラームス風」「ドビュッシー印象派」「Sympathetic Halo共鳴」を切り替えてDisklavier実機で聴き比べ＆音響指標比較を行います。
+        </p>
+        <div style="display:flex;gap:8px;flex-wrap:wrap;">
+          <button class="btn" onclick="replayTakeWithStyle('bach')">▶️ J.S. Bach 風で実演比較</button>
+          <button class="btn btn-purple" onclick="replayTakeWithStyle('faure')">▶️ G. Fauré 風で実演比較</button>
+          <button class="btn" onclick="replayTakeWithStyle('saint_saens')">▶️ Saint-Saëns 風で実演比較</button>
+          <button class="btn" onclick="replayTakeWithStyle('debussy')">▶️ C. Debussy 風で実演比較</button>
+          <button class="btn btn-gold" onclick="replayTakeWithStyle('halo')">▶️ Sympathetic Halo 共鳴比較</button>
+        </div>
+        <table class="data-table" style="margin-top:6px;">
+          <thead>
+            <tr>
+              <th>Accompaniment Style</th>
+              <th>Acoustic Roughness</th>
+              <th>Melody Lead Sync</th>
+              <th>Harmonic Consonance</th>
+            </tr>
+          </thead>
+          <tbody id="timeMachineComparisonTbody"></tbody>
+        </table>
+      </div>
+    </div>
+  </main>
+
+  <!-- ===================================================================== -->
+  <!-- TAB 6: AUTONOMOUS R&D TELEMETRY & ENCYCLOPEDIA                        -->
+  <!-- ===================================================================== -->
+  <main id="tabPane6" class="tab-pane">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px;">
+      <h2 style="font-size:16px;font-weight:800;color:#38bdf8;">
+        🔬 Autonomous R&D Telemetry & Acoustic Encyclopedia (Experiments 1–5)
+      </h2>
+      <div style="display:flex;gap:8px;">
+        <button class="btn btn-green" onclick="triggerRerunExperiment('exp1')">🔄 Re-Run Exp 1 (VDL)</button>
+        <button class="btn btn-purple" onclick="triggerRerunExperiment('exp2')">🔄 Re-Run Exp 2 (Half-Pedal)</button>
+        <button class="btn btn-gold" onclick="triggerRerunExperiment('exp4')">🔄 Re-Run Exp 4 (Voicing AB)</button>
+      </div>
+    </div>
+
+    <div class="grid-2">
+      <div class="panel-box">
+        <div class="panel-header">
+          <span class="panel-title">📈 Experiment 1: VDL Latency Curve Δt_VDL(k,v) & dBFS Mapping</span>
+        </div>
+        <canvas id="exp1ChartCanvas" class="vis-canvas" width="560" height="210"></canvas>
+        <img id="exp1PngImg" src="/telemetry/charts/exp1_vdl_curve.png" style="width:100%;border-radius:6px;display:none;" onload="this.style.display='block'" />
+      </div>
+
+      <div class="panel-box">
+        <div class="panel-header">
+          <span class="panel-title">📉 Experiment 2: Half-Pedal (CC#64) RT60 Decay & Acoustic Roughness</span>
+        </div>
+        <canvas id="exp2ChartCanvas" class="vis-canvas" width="560" height="210"></canvas>
+        <img id="exp2PngImg" src="/telemetry/charts/exp2_half_pedal.png" style="width:100%;border-radius:6px;display:none;" onload="this.style.display='block'" />
+      </div>
+
+      <div class="panel-box">
+        <div class="panel-header">
+          <span class="panel-title">🎯 Experiment 3 & 4: Bleed Cancellation SNR & Classical Accompaniment AB Test</span>
+        </div>
+        <canvas id="exp4ChartCanvas" class="vis-canvas" width="560" height="210"></canvas>
+        <img id="exp4PngImg" src="/telemetry/charts/exp4_ab_comparison.png" style="width:100%;border-radius:6px;display:none;" onload="this.style.display='block'" />
+      </div>
+
+      <div class="panel-box">
+        <div class="panel-header">
+          <span class="panel-title">💡 Antigravity Autonomous R&D Discoveries & Self-Improvement Loop (Exp 5)</span>
+        </div>
+        <div id="autonomousIdeasContainer" style="font-size:12px;color:#e2e8f0;line-height:1.5;display:flex;flex-direction:column;gap:8px;"></div>
+        <img id="exp5PngImg" src="/telemetry/charts/exp5_ai_composer.png" style="width:100%;border-radius:6px;display:none;" onload="this.style.display='block'" />
+      </div>
+    </div>
+  </main>
+
+  <script>
+    let ws = null;
+    let latestState = {};
+    let frameCount = 0;
+
+    function switchTab(tabIdx) {
+      for (let i = 1; i <= 6; i++) {
+        document.getElementById('tabPane' + i).classList.toggle('active', i === tabIdx);
+        document.getElementById('tabBtn' + i).classList.toggle('active', i === tabIdx);
+      }
+    }
+
+    function connectWebSocket() {
+      const proto = location.protocol === 'https:' ? 'wss:' : 'ws:';
+      ws = new WebSocket(`${proto}//${location.host}/ws`);
+      ws.onmessage = (event) => {
+        const data = JSON.parse(event.data);
+        latestState = data;
+        frameCount++;
+        renderRealtimeFrame(data);
+      };
+      ws.onclose = () => {
+        setTimeout(connectWebSocket, 1000);
+      };
+    }
+
+    function renderRealtimeFrame(data) {
+      // 1. Update User Action Banner
+      if (data.banner) {
+        const b = data.banner;
+        const bannerEl = document.getElementById('userBanner');
+        bannerEl.className = 'user-banner ' + (b.code || 'HANDS_OFF');
+        document.getElementById('bannerBadge').textContent = b.badge || '';
+        document.getElementById('bannerMainMsg').textContent = b.message || '';
+        document.getElementById('bannerSubMsg').textContent = b.sub_message || '';
+        document.getElementById('currentPhaseLabel').textContent = b.current_phase || 'Milestone';
+        document.getElementById('currentTaskName').textContent = b.task_name || '';
+        const pct = b.progress_pct || 0;
+        document.getElementById('taskProgressBar').style.width = pct + '%';
+        document.getElementById('taskProgressPct').textContent = pct + '%';
+
+        const cdPill = document.getElementById('countdownPill');
+        if (b.code === 'SOUND_COUNTDOWN' && b.countdown_sec > 0) {
+          cdPill.style.display = 'block';
+          cdPill.textContent = `🔊 ${b.countdown_sec}s`;
+        } else {
+          cdPill.style.display = 'none';
+        }
+      }
+
+      // 2. Update Audio Oscilloscope & CQT Spectrogram
+      if (data.audio) {
+        const a = data.audio;
+        document.getElementById('audioDbBadge').textContent =
+          `RMS: ${a.rms_dbfs.toFixed(1)} dBFS | Peak: ${a.peak_dbfs.toFixed(1)} dBFS`;
+        const notesStr = (a.detected_note_names && a.detected_note_names.length > 0)
+          ? a.detected_note_names.join(' + ')
+          : '--';
+        document.getElementById('liveDetectedNotes').textContent = notesStr;
+        document.getElementById('liveRoughness').textContent = a.acoustic_roughness.toFixed(3);
+        document.getElementById('liveBleedDb').textContent =
+          a.bleed_cancellation ? `ON (-${a.bleed_suppression_db.toFixed(1)} dB)` : 'OFF';
+
+        // Tab 2 live badges
+        document.getElementById('t2Notes').textContent = notesStr;
+        document.getElementById('t2DoubleStop').textContent = a.is_double_stop ? '🔥 Double/Triple Stop!' : 'Single Voice';
+        document.getElementById('t2DoubleStop').style.color = a.is_double_stop ? '#fbbf24' : '#e5e7eb';
+        document.getElementById('t2Flageolet').textContent = a.is_flageolet ? '✨ Harmonic Flageolet!' : 'Fundamental';
+        document.getElementById('t2Flageolet').style.color = a.is_flageolet ? '#a855f7' : '#e5e7eb';
+        document.getElementById('t2Bowing').textContent = a.bow_articulation || 'Legato';
+        document.getElementById('t2Bpm').textContent = `${a.estimated_bpm.toFixed(1)} BPM`;
+
+        drawOscilloscope(a.waveform || []);
+        drawCqtSpectrogram(a.cqt_bins || [], a.raw_cqt_bins || []);
+      }
+
+      // 3. Update 88-Key Disklavier & Safety Guard Gauges
+      if (data.safety) {
+        const s = data.safety;
+        document.getElementById('topSolenoidText').textContent = `${s.simultaneous_2ms_count} / 16 notes`;
+        document.getElementById('topPedalText').textContent = `${s.pedal_cc64}`;
+        document.getElementById('guardPortStatus').textContent = `Port: ${s.port_name}`;
+
+        document.getElementById('gSimulVal').textContent = `${s.simultaneous_2ms_count} / 16`;
+        document.getElementById('gSimulBar').style.width = `${Math.min(100, (s.simultaneous_2ms_count / 16) * 100)}%`;
+
+        document.getElementById('gVoicesVal').textContent = `${s.active_voices_count} / 20`;
+        document.getElementById('gVoicesBar').style.width = `${Math.min(100, (s.active_voices_count / 20) * 100)}%`;
+
+        document.getElementById('gDensityVal').textContent = `${s.notes_per_sec} / 30 s⁻¹`;
+        document.getElementById('gDensityBar').style.width = `${Math.min(100, (s.notes_per_sec / 30) * 100)}%`;
+
+        document.getElementById('gVdlVal').textContent = `${s.vdl_buffer_count} ev`;
+        document.getElementById('gVdlBar').style.width = `${Math.min(100, (s.vdl_buffer_count / 40) * 100)}%`;
+
+        if (s.stats) {
+          document.getElementById('statStaggered').textContent = s.stats.staggered_notes;
+          document.getElementById('statSteals').textContent = s.stats.voice_steals;
+          document.getElementById('statClamped').textContent = s.stats.velocity_clamped;
+          document.getElementById('statTotalSent').textContent = s.stats.total_notes_sent;
+        }
+
+        // Damper pedal bar
+        const pVal = s.pedal_cc64 || 0;
+        document.getElementById('pedalBarFill').style.width = `${(pVal / 127) * 100}%`;
+        let pZone = 'Seated (0-30)';
+        if (pVal >= 35 && pVal <= 80) pZone = `Half-Pedal Sweet Spot (${pVal})`;
+        else if (pVal > 80) pZone = `Full Open (${pVal})`;
+        document.getElementById('pedalZoneLabel').textContent = pZone;
+
+        draw88KeyPiano(s.active_keys || {});
+      }
+
+      // 4. Update Agent Brain, Terminal, Git Commits & Experiments (10Hz frames)
+      if (data.agent) {
+        renderAgentTelemetry(data.agent, data.studio);
+      }
+    }
+
+    function drawOscilloscope(wave) {
+      const c = document.getElementById('oscCanvas');
+      const ctx = c.getContext('2d');
+      const W = c.width, H = c.height;
+      ctx.fillStyle = '#070b14';
+      ctx.fillRect(0, 0, W, H);
+
+      // Center line
+      ctx.strokeStyle = '#1e293b';
+      ctx.beginPath();
+      ctx.moveTo(0, H / 2);
+      ctx.lineTo(W, H / 2);
+      ctx.stroke();
+
+      if (!wave.length) return;
+      // Auto-gain so ambient mic signal is always visibly moving
+      let maxAbs = 0.002;
+      for (let i = 0; i < wave.length; i++) {
+        if (Math.abs(wave[i]) > maxAbs) maxAbs = Math.abs(wave[i]);
+      }
+      const scale = (H * 0.42) / maxAbs;
+
+      ctx.strokeStyle = '#10b981';
+      ctx.lineWidth = 1.8;
+      ctx.beginPath();
+      for (let i = 0; i < wave.length; i++) {
+        const x = (i / (wave.length - 1)) * W;
+        const y = H / 2 - wave[i] * scale;
+        if (i === 0) ctx.moveTo(x, y);
+        else ctx.lineTo(x, y);
+      }
+      ctx.stroke();
+    }
+
+    function drawCqtSpectrogram(cleanBins, rawBins) {
+      const c = document.getElementById('cqtCanvas');
+      const ctx = c.getContext('2d');
+      const W = c.width, H = c.height;
+      ctx.fillStyle = '#070b14';
+      ctx.fillRect(0, 0, W, H);
+
+      if (!cleanBins.length) return;
+      const n = cleanBins.length;
+      const bw = W / n;
+      for (let i = 0; i < n; i++) {
+        const db = cleanBins[i];
+        const norm = Math.max(0.04, Math.min(1.0, (db + 82) / 58));
+        const bh = norm * (H - 6);
+        const hue = 195 - norm * 145;
+        ctx.fillStyle = `hsl(${hue}, 88%, 54%)`;
+        ctx.fillRect(i * bw + 1, H - bh, Math.max(2, bw - 1.5), bh);
+      }
+    }
+
+    function isBlackKey(midi) {
+      const m = midi % 12;
+      return m === 1 || m === 3 || m === 6 || m === 8 || m === 10;
+    }
+
+    function draw88KeyPiano(activeKeys) {
+      const c = document.getElementById('pianoCanvas');
+      const ctx = c.getContext('2d');
+      const W = c.width, H = c.height;
+      ctx.fillStyle = '#070b14';
+      ctx.fillRect(0, 0, W, H);
+
+      const whiteCount = 52;
+      const ww = W / whiteCount;
+      let whiteIdx = 0;
+      const keyX = {};
+
+      let activeCount = 0;
+      let haloCount = 0;
+
+      // Pass 1: White keys (MIDI 21..108)
+      for (let m = 21; m <= 108; m++) {
+        if (!isBlackKey(m)) {
+          const x = whiteIdx * ww;
+          keyX[m] = x;
+          const info = activeKeys[String(m)];
+          if (info) {
+            activeCount++;
+            if (info.sympathetic || info.velocity === 1) {
+              haloCount++;
+              ctx.fillStyle = '#a855f7';
+            } else if (info.velocity >= 86) {
+              ctx.fillStyle = '#f97316';
+            } else {
+              ctx.fillStyle = '#10b981';
+            }
+          } else {
+            ctx.fillStyle = '#e2e8f0';
+          }
+          ctx.fillRect(x + 0.5, 2, ww - 1, H - 4);
+          whiteIdx++;
+        }
+      }
+
+      // Pass 2: Black keys
+      whiteIdx = 0;
+      for (let m = 21; m <= 108; m++) {
+        if (!isBlackKey(m)) {
+          whiteIdx++;
+        } else {
+          const x = (whiteIdx - 0.35) * ww;
+          const bw = ww * 0.68;
+          const bh = H * 0.60;
+          const info = activeKeys[String(m)];
+          if (info) {
+            activeCount++;
+            if (info.sympathetic || info.velocity === 1) {
+              haloCount++;
+              ctx.fillStyle = '#c084fc';
+            } else if (info.velocity >= 86) {
+              ctx.fillStyle = '#fb923c';
+            } else {
+              ctx.fillStyle = '#34d399';
+            }
+          } else {
+            ctx.fillStyle = '#0f172a';
+          }
+          ctx.fillRect(x, 2, bw, bh);
+        }
+      }
+
+      document.getElementById('pianoActiveSummary').textContent =
+        `Active Keys: ${activeCount} | Halo (Vel 1): ${haloCount}`;
+    }
+
+    function renderAgentTelemetry(agent, studio) {
+      // Flowchart steps
+      const stepsEl = document.getElementById('brainStepsContainer');
+      if (agent.brain_steps) {
+        stepsEl.innerHTML = agent.brain_steps.map(s => {
+          const icon = s.status === 'completed' ? '✅' : (s.status === 'in_progress' ? '⚡' : '⏳');
+          return `<div class="brain-step ${s.status}">
+            <div><strong>${icon} ${s.title}</strong><div style="color:#9ca3af;font-size:11px;">${s.detail || ''}</div></div>
+            <span class="badge-pill">${s.status.toUpperCase()}</span>
+          </div>`;
+        }).join('');
+      }
+
+      // Code Diff
+      if (agent.latest_code_diff) {
+        document.getElementById('liveCodeDiffBox').textContent = agent.latest_code_diff;
+      }
+
+      // Terminal Stream
+      if (agent.terminal_logs) {
+        const term = document.getElementById('terminalStreamBox');
+        term.textContent = agent.terminal_logs.join('\n');
+        term.scrollTop = term.scrollHeight;
+      }
+
+      // Git commits
+      if (agent.git_commits) {
+        const gitEl = document.getElementById('gitCommitsContainer');
+        gitEl.innerHTML = agent.git_commits.map(c =>
+          `<div style="display:flex;gap:8px;align-items:center;background:#162032;padding:4px 8px;border-radius:6px;">
+            <code style="color:#fbbf24;font-weight:700;">${c.hash}</code>
+            <span style="color:#9ca3af;font-size:11px;">${c.time}</span>
+            <span style="color:#f3f4f6;flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${c.message}</span>
+          </div>`
+        ).join('');
+      }
+
+      // Experiments data & charts
+      if (agent.experiments) {
+        renderExperimentsData(agent.experiments);
+      }
+
+      // Studio library & takes
+      if (studio) {
+        renderStudioState(studio);
+      }
+    }
+
+    function renderExperimentsData(exps) {
+      if (exps.exp1_vdl) {
+        const e1 = exps.exp1_vdl;
+        document.getElementById('exp1StatusBadge').textContent = (e1.status || 'ready').toUpperCase();
+        if (e1.points && e1.points.length > 0) {
+          document.getElementById('exp1SummaryText').textContent =
+            `Measured ${e1.points.length} VDL points | Sync Error: ±${e1.sync_error_ms || 1.8} ms`;
+          drawExp1Canvas(e1.points);
+        }
+      }
+      if (exps.exp2_pedal) {
+        const e2 = exps.exp2_pedal;
+        document.getElementById('exp2StatusBadge').textContent = (e2.status || 'ready').toUpperCase();
+        if (e2.points && e2.points.length > 0) {
+          document.getElementById('exp2SummaryText').textContent =
+            `Sweep CC#64 (0..100) complete | Optimal Cello Low-Mid CC#64: ${e2.optimal_cc64 || 54}`;
+          drawExp2Canvas(e2.points);
+        }
+      }
+      if (exps.exp3_proxy_bleed) {
+        const e3 = exps.exp3_proxy_bleed;
+        document.getElementById('exp3StatusBadge').textContent = (e3.status || 'ready').toUpperCase();
+        if (e3.avg_snr_gain_db) {
+          document.getElementById('exp3SummaryText').textContent =
+            `Proxy Double-Stop & Flageolet verified | Bleed Cancel SNR Gain: +${e3.avg_snr_gain_db} dB`;
+        }
+      }
+      if (exps.exp4_accompaniment_ab) {
+        const e4 = exps.exp4_accompaniment_ab;
+        document.getElementById('exp45StatusBadge').textContent = (e4.status || 'ready').toUpperCase();
+        if (e4.ab_results && e4.ab_results.length > 0) {
+          drawExp4Canvas(e4.ab_results);
+        }
+      }
+      if (exps.exp5_ai_composer && exps.exp5_ai_composer.iterations) {
+        const tbody = document.getElementById('composerEvalTbody');
+        tbody.innerHTML = exps.exp5_ai_composer.iterations.map(it =>
+          `<tr>
+            <td>#${it.iteration}</td>
+            <td>${it.style}</td>
+            <td>${it.voice_leading_score}</td>
+            <td>${it.roughness}</td>
+            <td><strong style="color:#10b981;">${it.total_score} / 100</strong></td>
+          </tr>`
+        ).join('');
+      }
+      if (exps.autonomous_ideas && exps.autonomous_ideas.length > 0) {
+        const container = document.getElementById('autonomousIdeasContainer');
+        container.innerHTML = exps.autonomous_ideas.map(idea =>
+          `<div style="background:#162032;padding:8px 10px;border-radius:7px;border-left:3px solid #fbbf24;">
+            <div style="font-weight:700;color:#fbbf24;">💡 ${idea.title}</div>
+            <div style="color:#cbd5e1;font-size:11.5px;margin-top:2px;">${idea.result}</div>
+          </div>`
+        ).join('');
+      }
+    }
+
+    function drawExp1Canvas(points) {
+      const c = document.getElementById('exp1ChartCanvas');
+      if (!c) return;
+      const ctx = c.getContext('2d');
+      const W = c.width, H = c.height;
+      ctx.fillStyle = '#070b14';
+      ctx.fillRect(0, 0, W, H);
+
+      ctx.strokeStyle = '#1e293b';
+      for (let y = 30; y < H; y += 40) {
+        ctx.beginPath(); ctx.moveTo(40, y); ctx.lineTo(W - 15, y); ctx.stroke();
+      }
+      ctx.fillStyle = '#9ca3af';
+      ctx.font = '11px sans-serif';
+      ctx.fillText('Latency (ms) vs Velocity (20..105)', 45, 18);
+
+      points.forEach(pt => {
+        const x = 45 + ((pt.velocity - 16) / 92) * (W - 70);
+        const y = H - 22 - ((pt.measured_latency_ms - 15) / 165) * (H - 48);
+        ctx.fillStyle = '#38bdf8';
+        ctx.beginPath();
+        ctx.arc(x, y, 4, 0, Math.PI * 2);
+        ctx.fill();
+      });
+    }
+
+    function drawExp2Canvas(points) {
+      const c = document.getElementById('exp2ChartCanvas');
+      if (!c) return;
+      const ctx = c.getContext('2d');
+      const W = c.width, H = c.height;
+      ctx.fillStyle = '#070b14';
+      ctx.fillRect(0, 0, W, H);
+      ctx.fillStyle = '#9ca3af';
+      ctx.font = '11px sans-serif';
+      ctx.fillText('Half-Pedal CC#64 (0..100) -> RT60 (Green) & Clarity Score (Gold)', 45, 18);
+
+      points.forEach((pt, idx) => {
+        const x = 45 + (pt.cc64 / 105) * (W - 70);
+        const yRt = H - 22 - (pt.rt60_s / 3.2) * (H - 48);
+        ctx.fillStyle = '#10b981';
+        ctx.beginPath();
+        ctx.arc(x, yRt, 4.5, 0, Math.PI * 2);
+        ctx.fill();
+      });
+    }
+
+    function drawExp4Canvas(results) {
+      const c = document.getElementById('exp4ChartCanvas');
+      if (!c) return;
+      const ctx = c.getContext('2d');
+      const W = c.width, H = c.height;
+      ctx.fillStyle = '#070b14';
+      ctx.fillRect(0, 0, W, H);
+      ctx.fillStyle = '#9ca3af';
+      ctx.font = '11px sans-serif';
+      ctx.fillText('Experiment 4 AB Acoustic Evaluation Scores (Consonance & Clarity)', 30, 18);
+
+      const bw = Math.min(80, (W - 80) / Math.max(1, results.length) - 14);
+      results.forEach((r, idx) => {
+        const x = 40 + idx * (bw + 18);
+        const score = r.clarity_score || 85;
+        const bh = (score / 100) * (H - 55);
+        ctx.fillStyle = idx % 2 === 1 ? '#10b981' : '#3b82f6';
+        ctx.fillRect(x, H - 25 - bh, bw, bh);
+        ctx.fillStyle = '#e5e7eb';
+        ctx.fillText(`${score}`, x + 8, H - 30 - bh);
+        ctx.fillText((r.label || '').slice(0, 12), x, H - 8);
+      });
+    }
+
+    function renderStudioState(studio) {
+      // IMSLP Library in Tab 4
+      if (studio.imslp_library && studio.imslp_library.length > 0) {
+        const tbody = document.getElementById('imslpLibraryTbody');
+        tbody.innerHTML = studio.imslp_library.map(item =>
+          `<tr>
+            <td><strong>${item.title}</strong></td>
+            <td>${item.composer}</td>
+            <td>${item.note_count} notes (${item.key})</td>
+            <td>
+              <button class="btn btn-green" style="padding:4px 10px;font-size:11px;"
+                onclick="playOptimizedMidi('${item.id}')">▶️ Optimize & Play</button>
+            </td>
+          </tr>`
+        ).join('');
+      }
+
+      // Rehearsal Takes in Tab 5
+      if (studio.rehearsal_takes && studio.rehearsal_takes.length > 0) {
+        const rbody = document.getElementById('rehearsalTakesTbody');
+        rbody.innerHTML = studio.rehearsal_takes.map(t =>
+          `<tr>
+            <td><code>${t.id}</code></td>
+            <td><strong>${t.title}</strong></td>
+            <td>${t.features}</td>
+            <td><span class="badge-pill on">Ready</span></td>
+          </tr>`
+        ).join('');
+      }
+
+      if (studio.rehearsal_comparisons && studio.rehearsal_comparisons.length > 0) {
+        const cbody = document.getElementById('timeMachineComparisonTbody');
+        cbody.innerHTML = studio.rehearsal_comparisons.map(c =>
+          `<tr>
+            <td><strong>${c.style}</strong></td>
+            <td>${c.roughness}</td>
+            <td>${c.melody_lead_ms} ms</td>
+            <td><strong style="color:#10b981;">${c.consonance_score} / 100</strong></td>
+          </tr>`
+        ).join('');
+      }
+
+      if (studio.current_composed_piece && studio.current_composed_piece.events) {
+        drawComposerPianoRoll(studio.current_composed_piece.events);
+      }
+    }
+
+    function drawComposerPianoRoll(events) {
+      const c = document.getElementById('composerPianoRollCanvas');
+      if (!c || !events.length) return;
+      const ctx = c.getContext('2d');
+      const W = c.width, H = c.height;
+      ctx.fillStyle = '#070b14';
+      ctx.fillRect(0, 0, W, H);
+
+      const maxT = Math.max(4.0, ...events.map(e => (e.time_offset_s || 0) + (e.duration_s || 0.3)));
+      events.forEach(e => {
+        const x = ((e.time_offset_s || 0) / maxT) * (W - 20) + 10;
+        const w = Math.max(4, ((e.duration_s || 0.3) / maxT) * (W - 20));
+        const y = H - 15 - ((e.note - 36) / 54) * (H - 30);
+        if (e.sympathetic_halo) ctx.fillStyle = '#a855f7';
+        else if (e.voice === 'cello_motif') ctx.fillStyle = '#fbbf24';
+        else if (e.voice === 'counter_melody') ctx.fillStyle = '#38bdf8';
+        else ctx.fillStyle = '#10b981';
+        ctx.fillRect(x, y, w, 5);
+      });
+    }
+
+    // Interactive Button Actions
+    async function triggerPanic() {
+      await fetch('/api/panic', { method: 'POST' });
+    }
+
+    async function setInputMode(mode) {
+      ['proxy', 'real_cello', 'synth'].forEach(m => {
+        document.getElementById('modeBtn_' + m).classList.toggle('active', m === mode);
+      });
+      await fetch('/api/mode', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({ input_mode: mode })
+      });
+    }
+
+    async function quickTestChord() {
+      await fetch('/api/play_chord', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({
+          description: 'C4-E4-G4-B4-D5 Warm Maj9 Chord (VDL Compensated + CC#64=56)',
+          countdown_seconds: 3,
+          use_vdl: true,
+          pedal_cc64: 56,
+          notes: [
+            {note: 48, velocity: 45, duration_s: 0.9},
+            {note: 55, velocity: 50, duration_s: 0.9},
+            {note: 60, velocity: 62, duration_s: 0.9},
+            {note: 64, velocity: 58, duration_s: 0.9},
+            {note: 67, velocity: 65, duration_s: 0.9},
+            {note: 71, velocity: 54, duration_s: 0.9},
+            {note: 74, velocity: 72, duration_s: 0.9}
+          ]
+        })
+      });
+    }
+
+    async function selectAccompStyle(style) {
+      await fetch('/api/mode', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({ session_style: style })
+      });
+      document.getElementById('activeStyleDetailBox').innerHTML =
+        `<div style="font-weight:700;color:#fbbf24;">Current Style: ${style}</div>
+         <div style="font-size:12px;color:#d1d5db;margin-top:4px;">Intonation-Aware Voicing ON | VDL Melody Lead +20ms ON | Right Damper CC#64 Half-Pedal Active</div>`;
+    }
+
+    async function runAutoProxySessionDemo() {
+      await fetch('/api/session/proxy_demo', { method: 'POST' });
+    }
+
+    async function listenAndComposeMotif() {
+      const style = document.getElementById('compStyleSelect').value;
+      const density = parseInt(document.getElementById('compDensitySlider').value);
+      const pedal = parseInt(document.getElementById('compPedalSlider').value);
+      await fetch('/api/composer/listen_and_compose', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({ style, density, pedal_cc64: pedal })
+      });
+    }
+
+    async function exportComposedMidi() {
+      const res = await fetch('/api/composer/export_midi', { method: 'POST' });
+      const data = await res.json();
+      alert('Saved SMF MIDI to: ' + (data.path || 'data/telemetry/composed_masterwork.mid'));
+    }
+
+    async function playOptimizedMidi(pieceId) {
+      await fetch('/api/midi/play_optimized', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({ piece_id: pieceId })
+      });
+    }
+
+    async function recordNewRehearsalTake() {
+      await fetch('/api/rehearsal/record_proxy_take', { method: 'POST' });
+    }
+
+    async function replayTakeWithStyle(style) {
+      await fetch('/api/rehearsal/replay_style', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({ style })
+      });
+    }
+
+    async function triggerRerunExperiment(expId) {
+      await fetch('/api/experiments/rerun', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({ exp_id: expId })
+      });
+    }
+
+    connectWebSocket();
+  </script>
+</body>
+</html>
