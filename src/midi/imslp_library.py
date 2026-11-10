@@ -352,6 +352,56 @@ def _build_masterwork_definitions() -> List[Dict[str, Any]]:
         }
     )
 
+    # 7. Felix Mendelssohn — Lied ohne Worte, Op. 109 in D Major for Cello & Piano
+    mend_events = []
+    for b_idx, (bass, arp, mel) in enumerate([
+        (38, [50, 54, 57, 62], 66),
+        (37, [49, 55, 57, 61], 64),
+        (35, [47, 54, 59, 62], 71),
+        (42, [50, 54, 57, 62], 69),
+    ]):
+        b_t = b_idx * 1.5
+        mend_events.append({"time_offset_s": b_t, "note": bass, "velocity": 48, "duration_s": 1.35, "pedal_cc64": 54, "voice": "bass"})
+        mend_events.append({"time_offset_s": b_t + 0.02, "note": mel, "velocity": 75, "duration_s": 1.35, "voice": "melody"})
+        for i, an in enumerate(arp):
+            mend_events.append({"time_offset_s": round(b_t + i * 0.34, 3), "note": an, "velocity": 42 + i * 3, "duration_s": 0.32, "voice": "arpeggio"})
+    pieces.append(
+        {
+            "id": "mendelssohn_op109",
+            "title": "Lied ohne Worte (Song Without Words), Op. 109 in D Major",
+            "composer": "Felix Mendelssohn",
+            "key": "D Major",
+            "tempo_bpm": 68,
+            "voice_leading_pattern": "Romantic Cantabile Melody + Broken Triad Inner Accompaniment",
+            "events": mend_events,
+        }
+    )
+
+    # 8. Frédéric Chopin — Nocturne Op. 9 No. 2 / Cello Sonata Op. 65 Largo
+    chopin_events = []
+    for b_idx, (bass, ch_notes, mel) in enumerate([
+        (39, [51, 55, 58, 63], 67),
+        (39, [50, 56, 58, 62], 68),
+        (39, [51, 55, 58, 63], 70),
+        (44, [51, 56, 60, 63], 72),
+    ]):
+        b_t = b_idx * 1.65
+        chopin_events.append({"time_offset_s": b_t, "note": bass, "velocity": 46, "duration_s": 1.5, "pedal_cc64": 58, "voice": "bass"})
+        chopin_events.append({"time_offset_s": b_t + 0.02, "note": mel, "velocity": 74, "duration_s": 1.48, "voice": "melody"})
+        for i, cn in enumerate(ch_notes):
+            chopin_events.append({"time_offset_s": round(b_t + 0.35 + i * 0.28, 3), "note": cn, "velocity": 40, "duration_s": 0.35, "voice": "inner_chord"})
+    pieces.append(
+        {
+            "id": "chopin_nocturne_sonata",
+            "title": "Nocturne Op. 9 No. 2 & Cello Sonata Op. 65 Bel Canto",
+            "composer": "Frédéric Chopin",
+            "key": "E-flat Major",
+            "tempo_bpm": 56,
+            "voice_leading_pattern": "Wide Tenth Left-Hand Arpeggio + Rubato Bel Canto Upper Voice",
+            "events": chopin_events,
+        }
+    )
+
     return pieces
 
 

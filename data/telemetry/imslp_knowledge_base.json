@@ -59,6 +59,26 @@
       "note_count": 33,
       "midi_path": "data/imslp_midi/debussy_clair_sonata.mid",
       "voice_leading_pattern": "Parallel 9th/13th Planing + Velocity-1 Sympathetic String Halo"
+    },
+    {
+      "id": "mendelssohn_op109",
+      "title": "Lied ohne Worte (Song Without Words), Op. 109 in D Major",
+      "composer": "Felix Mendelssohn",
+      "key": "D Major",
+      "tempo_bpm": 68,
+      "note_count": 24,
+      "midi_path": "data/imslp_midi/mendelssohn_op109.mid",
+      "voice_leading_pattern": "Romantic Cantabile Melody + Broken Triad Inner Accompaniment"
+    },
+    {
+      "id": "chopin_nocturne_sonata",
+      "title": "Nocturne Op. 9 No. 2 & Cello Sonata Op. 65 Bel Canto",
+      "composer": "Frédéric Chopin",
+      "key": "E-flat Major",
+      "tempo_bpm": 56,
+      "note_count": 24,
+      "midi_path": "data/imslp_midi/chopin_nocturne_sonata.mid",
+      "voice_leading_pattern": "Wide Tenth Left-Hand Arpeggio + Rubato Bel Canto Upper Voice"
     }
   ],
   "knowledge_base_patterns": [
@@ -122,6 +142,28 @@
       "work": "Clair de Lune & Sonata Harmonic Planing (with Sympathetic Halo)",
       "key": "F Minor / D-flat Major",
       "pattern": "Parallel 9th/13th Planing + Velocity-1 Sympathetic String Halo",
+      "recommended_cc64_range": [
+        44,
+        66
+      ],
+      "intimate_cello_voicing": "Avoid doubling Cello 3rd in middle register; use root+5th+9th+10th arpeggio"
+    },
+    {
+      "composer": "Felix Mendelssohn",
+      "work": "Lied ohne Worte (Song Without Words), Op. 109 in D Major",
+      "key": "D Major",
+      "pattern": "Romantic Cantabile Melody + Broken Triad Inner Accompaniment",
+      "recommended_cc64_range": [
+        44,
+        66
+      ],
+      "intimate_cello_voicing": "Avoid doubling Cello 3rd in middle register; use root+5th+9th+10th arpeggio"
+    },
+    {
+      "composer": "Frédéric Chopin",
+      "work": "Nocturne Op. 9 No. 2 & Cello Sonata Op. 65 Bel Canto",
+      "key": "E-flat Major",
+      "pattern": "Wide Tenth Left-Hand Arpeggio + Rubato Bel Canto Upper Voice",
       "recommended_cc64_range": [
         44,
         66
