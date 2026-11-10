@@ -1,0 +1,315 @@
+{
+  "exp1_vdl": {
+    "status": "completed",
+    "vdl_params": {
+      "base_min_ms": 37.93,
+      "amplitude_ms": 136.82,
+      "decay_rate": 0.015,
+      "bass_mass_slope": -0.145,
+      "r_squared": 0.94
+    },
+    "uncompensated_spread_ms": 77.49,
+    "sync_error_ms": 2.4,
+    "within_3ms_target": true,
+    "points": [
+      {
+        "note": 36,
+        "note_name": "C2",
+        "velocity": 28,
+        "measured_latency_ms": 161.89,
+        "predicted_latency_ms": 139.32,
+        "peak_dbfs": -34.88,
+        "rms_dbfs": -45.54,
+        "acoustic_onset_detected": true
+      },
+      {
+        "note": 36,
+        "note_name": "C2",
+        "velocity": 55,
+        "measured_latency_ms": 120.18,
+        "predicted_latency_ms": 68.48,
+        "peak_dbfs": -26.82,
+        "rms_dbfs": -36.17,
+        "acoustic_onset_detected": true
+      },
+      {
+        "note": 36,
+        "note_name": "C2",
+        "velocity": 92,
+        "measured_latency_ms": 82.2,
+        "predicted_latency_ms": 36.74,
+        "peak_dbfs": -17.72,
+        "rms_dbfs": -26.86,
+        "acoustic_onset_detected": true
+      },
+      {
+        "note": 48,
+        "note_name": "C3",
+        "velocity": 24,
+        "measured_latency_ms": 155.29,
+        "predicted_latency_ms": 155.29,
+        "peak_dbfs": -30.21,
+        "rms_dbfs": -42.12,
+        "acoustic_onset_detected": false
+      },
+      {
+        "note": 48,
+        "note_name": "C3",
+        "velocity": 45,
+        "measured_latency_ms": 137.15,
+        "predicted_latency_ms": 85.48,
+        "peak_dbfs": -27.26,
+        "rms_dbfs": -36.89,
+        "acoustic_onset_detected": true
+      },
+      {
+        "note": 48,
+        "note_name": "C3",
+        "velocity": 75,
+        "measured_latency_ms": 110.89,
+        "predicted_latency_ms": 44.67,
+        "peak_dbfs": -19.13,
+        "rms_dbfs": -28.84,
+        "acoustic_onset_detected": true
+      },
+      {
+        "note": 48,
+        "note_name": "C3",
+        "velocity": 98,
+        "measured_latency_ms": 74.65,
+        "predicted_latency_ms": 32.85,
+        "peak_dbfs": -12.63,
+        "rms_dbfs": -22.29,
+        "acoustic_onset_detected": true
+      },
+      {
+        "note": 60,
+        "note_name": "C4",
+        "velocity": 20,
+        "measured_latency_ms": 174.0,
+        "predicted_latency_ms": 174.0,
+        "peak_dbfs": -31.24,
+        "rms_dbfs": -44.32,
+        "acoustic_onset_detected": false
+      },
+      {
+        "note": 60,
+        "note_name": "C4",
+        "velocity": 30,
+        "measured_latency_ms": 210.0,
+        "predicted_latency_ms": 128.05,
+        "peak_dbfs": -32.42,
+        "rms_dbfs": -44.04,
+        "acoustic_onset_detected": true
+      },
+      {
+        "note": 60,
+        "note_name": "C4",
+        "velocity": 42,
+        "measured_latency_ms": 90.85,
+        "predicted_latency_ms": 90.85,
+        "peak_dbfs": -29.08,
+        "rms_dbfs": -39.25,
+        "acoustic_onset_detected": false
+      },
+      {
+        "note": 60,
+        "note_name": "C4",
+        "velocity": 56,
+        "measured_latency_ms": 199.75,
+        "predicted_latency_ms": 63.59,
+        "peak_dbfs": -25.04,
+        "rms_dbfs": -36.07,
+        "acoustic_onset_detected": true
+      },
+      {
+        "note": 60,
+        "note_name": "C4",
+        "velocity": 70,
+        "measured_latency_ms": 99.62,
+        "predicted_latency_ms": 47.13,
+        "peak_dbfs": -21.4,
+        "rms_dbfs": -31.15,
+        "acoustic_onset_detected": true
+      },
+      {
+        "note": 60,
+        "note_name": "C4",
+        "velocity": 85,
+        "measured_latency_ms": 92.0,
+        "predicted_latency_ms": 36.64,
+        "peak_dbfs": -16.6,
+        "rms_dbfs": -26.87,
+        "acoustic_onset_detected": true
+      },
+      {
+        "note": 60,
+        "note_name": "C4",
+        "velocity": 100,
+        "measured_latency_ms": 70.55,
+        "predicted_latency_ms": 30.53,
+        "peak_dbfs": -11.46,
+        "rms_dbfs": -22.24,
+        "acoustic_onset_detected": true
+      },
+      {
+        "note": 72,
+        "note_name": "C5",
+        "velocity": 26,
+        "measured_latency_ms": 142.79,
+        "predicted_latency_ms": 142.79,
+        "peak_dbfs": -33.78,
+        "rms_dbfs": -47.15,
+        "acoustic_onset_detected": false
+      },
+      {
+        "note": 72,
+        "note_name": "C5",
+        "velocity": 52,
+        "measured_latency_ms": 122.97,
+        "predicted_latency_ms": 68.35,
+        "peak_dbfs": -28.89,
+        "rms_dbfs": -41.5,
+        "acoustic_onset_detected": true
+      },
+      {
+        "note": 72,
+        "note_name": "C5",
+        "velocity": 82,
+        "measured_latency_ms": 85.81,
+        "predicted_latency_ms": 36.63,
+        "peak_dbfs": -19.69,
+        "rms_dbfs": -32.17,
+        "acoustic_onset_detected": true
+      },
+      {
+        "note": 72,
+        "note_name": "C5",
+        "velocity": 100,
+        "measured_latency_ms": 67.71,
+        "predicted_latency_ms": 28.85,
+        "peak_dbfs": -13.38,
+        "rms_dbfs": -26.21,
+        "acoustic_onset_detected": true
+      },
+      {
+        "note": 84,
+        "note_name": "C6",
+        "velocity": 30,
+        "measured_latency_ms": 124.69,
+        "predicted_latency_ms": 124.69,
+        "peak_dbfs": -38.13,
+        "rms_dbfs": -49.8,
+        "acoustic_onset_detected": false
+      },
+      {
+        "note": 84,
+        "note_name": "C6",
+        "velocity": 65,
+        "measured_latency_ms": 103.99,
+        "predicted_latency_ms": 48.72,
+        "peak_dbfs": -26.67,
+        "rms_dbfs": -37.02,
+        "acoustic_onset_detected": true
+      },
+      {
+        "note": 84,
+        "note_name": "C6",
+        "velocity": 96,
+        "measured_latency_ms": 69.91,
+        "predicted_latency_ms": 28.49,
+        "peak_dbfs": -14.65,
+        "rms_dbfs": -26.87,
+        "acoustic_onset_detected": true
+      }
+    ]
+  },
+  "exp2_pedal": {
+    "status": "completed",
+    "optimal_cc64": 40,
+    "optimal_curve": {
+      "cello_low_C2_B2": {
+        "adagio_60bpm": 46,
+        "andante_84bpm": 42,
+        "allegro_120bpm": 38
+      },
+      "cello_mid_C3_G4": {
+        "adagio_60bpm": 58,
+        "andante_84bpm": 54,
+        "allegro_120bpm": 46
+      },
+      "cello_high_A4_A5_flageolet": {
+        "adagio_60bpm": 72,
+        "andante_84bpm": 66,
+        "allegro_120bpm": 58
+      },
+      "preroll_compensation_ms": -40.0
+    },
+    "points": [
+      {
+        "cc64": 0,
+        "register_name": "C3-G4 Cello Mid-Low Register",
+        "rt60_s": 1.063,
+        "acoustic_roughness": 0.03,
+        "clarity_score": 111.4,
+        "recommended_max_cc64": 58
+      },
+      {
+        "cc64": 30,
+        "register_name": "C3-G4 Cello Mid-Low Register",
+        "rt60_s": 1.135,
+        "acoustic_roughness": 0.03,
+        "clarity_score": 112.4,
+        "recommended_max_cc64": 58
+      },
+      {
+        "cc64": 40,
+        "register_name": "C3-G4 Cello Mid-Low Register",
+        "rt60_s": 1.124,
+        "acoustic_roughness": 0.032,
+        "clarity_score": 112.1,
+        "recommended_max_cc64": 58
+      },
+      {
+        "cc64": 50,
+        "register_name": "C3-G4 Cello Mid-Low Register",
+        "rt60_s": 1.163,
+        "acoustic_roughness": 0.056,
+        "clarity_score": 109.8,
+        "recommended_max_cc64": 58
+      },
+      {
+        "cc64": 60,
+        "register_name": "C3-G4 Cello Mid-Low Register",
+        "rt60_s": 1.699,
+        "acoustic_roughness": 0.5973,
+        "clarity_score": 55.1,
+        "recommended_max_cc64": 58
+      },
+      {
+        "cc64": 70,
+        "register_name": "C3-G4 Cello Mid-Low Register",
+        "rt60_s": 2.538,
+        "acoustic_roughness": 1.084,
+        "clarity_score": 10.0,
+        "recommended_max_cc64": 58
+      },
+      {
+        "cc64": 80,
+        "register_name": "C3-G4 Cello Mid-Low Register",
+        "rt60_s": 3.049,
+        "acoustic_roughness": 1.108,
+        "clarity_score": 10.0,
+        "recommended_max_cc64": 58
+      },
+      {
+        "cc64": 100,
+        "register_name": "C3-G4 Cello Mid-Low Register",
+        "rt60_s": 3.121,
+        "acoustic_roughness": 1.156,
+        "clarity_score": 10.0,
+        "recommended_max_cc64": 58
+      }
+    ]
+  }
+}
