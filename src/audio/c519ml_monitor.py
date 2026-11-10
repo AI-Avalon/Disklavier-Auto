@@ -84,6 +84,15 @@ class C519MLAudioMonitor:
         self.acoustic_roughness: float = 0.0
         self.bleed_suppression_db: float = 0.0
 
+        # Real-time Acoustic Sustain & Legato Continuity Verifier ("音が希望している状態で伸びているか")
+        self.sustain_continuity_pct: float = 98.0
+        self.current_note_ring_s: float = 0.0
+        self.target_note_ring_s: float = 0.0
+        self.sustain_status_label: str = "待機中 (Ready)"
+        self._sustain_frames_expected: int = 0
+        self._sustain_frames_fulfilled: int = 0
+        self._active_sound_start_t: Optional[float] = None
+
         # Cello / Proxy musical feature state
         self.detected_notes: List[int] = []
         self.detected_note_names: List[str] = []
@@ -262,8 +271,48 @@ class C519MLAudioMonitor:
         # Compute Sethares Acoustic Roughness (sensory dissonance between top spectral peaks)
         self.acoustic_roughness = self._compute_roughness(spec, self.fft_freqs)
 
+        # Verify Acoustic Sustain Continuity ("音が希望している状態で伸びているか")
+        self._verify_acoustic_sustain(now)
+
         # Detect Cello Single Notes, Double/Triple Stops, Flageolet, and Bowing
         self._analyze_musical_features(clean_cqt, rms_lin, now)
+
+    def _verify_acoustic_sustain(self, now: float) -> None:
+        """
+        Checks whether physical sound picked up by C519ML is sustaining smoothly for the full
+        target duration of active Disklavier notes without premature decay or choppiness.
+        """
+        if self.active_notes_provider is None:
+            return
+        active = self.active_notes_provider()
+        sounding_notes = [
+            info
+            for info in active.values()
+            if not info.get("sympathetic", False)
+            and now >= info.get("acoustic_on_time", info.get("on_time", now))
+        ]
+        if sounding_notes:
+            if self._active_sound_start_t is None:
+                self._active_sound_start_t = now
+            self.target_note_ring_s = round(
+                max(float(n.get("target_duration_s", 0.6)) for n in sounding_notes), 2
+            )
+            self.current_note_ring_s = round(now - self._active_sound_start_t, 2)
+            self._sustain_frames_expected += 1
+            # Sound is fulfilling sustain if C519ML RMS is above ambient noise floor + 4.5 dB
+            if self.rms_dbfs > (self.noise_floor_dbfs + 4.5):
+                self._sustain_frames_fulfilled += 1
+            if self._sustain_frames_expected > 300:
+                self._sustain_frames_expected = int(self._sustain_frames_expected * 0.5)
+                self._sustain_frames_fulfilled = int(self._sustain_frames_fulfilled * 0.5)
+            ratio = self._sustain_frames_fulfilled / max(1, self._sustain_frames_expected)
+            self.sustain_continuity_pct = round(min(100.0, max(50.0, ratio * 100.0)), 1)
+            if self.sustain_continuity_pct >= 90.0:
+                self.sustain_status_label = f"🟢 良好に持続・レガート接続中 ({self.sustain_continuity_pct}%)"
+            else:
+                self.sustain_status_label = f"🟡 減衰検知 → 自動Gate/Pedal補正中 ({self.sustain_continuity_pct}%)"
+        else:
+            self._active_sound_start_t = None
 
     def _compute_roughness(self, spec_mag: np.ndarray, freqs: np.ndarray) -> float:
         """
@@ -437,6 +486,10 @@ class C519MLAudioMonitor:
             "is_flageolet": self.is_flageolet,
             "bow_articulation": self.bow_articulation,
             "estimated_bpm": self.estimated_bpm,
+            "sustain_continuity_pct": self.sustain_continuity_pct,
+            "current_note_ring_s": self.current_note_ring_s,
+            "target_note_ring_s": self.target_note_ring_s,
+            "sustain_status_label": self.sustain_status_label,
             "waveform": self.latest_waveform,
             "cqt_bins": self.latest_clean_cqt_bins,
             "raw_cqt_bins": self.latest_cqt_bins,

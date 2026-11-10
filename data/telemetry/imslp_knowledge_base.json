@@ -1,14 +1,24 @@
 {
   "catalog": [
     {
+      "id": "debussy_clair_sonata",
+      "title": "Clair de Lune (Suite bergamasque, L. 75 — Full Legato Edition)",
+      "composer": "Claude Debussy",
+      "key": "D-flat Major",
+      "tempo_bpm": 56,
+      "note_count": 101,
+      "midi_path": "data/imslp_midi/debussy_clair_sonata.mid",
+      "voice_leading_pattern": "9/8 Finger-Pedaled Harmonic Planing + Syncopated CC#64 Sustain"
+    },
+    {
       "id": "saint_saens_swan",
       "title": "Le Cygne (The Swan) — Carnaval des Animaux",
       "composer": "Camille Saint-Saëns",
       "key": "G Major",
-      "tempo_bpm": 68,
-      "note_count": 48,
+      "tempo_bpm": 66,
+      "note_count": 88,
       "midi_path": "data/imslp_midi/saint_saens_swan.mid",
-      "voice_leading_pattern": "Sextuplet Diatonic Arpeggio + Stepwise Bass"
+      "voice_leading_pattern": "Overlapping Harp Sextuplets + Legato Cantabile Melody"
     },
     {
       "id": "faure_elegie_op24",
@@ -16,19 +26,19 @@
       "composer": "Gabriel Fauré",
       "key": "C Minor",
       "tempo_bpm": 58,
-      "note_count": 98,
+      "note_count": 95,
       "midi_path": "data/imslp_midi/faure_elegie_op24.mid",
-      "voice_leading_pattern": "Repeated Inner-Voice Pulsation + Descending Bass Tetrachord"
+      "voice_leading_pattern": "Sustained Bass Tetrachord + Legato Pulsating Chords"
     },
     {
       "id": "faure_sicilienne_op78",
       "title": "Sicilienne in G Minor, Op. 78",
       "composer": "Gabriel Fauré",
       "key": "G Minor",
-      "tempo_bpm": 74,
-      "note_count": 36,
+      "tempo_bpm": 72,
+      "note_count": 40,
       "midi_path": "data/imslp_midi/faure_sicilienne_op78.mid",
-      "voice_leading_pattern": "6/8 Aeolian Harp Arpeggio + Dorian Modal Inflection"
+      "voice_leading_pattern": "6/8 Aeolian Harp Legato Arpeggio + Dorian Cantabile"
     },
     {
       "id": "bach_suite1_bwv1007",
@@ -36,29 +46,29 @@
       "composer": "J.S. Bach",
       "key": "G Major",
       "tempo_bpm": 76,
-      "note_count": 36,
+      "note_count": 68,
       "midi_path": "data/imslp_midi/bach_suite1_bwv1007.mid",
-      "voice_leading_pattern": "Compound Latent Polyphony (Pedal Bass + Harmonic Bariolage)"
+      "voice_leading_pattern": "Finger-Sustained Pedal Bass + Overlapping Bariolage"
+    },
+    {
+      "id": "chopin_nocturne_sonata",
+      "title": "Nocturne in E-flat Major, Op. 9 No. 2 (Bel Canto Legato)",
+      "composer": "Frédéric Chopin",
+      "key": "E-flat Major",
+      "tempo_bpm": 56,
+      "note_count": 29,
+      "midi_path": "data/imslp_midi/chopin_nocturne_sonata.mid",
+      "voice_leading_pattern": "Syncopated Pedal Bass + Singing Bel Canto Legato"
     },
     {
       "id": "brahms_sonata1_op38",
-      "title": "Cello Sonata No. 1 in E Minor, Op. 38 (Allegro non troppo)",
+      "title": "Cello Sonata No. 1 in E Minor, Op. 38",
       "composer": "Johannes Brahms",
       "key": "E Minor",
-      "tempo_bpm": 66,
-      "note_count": 24,
+      "tempo_bpm": 64,
+      "note_count": 27,
       "midi_path": "data/imslp_midi/brahms_sonata1_op38.mid",
-      "voice_leading_pattern": "Open 5th/Octave Cushion + Syncopated Inner Sixth Counterpoint"
-    },
-    {
-      "id": "debussy_clair_sonata",
-      "title": "Clair de Lune & Sonata Harmonic Planing (with Sympathetic Halo)",
-      "composer": "Claude Debussy",
-      "key": "F Minor / D-flat Major",
-      "tempo_bpm": 56,
-      "note_count": 33,
-      "midi_path": "data/imslp_midi/debussy_clair_sonata.mid",
-      "voice_leading_pattern": "Parallel 9th/13th Planing + Velocity-1 Sympathetic String Halo"
+      "voice_leading_pattern": "Sonorous Low Bass + Warm Sixths Legato Counterpoint"
     },
     {
       "id": "mendelssohn_op109",
@@ -66,109 +76,91 @@
       "composer": "Felix Mendelssohn",
       "key": "D Major",
       "tempo_bpm": 68,
-      "note_count": 24,
+      "note_count": 27,
       "midi_path": "data/imslp_midi/mendelssohn_op109.mid",
-      "voice_leading_pattern": "Romantic Cantabile Melody + Broken Triad Inner Accompaniment"
-    },
-    {
-      "id": "chopin_nocturne_sonata",
-      "title": "Nocturne Op. 9 No. 2 & Cello Sonata Op. 65 Bel Canto",
-      "composer": "Frédéric Chopin",
-      "key": "E-flat Major",
-      "tempo_bpm": 56,
-      "note_count": 24,
-      "midi_path": "data/imslp_midi/chopin_nocturne_sonata.mid",
-      "voice_leading_pattern": "Wide Tenth Left-Hand Arpeggio + Rubato Bel Canto Upper Voice"
+      "voice_leading_pattern": "Romantic Cantabile Melody + Sustained Broken Triads"
     }
   ],
   "knowledge_base_patterns": [
     {
+      "composer": "Claude Debussy",
+      "work": "Clair de Lune (Suite bergamasque, L. 75 — Full Legato Edition)",
+      "key": "D-flat Major",
+      "pattern": "9/8 Finger-Pedaled Harmonic Planing + Syncopated CC#64 Sustain",
+      "recommended_cc64_range": [
+        52,
+        72
+      ]
+    },
+    {
       "composer": "Camille Saint-Saëns",
       "work": "Le Cygne (The Swan) — Carnaval des Animaux",
       "key": "G Major",
-      "pattern": "Sextuplet Diatonic Arpeggio + Stepwise Bass",
+      "pattern": "Overlapping Harp Sextuplets + Legato Cantabile Melody",
       "recommended_cc64_range": [
-        44,
-        66
-      ],
-      "intimate_cello_voicing": "Avoid doubling Cello 3rd in middle register; use root+5th+9th+10th arpeggio"
+        52,
+        72
+      ]
     },
     {
       "composer": "Gabriel Fauré",
       "work": "Élégie in C Minor, Op. 24",
       "key": "C Minor",
-      "pattern": "Repeated Inner-Voice Pulsation + Descending Bass Tetrachord",
+      "pattern": "Sustained Bass Tetrachord + Legato Pulsating Chords",
       "recommended_cc64_range": [
-        44,
-        66
-      ],
-      "intimate_cello_voicing": "Avoid doubling Cello 3rd in middle register; use root+5th+9th+10th arpeggio"
+        52,
+        72
+      ]
     },
     {
       "composer": "Gabriel Fauré",
       "work": "Sicilienne in G Minor, Op. 78",
       "key": "G Minor",
-      "pattern": "6/8 Aeolian Harp Arpeggio + Dorian Modal Inflection",
+      "pattern": "6/8 Aeolian Harp Legato Arpeggio + Dorian Cantabile",
       "recommended_cc64_range": [
-        44,
-        66
-      ],
-      "intimate_cello_voicing": "Avoid doubling Cello 3rd in middle register; use root+5th+9th+10th arpeggio"
+        52,
+        72
+      ]
     },
     {
       "composer": "J.S. Bach",
       "work": "Cello Suite No. 1 in G Major, BWV 1007 (Prelude)",
       "key": "G Major",
-      "pattern": "Compound Latent Polyphony (Pedal Bass + Harmonic Bariolage)",
+      "pattern": "Finger-Sustained Pedal Bass + Overlapping Bariolage",
       "recommended_cc64_range": [
-        44,
-        66
-      ],
-      "intimate_cello_voicing": "Avoid doubling Cello 3rd in middle register; use root+5th+9th+10th arpeggio"
+        52,
+        72
+      ]
+    },
+    {
+      "composer": "Frédéric Chopin",
+      "work": "Nocturne in E-flat Major, Op. 9 No. 2 (Bel Canto Legato)",
+      "key": "E-flat Major",
+      "pattern": "Syncopated Pedal Bass + Singing Bel Canto Legato",
+      "recommended_cc64_range": [
+        52,
+        72
+      ]
     },
     {
       "composer": "Johannes Brahms",
-      "work": "Cello Sonata No. 1 in E Minor, Op. 38 (Allegro non troppo)",
+      "work": "Cello Sonata No. 1 in E Minor, Op. 38",
       "key": "E Minor",
-      "pattern": "Open 5th/Octave Cushion + Syncopated Inner Sixth Counterpoint",
+      "pattern": "Sonorous Low Bass + Warm Sixths Legato Counterpoint",
       "recommended_cc64_range": [
-        44,
-        66
-      ],
-      "intimate_cello_voicing": "Avoid doubling Cello 3rd in middle register; use root+5th+9th+10th arpeggio"
-    },
-    {
-      "composer": "Claude Debussy",
-      "work": "Clair de Lune & Sonata Harmonic Planing (with Sympathetic Halo)",
-      "key": "F Minor / D-flat Major",
-      "pattern": "Parallel 9th/13th Planing + Velocity-1 Sympathetic String Halo",
-      "recommended_cc64_range": [
-        44,
-        66
-      ],
-      "intimate_cello_voicing": "Avoid doubling Cello 3rd in middle register; use root+5th+9th+10th arpeggio"
+        52,
+        72
+      ]
     },
     {
       "composer": "Felix Mendelssohn",
       "work": "Lied ohne Worte (Song Without Words), Op. 109 in D Major",
       "key": "D Major",
-      "pattern": "Romantic Cantabile Melody + Broken Triad Inner Accompaniment",
+      "pattern": "Romantic Cantabile Melody + Sustained Broken Triads",
       "recommended_cc64_range": [
-        44,
-        66
-      ],
-      "intimate_cello_voicing": "Avoid doubling Cello 3rd in middle register; use root+5th+9th+10th arpeggio"
-    },
-    {
-      "composer": "Frédéric Chopin",
-      "work": "Nocturne Op. 9 No. 2 & Cello Sonata Op. 65 Bel Canto",
-      "key": "E-flat Major",
-      "pattern": "Wide Tenth Left-Hand Arpeggio + Rubato Bel Canto Upper Voice",
-      "recommended_cc64_range": [
-        44,
-        66
-      ],
-      "intimate_cello_voicing": "Avoid doubling Cello 3rd in middle register; use root+5th+9th+10th arpeggio"
+        52,
+        72
+      ]
     }
   ]
 }

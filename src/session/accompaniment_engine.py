@@ -168,8 +168,8 @@ def generate_accompaniment_for_cello_event(
                         time_offset_s + i * step_dur + inner_delay_s, 4
                     ),
                     "note": min(92, an),
-                    "velocity": 36 + (i % 3) * 5,
-                    "duration_s": round(max(0.05, step_dur * 0.90), 3),
+                    "velocity": 40 + (i % 3) * 4,
+                    "duration_s": round(max(0.45, step_dur * 2.2), 3),
                     "voice": "arpeggio",
                     "source_tag": "accompaniment",
                 }
@@ -182,7 +182,7 @@ def generate_accompaniment_for_cello_event(
                 "time_offset_s": round(time_offset_s, 4),
                 "note": bass_note,
                 "velocity": 60,
-                "duration_s": round(duration_s * 0.95, 3),
+                "duration_s": round(duration_s * 1.05, 3),
                 "pedal_cc64": opt_cc64,
                 "voice": "bass",
                 "source_tag": "accompaniment",
@@ -193,7 +193,7 @@ def generate_accompaniment_for_cello_event(
                 "time_offset_s": round(time_offset_s + 0.002, 4),
                 "note": bass_note + 7,
                 "velocity": 52,
-                "duration_s": round(duration_s * 0.95, 3),
+                "duration_s": round(duration_s * 1.05, 3),
                 "voice": "bass",
                 "source_tag": "accompaniment",
             }
@@ -206,21 +206,21 @@ def generate_accompaniment_for_cello_event(
                     ),
                     "note": min(88, cn),
                     "velocity": 48,
-                    "duration_s": 0.34,
+                    "duration_s": 0.78,
                     "voice": "inner_chord",
                     "source_tag": "accompaniment",
                 }
             )
 
     elif style in ("debussy", "debussy_impressionist"):
-        # Debussy extended 9th/11th planing + subtle Velocity-1 Halo
+        # Debussy extended 9th/11th planing + lush finger-legato sustain
         events.append(
             {
                 "time_offset_s": round(time_offset_s, 4),
                 "note": bass_note,
-                "velocity": 40,
-                "duration_s": round(duration_s * 0.98, 3),
-                "pedal_cc64": 64,
+                "velocity": 46,
+                "duration_s": round(duration_s * 1.10, 3),
+                "pedal_cc64": 68,
                 "voice": "bass",
                 "source_tag": "accompaniment",
             }
@@ -232,8 +232,8 @@ def generate_accompaniment_for_cello_event(
                         time_offset_s + i * (duration_s / 5.5) + inner_delay_s, 4
                     ),
                     "note": min(94, an),
-                    "velocity": 34 + i * 4,
-                    "duration_s": 0.42,
+                    "velocity": 40 + i * 3,
+                    "duration_s": round(max(0.95, duration_s - i * (duration_s / 6.0)), 3),
                     "voice": "arpeggio",
                     "source_tag": "accompaniment",
                 }
@@ -246,7 +246,7 @@ def generate_accompaniment_for_cello_event(
                 "time_offset_s": round(time_offset_s, 4),
                 "note": bass_note,
                 "velocity": 50,
-                "duration_s": round(duration_s * 0.95, 3),
+                "duration_s": round(duration_s * 1.05, 3),
                 "pedal_cc64": opt_cc64,
                 "voice": "bass",
                 "source_tag": "accompaniment",
@@ -258,7 +258,7 @@ def generate_accompaniment_for_cello_event(
                 "time_offset_s": round(time_offset_s, 4),
                 "note": min(88, top_pitch + 7),
                 "velocity": 62,
-                "duration_s": round(duration_s * 0.85, 3),
+                "duration_s": round(duration_s * 1.05, 3),
                 "voice": "counter_melody",
                 "source_tag": "accompaniment",
             }
@@ -271,8 +271,8 @@ def generate_accompaniment_for_cello_event(
                         time_offset_s + i * step_dur + inner_delay_s, 4
                     ),
                     "note": min(90, an),
-                    "velocity": 38 + i * 4,
-                    "duration_s": round(max(0.05, step_dur * 0.9), 3),
+                    "velocity": 42 + i * 4,
+                    "duration_s": round(max(0.75, step_dur * 2.2), 3),
                     "voice": "arpeggio",
                     "source_tag": "accompaniment",
                 }

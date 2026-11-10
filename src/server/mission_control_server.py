@@ -455,11 +455,19 @@ async def play_sequence_api(req: SequencePlayReq):
                 use_vdl_compensation=req.use_vdl,
                 pedal_cc64=pedal,
                 sympathetic_halo=halo,
+                legato_overlap_s=0.045,
                 source_tag=tag,
             )
             scheduled_count += 1
         elif pedal is not None:
-            safety_guard.send_pedal_cc64(int(pedal), source_tag=tag)
+            safety_guard.schedule_chord_or_notes(
+                notes=[],
+                target_sound_time=base_target + t_off,
+                use_vdl_compensation=False,
+                pedal_cc64=int(pedal),
+                pedal_preroll_ms=25.0,
+                source_tag=tag,
+            )
 
     return {
         "ok": True,
@@ -515,6 +523,51 @@ async def api_composer_listen_and_compose(req: Dict[str, Any]):
         studio_state=studio_state,
         countdown_fn=run_sound_countdown,
     )
+
+
+@app.post("/api/dialogue/your_turn")
+async def api_dialogue_your_turn():
+    import importlib
+    import src.composer.ai_classical_composer as comp_mod
+
+    importlib.reload(comp_mod)
+    return await comp_mod.start_human_turn_listening(
+        safety_guard=safety_guard,
+        audio_monitor=audio_monitor,
+        telemetry_store=telemetry_store,
+        studio_state=studio_state,
+    )
+
+
+@app.post("/api/dialogue/inject_notes")
+async def api_dialogue_inject_notes(req: Dict[str, Any]):
+    import importlib
+    import src.composer.ai_classical_composer as comp_mod
+
+    importlib.reload(comp_mod)
+    notes = [int(x) for x in req.get("notes", [61, 65, 68, 73])]
+    return await comp_mod.inject_interactive_motif_notes(
+        notes=notes,
+        safety_guard=safety_guard,
+        audio_monitor=audio_monitor,
+        telemetry_store=telemetry_store,
+        studio_state=studio_state,
+    )
+
+
+@app.post("/api/closed_loop/optimize_sustain")
+async def api_closed_loop_optimize_sustain(req: Dict[str, Any]):
+    overlap_ms = float(req.get("legato_overlap_ms", 48.0))
+    min_vel = int(req.get("min_soft_velocity", 32))
+    pedal_boost = int(req.get("sustain_pedal_boost", 6))
+    safety_guard.closed_loop_params["legato_overlap_ms"] = overlap_ms
+    safety_guard.closed_loop_params["min_soft_velocity"] = min_vel
+    safety_guard.closed_loop_params["sustain_pedal_boost"] = pedal_boost
+    safety_guard.stats["auto_optimizations_applied"] += 1
+    telemetry_store.log_event(
+        f"🔧 [CLOSED-LOOP SUSTAIN TUNER] Applied: LegatoOverlap=+{overlap_ms}ms, MinVel={min_vel}, PedalBoost=+{pedal_boost}"
+    )
+    return {"ok": True, "closed_loop_params": safety_guard.closed_loop_params}
 
 
 @app.post("/api/composer/export_midi")

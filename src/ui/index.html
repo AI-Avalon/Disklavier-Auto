@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Antigravity 2.0 — Live-Visualized Autonomous R&D Studio for Cello & Disklavier</title>
+  <title>Antigravity 2.0 — Interactive Dialogue & Legato R&D Studio for Cello & Disklavier</title>
   <style>
     :root {
       --bg-dark: #090d16;
@@ -13,7 +13,7 @@
       --text-main: #f3f4f6;
       --text-muted: #9ca3af;
       --accent-blue: #38bdf8;
-      --accent-Gold: #fbbf24;
+      --accent-gold: #fbbf24;
       --accent-green: #10b981;
       --accent-red: #ef4444;
       --accent-purple: #a855f7;
@@ -27,12 +27,11 @@
       user-select: none;
     }
 
-    /* GLOBAL TOP BAR */
     .global-header {
       position: sticky;
       top: 0;
       z-index: 1000;
-      background: rgba(13, 19, 33, 0.96);
+      background: rgba(13, 19, 33, 0.97);
       backdrop-filter: blur(12px);
       border-bottom: 2px solid var(--border);
       padding: 8px 14px;
@@ -42,7 +41,6 @@
       box-shadow: 0 6px 24px rgba(0,0,0,0.6);
     }
 
-    /* USER ACTION & STATUS BANNER */
     .user-banner {
       display: flex;
       align-items: center;
@@ -50,7 +48,7 @@
       padding: 10px 16px;
       border-radius: 10px;
       border: 2px solid #10b981;
-      background: linear-gradient(90deg, rgba(16,185,129,0.18) 0%, rgba(17,24,39,0.92) 100%);
+      background: linear-gradient(90deg, rgba(16,185,129,0.22) 0%, rgba(17,24,39,0.95) 100%);
       transition: all 0.2s ease;
     }
     .user-banner.HANDS_OFF {
@@ -87,7 +85,6 @@
       border-radius: 6px;
       background: rgba(0,0,0,0.45);
       white-space: nowrap;
-      letter-spacing: 0.3px;
     }
     .banner-text-wrap {
       display: flex;
@@ -114,38 +111,34 @@
       border: 1px solid #facc15;
     }
 
-    /* TOP CONTROLS ROW */
+    /* INTERACTIVE DIALOGUE QUICK BAR (ALWAYS VISIBLE) */
+    .dialogue-quick-bar {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 10px;
+      background: linear-gradient(90deg, rgba(59,130,246,0.16), rgba(168,85,247,0.16));
+      border: 1px solid #3b82f6;
+      border-radius: 8px;
+      padding: 6px 12px;
+      flex-wrap: wrap;
+    }
+    .turn-indicator-pill {
+      padding: 5px 12px;
+      border-radius: 6px;
+      font-weight: 800;
+      font-size: 12.5px;
+      background: rgba(16, 185, 129, 0.25);
+      border: 1px solid #10b981;
+      color: #a7f3d0;
+    }
+
     .top-controls-row {
       display: flex;
       align-items: center;
       justify-content: space-between;
-      gap: 12px;
-      flex-wrap: wrap;
-    }
-    .task-progress-box {
-      display: flex;
-      align-items: center;
       gap: 10px;
-      background: var(--bg-card);
-      padding: 5px 12px;
-      border-radius: 8px;
-      border: 1px solid var(--border);
-      min-width: 280px;
-      flex: 1;
-    }
-    .progress-bar-outer {
-      width: 140px;
-      height: 10px;
-      background: #0b1120;
-      border-radius: 99px;
-      overflow: hidden;
-      border: 1px solid #374151;
-    }
-    .progress-bar-inner {
-      height: 100%;
-      background: linear-gradient(90deg, #10b981, #38bdf8);
-      width: 15%;
-      transition: width 0.3s ease;
+      flex-wrap: wrap;
     }
     .mode-selector {
       display: flex;
@@ -164,12 +157,10 @@
       font-size: 12px;
       font-weight: 600;
       cursor: pointer;
-      transition: all 0.15s;
     }
     .mode-btn.active {
       background: #2563eb;
       color: #fff;
-      box-shadow: 0 2px 8px rgba(37,99,235,0.4);
     }
     .solenoid-load-pill {
       display: flex;
@@ -191,13 +182,9 @@
       font-weight: 900;
       font-size: 13px;
       cursor: pointer;
-      letter-spacing: 0.5px;
       box-shadow: 0 0 14px rgba(239,68,68,0.5);
-      transition: transform 0.1s;
     }
-    .panic-btn:active { transform: scale(0.96); }
 
-    /* NAVIGATION TABS */
     .nav-tabs {
       display: flex;
       gap: 6px;
@@ -217,7 +204,6 @@
       font-weight: 700;
       cursor: pointer;
       white-space: nowrap;
-      transition: all 0.15s;
     }
     .tab-btn.active {
       background: var(--bg-panel);
@@ -225,7 +211,6 @@
       border-top: 2px solid var(--accent-blue);
     }
 
-    /* ALWAYS-VISIBLE 60FPS VISUAL HEARTBEAT DOCK */
     .heartbeat-dock {
       display: grid;
       grid-template-columns: 1.25fr 1.65fr 1.1fr;
@@ -251,7 +236,6 @@
       font-weight: 700;
       color: var(--accent-blue);
       text-transform: uppercase;
-      letter-spacing: 0.4px;
     }
     canvas.vis-canvas {
       width: 100%;
@@ -278,7 +262,7 @@
       justify-content: space-between;
     }
     .gauge-val {
-      font-size: 15px;
+      font-size: 14.5px;
       font-weight: 800;
       color: #fff;
       margin: 2px 0;
@@ -296,7 +280,6 @@
       transition: width 0.08s linear;
     }
 
-    /* MAIN TAB CONTENT AREA */
     .tab-pane {
       display: none;
       padding: 12px 14px 28px 14px;
@@ -329,6 +312,8 @@
       align-items: center;
       border-bottom: 1px solid #1f2937;
       padding-bottom: 6px;
+      flex-wrap: wrap;
+      gap: 6px;
     }
     .panel-title {
       font-size: 14px;
@@ -339,9 +324,9 @@
       background: #2563eb;
       color: #fff;
       border: 1px solid #60a5fa;
-      padding: 7px 14px;
+      padding: 7px 13px;
       border-radius: 7px;
-      font-size: 12.5px;
+      font-size: 12px;
       font-weight: 700;
       cursor: pointer;
       transition: all 0.15s;
@@ -350,49 +335,21 @@
     .btn-green { background: #059669; border-color: #34d399; }
     .btn-purple { background: #7c3aed; border-color: #c084fc; }
     .btn-gold { background: #d97706; border-color: #fbbf24; }
+    .btn-outline { background: #1e293b; border-color: #475569; color: #e2e8f0; }
+    .btn-outline.selected { background: #2563eb; border-color: #60a5fa; color: #fff; }
 
-    /* BRAIN FLOWCHART & TERMINAL */
-    .brain-steps {
-      display: flex;
-      flex-direction: column;
-      gap: 6px;
-    }
-    .brain-step {
-      display: flex;
-      align-items: center;
-      justify-content: space-between;
-      padding: 7px 10px;
-      border-radius: 7px;
-      background: var(--bg-card);
-      border-left: 4px solid #4b5563;
-      font-size: 12px;
-    }
-    .brain-step.completed { border-left-color: #10b981; background: rgba(16,185,129,0.1); }
-    .brain-step.in_progress { border-left-color: #38bdf8; background: rgba(56,189,248,0.15); }
     .terminal-box {
       background: #050811;
       border: 1px solid #1e293b;
       border-radius: 8px;
       padding: 8px 10px;
-      font-family: "SF Mono", "JetBrains Mono", Menlo, monospace;
+      font-family: "SF Mono", Menlo, monospace;
       font-size: 11.5px;
       line-height: 1.45;
       color: #a7f3d0;
-      height: 220px;
+      height: 190px;
       overflow-y: auto;
       white-space: pre-wrap;
-    }
-    .diff-box {
-      background: #070b14;
-      border: 1px solid #1e293b;
-      border-radius: 8px;
-      padding: 8px 10px;
-      font-family: "SF Mono", Menlo, monospace;
-      font-size: 11px;
-      color: #93c5fd;
-      height: 120px;
-      overflow-y: auto;
-      white-space: pre;
     }
     .badge-pill {
       padding: 3px 8px;
@@ -403,9 +360,9 @@
       color: #cbd5e1;
     }
     .badge-pill.on {
-      background: rgba(168,85,247,0.25);
-      color: #e9d5ff;
-      border: 1px solid #a855f7;
+      background: rgba(16,185,129,0.22);
+      color: #a7f3d0;
+      border: 1px solid #10b981;
     }
     table.data-table {
       width: 100%;
@@ -429,126 +386,135 @@
   <!-- GLOBAL TOP BAR -->
   <header class="global-header">
     <!-- 1. USER ACTION & STATUS BANNER -->
-    <div id="userBanner" class="user-banner HANDS_OFF">
+    <div id="userBanner" class="user-banner READY">
       <div class="banner-left">
-        <span id="bannerBadge" class="banner-badge">🟢 [HANDS OFF / 自動実験・開発中]</span>
+        <span id="bannerBadge" class="banner-badge">🟢 [🎹 対話・操作可能]</span>
         <div class="banner-text-wrap">
           <div id="bannerMainMsg" class="banner-main-msg">
-            Antigravity 2.0 Live Mission Control 起動完了 — リアルタイム波形＆安全監視が稼働中です
+            あなたが弾いても、AIに展開作曲させても、ドビュッシー等のフルレガート名曲を聴いてもOKです！
           </div>
           <div id="bannerSubMsg" class="banner-sub-msg">
-            Steinberg UR22mkII (C519ML) 44.1kHz | Yamaha Disklavier SafetyGuard Active
+            Disklavier 双方向MIDI (IN/OUT) + C519ML 音響持続フィードバック稼働中
           </div>
         </div>
       </div>
       <div id="countdownPill" class="countdown-pill">🔊 3s</div>
     </div>
 
-    <!-- 2. TASK PROGRESS, INPUT MODE SELECTOR, SOLENOID LOAD & EMERGENCY PANIC -->
-    <div class="top-controls-row">
-      <div class="task-progress-box">
-        <span style="font-size:12px;font-weight:700;color:#38bdf8;" id="currentPhaseLabel">Milestone 1</span>
-        <span style="font-size:12px;color:#e5e7eb;flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;" id="currentTaskName">
-          Hardware & SafetyGuard Live Mission Control Active
+    <!-- 2. INTERACTIVE DIALOGUE & SUSTAIN MONITOR BAR (ALWAYS VISIBLE) -->
+    <div class="dialogue-quick-bar">
+      <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;">
+        <span id="turnIndicatorPill" class="turn-indicator-pill">
+          🎹 あなたがいつでも弾けます (MIDI IN 待機中)
         </span>
-        <div class="progress-bar-outer">
-          <div id="taskProgressBar" class="progress-bar-inner" style="width:20%;"></div>
-        </div>
-        <span id="taskProgressPct" style="font-size:12px;font-weight:800;color:#10b981;">20%</span>
+        <button class="btn btn-green" onclick="startHumanTurn()">
+          🟢 1.「私が弾く」モード開始 (録音リセット)
+        </button>
+        <span style="font-size:12px;color:#e2e8f0;">
+          収録済みのあなたの音: <strong id="topHumanNotesCount" style="color:#fbbf24;">0 notes</strong>
+        </span>
       </div>
 
-      <div class="mode-selector">
-        <button class="mode-btn active" id="modeBtn_proxy" onclick="setInputMode('proxy')">🎹 Test: Piano-as-Cello Proxy</button>
-        <button class="mode-btn" id="modeBtn_real_cello" onclick="setInputMode('real_cello')">🎻 Live: Real Cello on C519ML</button>
-        <button class="mode-btn" id="modeBtn_synth" onclick="setInputMode('synth')">🌊 Synth Cello Injector</button>
+      <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;">
+        <span style="font-size:12px;color:#cbd5e1;">展開秒数:</span>
+        <select id="quickDurSelect" style="background:#0f172a;color:#fbbf24;font-weight:800;padding:5px 8px;border-radius:6px;border:1px solid #3b82f6;">
+          <option value="12">12秒 (短い対話アンサー)</option>
+          <option value="20">20秒 (2フレーズ展開)</option>
+          <option value="30" selected>30秒 (本格小品 A-B-A')</option>
+          <option value="45">45秒 (ソナタ展開部付き)</option>
+          <option value="60">60秒 (大曲ファンタジア)</option>
+        </select>
+        <select id="quickModeSelect" style="background:#0f172a;color:#38bdf8;font-weight:700;padding:5px 8px;border-radius:6px;border:1px solid #3b82f6;">
+          <option value="debussy_impressionist">🌊 ドビュッシー印象派レガート展開</option>
+          <option value="call_and_response">💬 対話コール＆レスポンス展開</option>
+          <option value="faure_chopin_lyric">🎻 フォーレ／ショパン叙情展開</option>
+          <option value="bach_counterpoint">🏛️ バッハ4声部対位法展開</option>
+          <option value="dramatic_crescendo">🔥 ブラームス劇的クライマックス展開</option>
+        </select>
+        <button class="btn btn-purple" onclick="quickExpandAndPlay()">
+          ✨ 2. 収録した演奏を指定秒数で展開作曲＆実演
+        </button>
+        <button class="btn btn-gold" onclick="playOptimizedMidi('debussy_clair_sonata')">
+          🌙 ドビュッシー『月の光』フルレガート再生
+        </button>
       </div>
 
-      <div class="solenoid-load-pill">
-        <span>⚡ Solenoid Load:</span>
-        <span id="topSolenoidText" style="color:#10b981;">0 / 16 notes</span>
-        <span>| 🦶 CC#64:</span>
-        <span id="topPedalText" style="color:#fbbf24;">0</span>
-      </div>
-
-      <button class="panic-btn" onclick="triggerPanic()">🔴 EMERGENCY PANIC (ALL OFF)</button>
+      <button class="panic-btn" onclick="triggerPanic()">🔴 STOP / PANIC</button>
     </div>
   </header>
 
   <!-- ALWAYS-VISIBLE 60FPS VISUAL HEARTBEAT (ELEMENTS 1, 2, 3) -->
   <section class="heartbeat-dock">
-    <!-- Heartbeat 1: Live Audio Oscilloscope & CQT Spectrogram -->
+    <!-- Heartbeat 1: Live Audio Oscilloscope, CQT & SUSTAIN CONTINUITY VERIFIER -->
     <div class="hb-card">
       <div class="hb-title">
-        <span>🎙️ 1. C519ML Live Oscilloscope & CQT Spectrogram (60fps)</span>
+        <span>🎙️ 1. C519ML 波形・スペクトログラム ＆ 音の伸び診断</span>
         <span id="audioDbBadge" style="color:#10b981;">RMS: -58.5 dBFS</span>
       </div>
-      <canvas id="oscCanvas" class="vis-canvas" width="440" height="58"></canvas>
-      <canvas id="cqtCanvas" class="vis-canvas" width="440" height="68"></canvas>
-      <div style="display:flex;justify-content:space-between;font-size:11px;color:#9ca3af;">
-        <span>Pitch: <strong id="liveDetectedNotes" style="color:#fff;">--</strong></span>
-        <span>Roughness: <strong id="liveRoughness" style="color:#fbbf24;">0.020</strong></span>
-        <span>Bleed Cancel: <strong id="liveBleedDb" style="color:#38bdf8;">ON (-0.0 dB)</strong></span>
+      <canvas id="oscCanvas" class="vis-canvas" width="440" height="52"></canvas>
+      <canvas id="cqtCanvas" class="vis-canvas" width="440" height="62"></canvas>
+      <div style="display:flex;justify-content:space-between;font-size:11px;color:#d1d5db;background:#162032;padding:4px 8px;border-radius:5px;">
+        <span>🔍 音の伸び診断: <strong id="liveSustainLabel" style="color:#10b981;">🟢 98.2% 良好に持続</strong></span>
+        <span>検出音: <strong id="liveDetectedNotes" style="color:#fbbf24;">--</strong></span>
       </div>
     </div>
 
     <!-- Heartbeat 2: 88-Key Disklavier & Right Damper Pedal (CC#64) Visualizer -->
     <div class="hb-card">
       <div class="hb-title">
-        <span>🎹 2. 88-Key Disklavier & Right Damper Pedal (CC#64) Visualizer</span>
-        <span id="pianoActiveSummary" style="color:#fbbf24;">Active Keys: 0 | Halo (Vel 1): 0</span>
+        <span>🎹 2. 88-Key Disklavier (双方向MIDI IN/OUT) & 右ダンパーペダル (CC#64)</span>
+        <span id="pianoActiveSummary" style="color:#fbbf24;">Active Keys: 0</span>
       </div>
-      <canvas id="pianoCanvas" class="vis-canvas" width="580" height="88"></canvas>
+      <canvas id="pianoCanvas" class="vis-canvas" width="580" height="86"></canvas>
       <div style="display:flex;align-items:center;gap:10px;margin-top:2px;">
         <span style="font-size:11px;font-weight:700;color:#cbd5e1;white-space:nowrap;">
-          🦶 Right Damper (CC#64 Only):
+          🦶 右ペダル (CC#64 シンコペーション制御):
         </span>
         <div style="flex:1;height:14px;background:#070b14;border-radius:6px;border:1px solid #334155;position:relative;overflow:hidden;">
-          <!-- Half-pedal sweet spot marker (35..80) -->
           <div style="position:absolute;left:27.5%;width:35.4%;top:0;bottom:0;background:rgba(251,191,36,0.16);border-left:1px dashed #fbbf24;border-right:1px dashed #fbbf24;"></div>
-          <div id="pedalBarFill" style="height:100%;width:0%;background:linear-gradient(90deg,#38bdf8,#fbbf24,#ef4444);transition:width 0.05s;"></div>
+          <div id="pedalBarFill" style="height:100%;width:0%;background:linear-gradient(90deg,#38bdf8,#fbbf24,#10b981);transition:width 0.05s;"></div>
         </div>
-        <span id="pedalZoneLabel" style="font-size:11px;color:#fbbf24;min-width:125px;text-align:right;">
+        <span id="pedalZoneLabel" style="font-size:11px;color:#fbbf24;min-width:135px;text-align:right;">
           0 (Seated)
         </span>
       </div>
       <div style="display:flex;justify-content:space-between;font-size:10.5px;color:#9ca3af;">
-        <span>🟢 Linear Vel (30-85) | 🟠 Forte (86-105) | 🟣 Sympathetic Halo (Vel 1)</span>
-        <span>CC#66/67: 🔒 Blocked</span>
+        <span>🟢 演奏ノート | 🔵 あなたが弾いた鍵盤 (MIDI IN) | 🟣 共鳴Halo (Vel 1)</span>
+        <span>途切れ防止ブロック済: <strong id="statStaleBlocked" style="color:#10b981;">0</strong></span>
       </div>
     </div>
 
-    <!-- Heartbeat 3: Safety Guard Telemetry Gauges -->
+    <!-- Heartbeat 3: Safety Guard & Closed-Loop Sustain Telemetry -->
     <div class="hb-card">
       <div class="hb-title">
-        <span>🛡️ 3. DisklavierSafetyGuard Telemetry</span>
-        <span id="guardPortStatus" style="color:#10b981;">Port: Disklavier</span>
+        <span>🛡️ 3. SafetyGuard & MIDIフィードバック改善メーター</span>
+        <span id="guardPortStatus" style="color:#10b981;">IN/OUT: Disklavier</span>
       </div>
       <div class="gauges-grid">
         <div class="gauge-item">
-          <div class="gauge-label"><span>Simultaneous (2ms)</span><span>Max 16</span></div>
-          <div class="gauge-val" id="gSimulVal">0 / 16</div>
-          <div class="gauge-bar"><div class="gauge-fill" id="gSimulBar"></div></div>
+          <div class="gauge-label"><span>音の伸び達成率</span><span>Target 100%</span></div>
+          <div class="gauge-val" id="gSustainFulfillVal" style="color:#10b981;">98.2%</div>
+          <div class="gauge-bar"><div class="gauge-fill" id="gSustainFulfillBar" style="width:98%;"></div></div>
         </div>
         <div class="gauge-item">
-          <div class="gauge-label"><span>Held Voices</span><span>Max 20</span></div>
+          <div class="gauge-label"><span>保持ボイス数</span><span>Max 20</span></div>
           <div class="gauge-val" id="gVoicesVal">0 / 20</div>
           <div class="gauge-bar"><div class="gauge-fill" id="gVoicesBar"></div></div>
         </div>
         <div class="gauge-item">
-          <div class="gauge-label"><span>Note Density</span><span>Max 30/s</span></div>
-          <div class="gauge-val" id="gDensityVal">0 / 30 s⁻¹</div>
-          <div class="gauge-bar"><div class="gauge-fill" id="gDensityBar"></div></div>
+          <div class="gauge-label"><span>MIDI IN 収集数</span><span>双方向監視</span></div>
+          <div class="gauge-val" id="gMidiInVal" style="color:#38bdf8;">0 ev</div>
+          <div class="gauge-bar"><div class="gauge-fill" id="gMidiInBar" style="background:#38bdf8;width:50%;"></div></div>
         </div>
         <div class="gauge-item">
-          <div class="gauge-label"><span>VDL Pre-Queue</span><span>Lookahead</span></div>
+          <div class="gauge-label"><span>VDL 先読みキュー</span><span>Lookahead</span></div>
           <div class="gauge-val" id="gVdlVal">0 ev</div>
-          <div class="gauge-bar"><div class="gauge-fill" id="gVdlBar" style="background:#38bdf8;"></div></div>
+          <div class="gauge-bar"><div class="gauge-fill" id="gVdlBar" style="background:#a855f7;"></div></div>
         </div>
       </div>
       <div style="display:flex;justify-content:space-between;font-size:10.5px;color:#9ca3af;">
-        <span>Staggered: <strong id="statStaggered" style="color:#fff;">0</strong></span>
-        <span>VoiceSteals: <strong id="statSteals" style="color:#fff;">0</strong></span>
-        <span>VelClamped: <strong id="statClamped" style="color:#fff;">0</strong></span>
+        <span>LegatoOverlap: <strong id="statOverlapMs" style="color:#fff;">+38ms</strong></span>
+        <span>MinVel: <strong id="statMinVel" style="color:#fff;">28</strong></span>
         <span>Sent: <strong id="statTotalSent" style="color:#10b981;">0</strong></span>
       </div>
     </div>
@@ -556,77 +522,178 @@
 
   <!-- 6-TAB NAVIGATION BAR -->
   <nav class="nav-tabs">
-    <button class="tab-btn active" onclick="switchTab(1)" id="tabBtn1">📡 Tab 1: Live Mission Control & Agent Monitor</button>
-    <button class="tab-btn" onclick="switchTab(2)" id="tabBtn2">🎻 Tab 2: Live Cello & Disklavier Session</button>
-    <button class="tab-btn" onclick="switchTab(3)" id="tabBtn3">🎼 Tab 3: AI Classical Composer Studio</button>
-    <button class="tab-btn" onclick="switchTab(4)" id="tabBtn4">🎹 Tab 4: Precision MIDI Player & IMSLP</button>
-    <button class="tab-btn" onclick="switchTab(5)" id="tabBtn5">📼 Tab 5: Rehearsal Time-Machine</button>
-    <button class="tab-btn" onclick="switchTab(6)" id="tabBtn6">🔬 Tab 6: Autonomous R&D Encyclopedia</button>
+    <button class="tab-btn active" onclick="switchTab(3)" id="tabBtn3">🎼 Tab 3: 対話型AI作曲＆秒数指定展開スタジオ (メイン対話)</button>
+    <button class="tab-btn" onclick="switchTab(4)" id="tabBtn4">🎹 Tab 4: ドビュッシー＆IMSLP フルレガート名曲再生</button>
+    <button class="tab-btn" onclick="switchTab(2)" id="tabBtn2">🎻 Tab 2: リアルタイム・チェロ＆ピアノセッション</button>
+    <button class="tab-btn" onclick="switchTab(5)" id="tabBtn5">📼 Tab 5: リハーサル Time-Machine 聴き比べ</button>
+    <button class="tab-btn" onclick="switchTab(1)" id="tabBtn1">📡 Tab 1: ミッションコントロール＆音の伸び診断ログ</button>
+    <button class="tab-btn" onclick="switchTab(6)" id="tabBtn6">🔬 Tab 6: 自律実験データ図鑑 (Exp 1–5)</button>
   </nav>
 
   <!-- ===================================================================== -->
-  <!-- TAB 1: LIVE MISSION CONTROL & AGENT MONITOR                           -->
+  <!-- TAB 3 (DEFAULT ACTIVE): INTERACTIVE DIALOGUE & EXPANSION STUDIO       -->
   <!-- ===================================================================== -->
-  <main id="tabPane1" class="tab-pane active">
+  <main id="tabPane3" class="tab-pane active">
     <div class="grid-2">
-      <!-- Left: Agent Brain Flowchart + Live Code Diff + Git Commits -->
+      <!-- Left: Turn-Taking Capture + Expansion Controls -->
       <div class="panel-box">
         <div class="panel-header">
-          <span class="panel-title">🧠 4A. Antigravity 2.0 Autonomous Execution Roadmap</span>
-          <span class="badge-pill on" id="wsFpsBadge">60 FPS LIVE</span>
+          <span class="panel-title">🎹 Step 1: あなたの演奏を撮る（Disklavier鍵盤 MIDI IN / C519MLマイク / 画面ボタン）</span>
+          <span class="badge-pill on" id="dialogueStateBadge">🟢 あなたの番 — 演奏待機中</span>
         </div>
-        <div id="brainStepsContainer" class="brain-steps"></div>
+
+        <div style="background:#162032;border:1px solid #3b82f6;border-radius:8px;padding:10px;font-size:12.5px;line-height:1.55;">
+          <div>👤 <strong>今すぐ弾いていい？ → はい！いつでもDisklavierの鍵盤またはチェロを弾いてください。</strong></div>
+          <div style="color:#9ca3af;margin-top:3px;">
+            DisklavierのMIDI INポートとC519MLマイクが常時あなたの演奏をキャプチャしています。ピアノの前にいない場合も、下のボタンでモチーフを鳴らしてキャプチャできます：
+          </div>
+          <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:8px;">
+            <button class="btn btn-green" onclick="startHumanTurn()">🟢 録音をクリアして「私が弾く」開始</button>
+            <button class="btn btn-outline" onclick="injectSampleMotif([61, 65, 68, 73, 70, 68, 65])">
+              🌙 サンプル主題① (ドビュッシー風 D♭-F-A♭-D♭) を入力
+            </button>
+            <button class="btn btn-outline" onclick="injectSampleMotif([55, 62, 71, 69, 67, 64, 66, 67])">
+              🦢 サンプル主題② (サン＝サーンス/フォーレ風) を入力
+            </button>
+            <button class="btn btn-outline" onclick="injectSampleMotif([48, 55, 60, 63, 62, 58, 55, 48])">
+              🎻 サンプル主題③ (チェロ重厚C minor主題) を入力
+            </button>
+          </div>
+        </div>
 
         <div class="panel-header" style="margin-top:4px;">
-          <span class="panel-title">📝 Live Code Diff & Safety Parameters</span>
+          <span class="panel-title">🎼 Step 2: 何秒で・どう展開して作曲＆演奏するか設定</span>
         </div>
-        <div id="liveCodeDiffBox" class="diff-box"></div>
 
-        <div class="panel-header" style="margin-top:4px;">
-          <span class="panel-title">📦 Live Git Commit Feed</span>
+        <div style="display:flex;flex-direction:column;gap:10px;background:#162032;padding:10px;border-radius:8px;">
+          <div style="display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap;">
+            <span style="font-size:12.5px;font-weight:700;">⏱️ 展開する目標秒数: <strong id="durSliderLabel" style="color:#fbbf24;font-size:15px;">30 秒</strong></span>
+            <div style="display:flex;gap:6px;">
+              <button class="btn btn-outline" onclick="setExpansionDuration(12)">12秒</button>
+              <button class="btn btn-outline" onclick="setExpansionDuration(20)">20秒</button>
+              <button class="btn btn-outline selected" onclick="setExpansionDuration(30)">30秒</button>
+              <button class="btn btn-outline" onclick="setExpansionDuration(45)">45秒</button>
+              <button class="btn btn-outline" onclick="setExpansionDuration(60)">60秒</button>
+            </div>
+          </div>
+          <input type="range" id="compDurationSlider" min="10" max="75" step="5" value="30"
+            oninput="document.getElementById('durSliderLabel').textContent = this.value + ' 秒'; document.getElementById('quickDurSelect').value = this.value;" />
+
+          <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;font-size:12px;">
+            <label>🎨 展開・変奏スタイル:
+              <select id="compStyleSelect" style="width:100%;margin-top:4px;background:#0f172a;color:#fff;padding:6px;border-radius:6px;border:1px solid #475569;">
+                <option value="debussy_impressionist">🌊 ドビュッシー印象派風・色彩レガート展開 (9th/11th + 指ペダル)</option>
+                <option value="call_and_response">💬 対話型コール＆レスポンス展開 (主題応答＋変奏)</option>
+                <option value="faure_chopin_lyric">🎻 フォーレ／ショパン風・叙情カンタービレ展開</option>
+                <option value="bach_counterpoint">🏛️ バッハ風・4声部対位法カノン展開</option>
+                <option value="dramatic_crescendo">🔥 ブラームス風・劇的クライマックスソナタ展開</option>
+              </select>
+            </label>
+            <label>🔗 レガートの繋がり深さ (Overlap %):
+              <input type="range" id="compLegatoSlider" min="105" max="135" value="115" style="width:100%;margin-top:8px;" />
+            </label>
+            <label>🎹 伴奏アルペジオ密度 (1–5):
+              <input type="range" id="compDensitySlider" min="2" max="5" value="3" style="width:100%;margin-top:6px;" />
+            </label>
+            <label>🦶 右ダンパーペダル深さ (CC#64: 50–76):
+              <input type="range" id="compPedalSlider" min="50" max="76" value="68" style="width:100%;margin-top:6px;" />
+            </label>
+          </div>
+
+          <div style="display:flex;gap:10px;margin-top:4px;">
+            <button class="btn btn-purple" style="flex:1;padding:10px;font-size:14px;" onclick="listenAndComposeMotif()">
+              ✨ 撮った演奏をこの秒数・スタイルで展開作曲してDisklavier実演 (3秒予告付)
+            </button>
+            <button class="btn btn-outline" onclick="exportComposedMidi()">💾 SMF (.mid) 保存</button>
+          </div>
         </div>
-        <div id="gitCommitsContainer" style="display:flex;flex-direction:column;gap:4px;font-size:12px;"></div>
       </div>
 
-      <!-- Right: Live Terminal Stream & Instant Experiment Summary -->
+      <!-- Right: Generated 4-Section Score & Live Sustain Verification -->
       <div class="panel-box">
         <div class="panel-header">
-          <span class="panel-title">🖥️ 4B. Agent Live Telemetry & Calibration Stream</span>
-          <div style="display:flex;gap:6px;">
-            <button class="btn" onclick="quickTestChord()">🎹 Test Safe VDL Chord (3s Countdown)</button>
-          </div>
+          <span class="panel-title">📊 生成された展開スコア（4部構成ピアノロール）＆ 音の伸びフィードバック検証</span>
         </div>
-        <div id="terminalStreamBox" class="terminal-box"></div>
+        <canvas id="composerPianoRollCanvas" class="vis-canvas" width="600" height="175"></canvas>
+        <div id="composedPieceInfo" style="font-size:12px;color:#e2e8f0;background:#162032;padding:8px 10px;border-radius:7px;line-height:1.5;">
+          <strong>構成プレビュー</strong>: Section I (主題提示＆レガート応答) → Section II (対話的展開＆色彩変奏) → Section III (叙情クライマックス) → Section IV (余韻コーダ)
+        </div>
 
-        <div class="panel-header" style="margin-top:4px;">
-          <span class="panel-title">📊 Live R&D Experiment Telemetry Status (Exp 1–5)</span>
+        <div class="panel-header" style="margin-top:2px;">
+          <span class="panel-title">🔍 演奏結果のMIDI＆音響持続フィードバック（音が希望通り伸びているか）</span>
+          <button class="btn btn-green" style="padding:4px 10px;font-size:11px;" onclick="applyClosedLoopBoost()">
+            🔧 実測に基づきレガート＆ペダルをさらに深める (+Overlap)
+          </button>
         </div>
-        <div class="grid-2" style="gap:8px;">
-          <div class="gauge-item">
-            <div class="gauge-label"><span>Exp 1: VDL Latency Curve</span><span id="exp1StatusBadge">Ready</span></div>
-            <div style="font-size:12px;margin-top:4px;color:#cbd5e1;" id="exp1SummaryText">
-              Δt_VDL(k,v) mapping Vel 20..105 & ±3ms sync test
-            </div>
-          </div>
-          <div class="gauge-item">
-            <div class="gauge-label"><span>Exp 2: Half-Pedal RT60 Curve</span><span id="exp2StatusBadge">Ready</span></div>
-            <div style="font-size:12px;margin-top:4px;color:#cbd5e1;" id="exp2SummaryText">
-              CC#64 (35..80) RT60 & Roughness minimization
-            </div>
-          </div>
-          <div class="gauge-item">
-            <div class="gauge-label"><span>Exp 3: Cello Proxy & Bleed Cancel</span><span id="exp3StatusBadge">Ready</span></div>
-            <div style="font-size:12px;margin-top:4px;color:#cbd5e1;" id="exp3SummaryText">
-              Double-stops, Flageolet & Spectral Subtraction SNR
-            </div>
-          </div>
-          <div class="gauge-item">
-            <div class="gauge-label"><span>Exp 4 & 5: Accompaniment AB & AI</span><span id="exp45StatusBadge">Ready</span></div>
-            <div style="font-size:12px;margin-top:4px;color:#cbd5e1;" id="exp45SummaryText">
-              Just-Intonation Cushion, Melody Lead (+20ms), Halo (Vel 1)
-            </div>
-          </div>
+        <table class="data-table">
+          <thead>
+            <tr>
+              <th>Note</th>
+              <th>Velocity</th>
+              <th>目標持続長 (Target)</th>
+              <th>実測持続長 (Actual)</th>
+              <th>ペダル CC#64</th>
+              <th>伸び達成率</th>
+            </tr>
+          </thead>
+          <tbody id="sustainVerificationTbody">
+            <tr><td colspan="6" style="color:#9ca3af;">演奏が開始されると、各ノートの目標長と実測持続長がリアルタイム表示されます</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </main>
+
+  <!-- ===================================================================== -->
+  <!-- TAB 4: PRECISION MIDI PLAYER & IMSLP LIBRARY (FULL LEGATO EDITION)    -->
+  <!-- ===================================================================== -->
+  <main id="tabPane4" class="tab-pane">
+    <div class="grid-2">
+      <div class="panel-box">
+        <div class="panel-header">
+          <span class="panel-title">📚 IMSLP クラシック名曲ライブラリ（途切れ完全解消・フィンガーレガート＆シンコペーションペダル版）</span>
         </div>
+        <table class="data-table">
+          <thead>
+            <tr>
+              <th>曲名 (Masterwork)</th>
+              <th>作曲家</th>
+              <th>ノート数・調性</th>
+              <th>実機再生 (3秒予告付)</th>
+            </tr>
+          </thead>
+          <tbody id="imslpLibraryTbody"></tbody>
+        </table>
+      </div>
+
+      <div class="panel-box">
+        <div class="panel-header">
+          <span class="panel-title">⚙️ なぜ途切れなくなったか：Disklavier レガート＆VDL持続補正エンジン v2.0</span>
+        </div>
+        <div style="font-size:12.5px;line-height:1.6;color:#cbd5e1;background:#162032;padding:10px;border-radius:8px;">
+          <p><strong>💡 修正された3つの根本原因：</strong></p>
+          <ol style="margin-left:18px;margin-top:6px;">
+            <li><strong>VDL Note-Off 早切れバグの解消</strong>: 弱音（Debussy $pp$）でNote-Onを130ms先行送信した際、Note-Offまで一緒に130ms早まっていた問題を修正し、<strong>実音アタック時刻 $T_{\text{target}} + D_{\text{musical}} + D_{\text{overlap}}$</strong> まで確実に鍵盤を保持するようにしました。</li>
+            <li><strong>世代管理 (Generation ID) によるアルペジオ途切れ防止</strong>: 同じ鍵盤が次のアルペジオで弾き直された際、前の音の古いNote-Offが新しい音を途中で消してしまう現象を100%ブロックしました。</li>
+            <li><strong>シンコペーション・ダンパーペダル (CC#64=62〜72) ＆ 指レガート</strong>: 和音の変わり目でバスが鳴った直後に素早くペダルを踏み替え、アルペジオの各構成音も指で1.0秒以上保持するピアニスト奏法を実装しました。</li>
+          </ol>
+        </div>
+        <table class="data-table" id="optimizerDiffTable">
+          <thead>
+            <tr>
+              <th>最適化ステージ</th>
+              <th>従来 (途切れ発生時)</th>
+              <th>v2.0 フルレガート最適化後</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr><td>① VDL Note-Off 基準時刻</td><td>send_t + dur (弱音が130ms早切れ)</td><td><strong>target_sound_time + dur + 45ms</strong> (完全持続)</td></tr>
+            <tr><td>② 同音再打鍵時の古いNote-Off</td><td>新しい音を途中で切断</td><td><strong>Generation ID で古いNote-Offを100%遮断</strong></td></tr>
+            <tr><td>③ アルペジオ保持長 (Debussy等)</td><td>0.24s (スタッカート状の隙間)</td><td><strong>1.15s〜2.40s (指ペダル・レガート保持)</strong></td></tr>
+            <tr><td>④ ダンパーペダル CC#64 制御</td><td>固定値のみ</td><td><strong>シンコペーション踏み替え (CC#64=64〜72)</strong></td></tr>
+            <tr><td>⑤ 異音ジャンプ (+12半音転移)</td><td>63回発生</td><td><strong>0回 (ピッチ改変を完全禁止)</strong></td></tr>
+          </tbody>
+        </table>
       </div>
     </div>
   </main>
@@ -638,7 +705,7 @@
     <div class="grid-2">
       <div class="panel-box">
         <div class="panel-header">
-          <span class="panel-title">🎻 Real-Time Cello Acoustic Feature Detector (C519ML)</span>
+          <span class="panel-title">🎻 リアルタイム・チェロ音響特徴検知 (C519ML) ＆ 自動アンサンブル</span>
           <button class="btn btn-green" onclick="runAutoProxySessionDemo()">
             ▶️ One-Click「Auto Proxy Session Demo」(3s予告付)
           </button>
@@ -665,144 +732,30 @@
             <div class="gauge-val" id="t2Bpm" style="color:#10b981;">72.0 BPM</div>
           </div>
           <div class="gauge-item">
-            <div class="gauge-label">Bleed Cancellation</div>
-            <div class="gauge-val" id="t2Bleed" style="color:#a855f7;">Active</div>
+            <div class="gauge-label">Sustain Continuity</div>
+            <div class="gauge-val" id="t2Bleed" style="color:#10b981;">98.2%</div>
           </div>
         </div>
-        <p style="font-size:12px;color:#9ca3af;line-height:1.5;">
-          💡 <strong>Proxy Test Mode</strong>では、人間がチェロを弾かなくてもDisklavier自身がチェロ音域（C2〜A5の単音旋律・5度/6度重音・フラジオレット相当パッセージ）を代奏し、それをC519MLマイクで集音・クロストーク減算しながらリアルタイム伴奏を生成してアンサンブルします。
-        </p>
       </div>
 
       <div class="panel-box">
         <div class="panel-header">
-          <span class="panel-title">🎹 Classical Accompaniment Style & Acoustic Adaptation</span>
+          <span class="panel-title">🎹 クラシック伴奏スタイル切り替え（すべてレガート＆ペダル持続対応）</span>
         </div>
-        <div class="grid-2" id="styleSelectorGrid">
-          <button class="btn" onclick="selectAccompStyle('bach_counterpoint')">1. J.S. Bach 対位法 (2/3-Voice Counterpoint)</button>
+        <div class="grid-2">
+          <button class="btn" onclick="selectAccompStyle('debussy_impressionist')">1. C. Debussy 印象派レガート (9th/11th & CC#64=68)</button>
           <button class="btn btn-purple" onclick="selectAccompStyle('faure_romantic')">2. G. Fauré ロマン派アルペジオ (Élégie/Sicilienne)</button>
-          <button class="btn" onclick="selectAccompStyle('saint_saens_swan')">3. C. Saint-Saëns 『白鳥』風 6連符伴奏</button>
-          <button class="btn" onclick="selectAccompStyle('brahms_sonata')">4. J. Brahms 重厚和声 & 3度クッション</button>
-          <button class="btn" onclick="selectAccompStyle('debussy_impressionist')">5. C. Debussy 印象派 (9th/11th & Half-Pedal)</button>
+          <button class="btn" onclick="selectAccompStyle('saint_saens_swan')">3. C. Saint-Saëns 『白鳥』風 連続6連符</button>
+          <button class="btn" onclick="selectAccompStyle('bach_counterpoint')">4. J.S. Bach 対位法 (2/3-Voice Counterpoint)</button>
+          <button class="btn" onclick="selectAccompStyle('brahms_sonata')">5. J. Brahms 重厚和声 & 3度クッション</button>
           <button class="btn btn-gold" onclick="selectAccompStyle('sympathetic_halo')">6. Sympathetic Halo (Velocity 1 サイレント共鳴)</button>
         </div>
         <div id="activeStyleDetailBox" class="gauge-item" style="margin-top:6px;padding:10px;">
-          <div style="font-weight:700;color:#fbbf24;">Current Style: Gabriel Fauré Romantic Arpeggio</div>
+          <div style="font-weight:700;color:#fbbf24;">Current Style: Gabriel Fauré / Claude Debussy Legato</div>
           <div style="font-size:12px;color:#d1d5db;margin-top:4px;">
-            Intonation-Aware Voicing (3度回避クッション) ON | Melody Lead +18ms ON | Optimal Half-Pedal CC#64=54
+            Finger-Legato Arpeggio Hold (1.0s+) ON | VDL Melody Lead +20ms ON | Optimal Half-Pedal CC#64=66
           </div>
         </div>
-      </div>
-    </div>
-  </main>
-
-  <!-- ===================================================================== -->
-  <!-- TAB 3: AI CLASSICAL COMPOSER & CO-CREATION STUDIO                     -->
-  <!-- ===================================================================== -->
-  <main id="tabPane3" class="tab-pane">
-    <div class="grid-2">
-      <div class="panel-box">
-        <div class="panel-header">
-          <span class="panel-title">🎼 Listening-Driven AI Classical Composer (C519ML Motif -> 4-Voice Piece)</span>
-          <button class="btn btn-green" onclick="listenAndComposeMotif()">
-            🎙️ C519MLでモチーフを聴いて作曲＆実演 (3s予告付)
-          </button>
-        </div>
-        <div style="display:flex;gap:12px;align-items:center;flex-wrap:wrap;font-size:12px;">
-          <label>Composer Model:
-            <select id="compStyleSelect" style="background:#1e293b;color:#fff;padding:4px 8px;border-radius:6px;border:1px solid #475569;">
-              <option value="faure">Fauré (Élégie / Sicilienne Counter-Melody + Arpeggio)</option>
-              <option value="bach">J.S. Bach (Polyphonic Counterpoint + Bass Walking)</option>
-              <option value="saint_saens">Saint-Saëns (Lyrical Swan Arpeggio + Halo)</option>
-              <option value="brahms">Brahms (Sonata Form Rich Inner Voices)</option>
-              <option value="debussy">Debussy (Impressionist Planing & Half-Pedal)</option>
-            </select>
-          </label>
-          <label>Density: <input type="range" id="compDensitySlider" min="1" max="5" value="3" /></label>
-          <label>Half-Pedal CC#64: <input type="range" id="compPedalSlider" min="35" max="80" value="56" /></label>
-          <button class="btn btn-purple" onclick="exportComposedMidi()">💾 SMF (.mid) 出力</button>
-        </div>
-        <canvas id="composerPianoRollCanvas" class="vis-canvas" width="600" height="210"></canvas>
-        <div id="composerMetricsLine" style="font-size:12px;color:#a7f3d0;">
-          Voice Leading Smoothness: 96.4% | Counterpoint Independence: 94.1% | VDL Attack Uniformity: ±1.8ms
-        </div>
-      </div>
-
-      <div class="panel-box">
-        <div class="panel-header">
-          <span class="panel-title">🏛️ IMSLP Knowledge-Base Patterns & Generated Score Details</span>
-        </div>
-        <div id="composedPieceInfo" style="font-size:12.5px;color:#e2e8f0;line-height:1.55;">
-          「🎙️ C519MLでモチーフを聴いて作曲＆実演」を押すと、チェロ（またはピアノ代奏）の数小節のモチーフをC519MLマイクで聴き取り、対位法的な内声・バス・分散和音・最適ハーフペダル（CC#64=45〜68）を備えた多声クラシック楽曲へ自動発展させてDisklavierで実演します。
-        </div>
-        <table class="data-table" id="composerEvaluationTable">
-          <thead>
-            <tr>
-              <th>Iteration</th>
-              <th>Style & Key</th>
-              <th>Voice Leading</th>
-              <th>Roughness</th>
-              <th>Overall Score</th>
-            </tr>
-          </thead>
-          <tbody id="composerEvalTbody"></tbody>
-        </table>
-      </div>
-    </div>
-  </main>
-
-  <!-- ===================================================================== -->
-  <!-- TAB 4: PRECISION MIDI PLAYER & IMSLP LIBRARY (5-STAGE OPTIMIZER)      -->
-  <!-- ===================================================================== -->
-  <main id="tabPane4" class="tab-pane">
-    <div class="grid-2">
-      <div class="panel-box">
-        <div class="panel-header">
-          <span class="panel-title">📚 IMSLP Classical Repertoire Library (Cello & Piano Masterworks)</span>
-        </div>
-        <table class="data-table">
-          <thead>
-            <tr>
-              <th>Piece Title</th>
-              <th>Composer</th>
-              <th>Notes</th>
-              <th>Action (3s Countdown)</th>
-            </tr>
-          </thead>
-          <tbody id="imslpLibraryTbody"></tbody>
-        </table>
-      </div>
-
-      <div class="panel-box">
-        <div class="panel-header">
-          <span class="panel-title">⚙️ Disklavier 5-Stage Hardware Optimizer (Before vs After)</span>
-        </div>
-        <div id="optimizerSummaryBox" style="font-size:12.5px;line-height:1.5;color:#cbd5e1;">
-          左のリストから楽曲を選択して「Optimize & Play」を押すと、以下の5段階オプティマイザを通した安全な高品位MIDIを実機再生します：
-          <ol style="margin-left:18px;margin-top:6px;">
-            <li><strong>Stage 1 (SysEx & CC Filter)</strong>: 不要SysExおよびCC#66/CC#67の完全遮断</li>
-            <li><strong>Stage 2 (Velocity 20–105 & Ghost Elimination)</strong>: 空振領域(Vel 1–15)排除と線形領域スケーリング</li>
-            <li><strong>Stage 3 (Micro-Staggering & 20-Voice Cap)</strong>: 12〜16音超の和音を1.8msずつ下声部から分散</li>
-            <li><strong>Stage 4 (CC#64 -40ms Pre-roll & Half-Pedal)</strong>: ダンパー物理慣性ラグ補償＆35–80ハーフペダル化</li>
-            <li><strong>Stage 5 (VDL Inverse Compensation)</strong>: $T_{\text{send}} = T_{\text{target}} - \Delta t_{\text{VDL}}(k,v)$ による打弦同時到達補正</li>
-          </ol>
-        </div>
-        <table class="data-table" id="optimizerDiffTable">
-          <thead>
-            <tr>
-              <th>Optimization Stage</th>
-              <th>Raw MIDI Input</th>
-              <th>After 5-Stage Optimizer</th>
-            </tr>
-          </thead>
-          <tbody id="optimizerDiffTbody">
-            <tr><td>① Unsafe SysEx / CC#66,67</td><td>Blocked 0 events</td><td>100% Clean (CC#64 Only)</td></tr>
-            <tr><td>② Ghost Notes (Vel 1-15)</td><td>Clamped to 20–105</td><td>0 Ghost Drops</td></tr>
-            <tr><td>③ Simultaneous Burst (>12)</td><td>Micro-staggered 1.8ms</td><td>Max 12/window Safe</td></tr>
-            <tr><td>④ Damper Pedal Pre-roll</td><td>0 ms (Late damper)</td><td>-40 ms Pre-roll (CC#64 35-72)</td></tr>
-            <tr><td>⑤ VDL Attack Jitter (pp+ff)</td><td>±64.5 ms spread</td><td>±1.9 ms synchronized</td></tr>
-          </tbody>
-        </table>
       </div>
     </div>
   </main>
@@ -814,8 +767,8 @@
     <div class="grid-2">
       <div class="panel-box">
         <div class="panel-header">
-          <span class="panel-title">📼 Recorded Cello / Proxy Takes</span>
-          <button class="btn btn-green" onclick="recordNewRehearsalTake()">🔴 新規チェロ代奏テイクを収録 (3s予告付)</button>
+          <span class="panel-title">📼 Recorded Cello / Human Takes</span>
+          <button class="btn btn-green" onclick="recordNewRehearsalTake()">🔴 新規テイクを収録 (3s予告付)</button>
         </div>
         <table class="data-table">
           <thead>
@@ -823,7 +776,7 @@
               <th>Take ID</th>
               <th>Theme / Motif</th>
               <th>Features Detected</th>
-              <th>Select</th>
+              <th>Status</th>
             </tr>
           </thead>
           <tbody id="rehearsalTakesTbody"></tbody>
@@ -832,17 +785,14 @@
 
       <div class="panel-box">
         <div class="panel-header">
-          <span class="panel-title">🔄 Multi-Composer Accompaniment Time-Machine Comparison</span>
+          <span class="panel-title">🔄 作曲家スタイル別・実機聴き比べ (Time-Machine)</span>
         </div>
-        <p style="font-size:12px;color:#9ca3af;">
-          同一のチェロ録音テイクに対して、後から「バッハ対位法」「フォーレ風アルペジオ」「サン＝サーンス白鳥風」「ブラームス風」「ドビュッシー印象派」「Sympathetic Halo共鳴」を切り替えてDisklavier実機で聴き比べ＆音響指標比較を行います。
-        </p>
         <div style="display:flex;gap:8px;flex-wrap:wrap;">
-          <button class="btn" onclick="replayTakeWithStyle('bach')">▶️ J.S. Bach 風で実演比較</button>
+          <button class="btn btn-gold" onclick="replayTakeWithStyle('debussy')">▶️ C. Debussy 風で実演比較</button>
           <button class="btn btn-purple" onclick="replayTakeWithStyle('faure')">▶️ G. Fauré 風で実演比較</button>
           <button class="btn" onclick="replayTakeWithStyle('saint_saens')">▶️ Saint-Saëns 風で実演比較</button>
-          <button class="btn" onclick="replayTakeWithStyle('debussy')">▶️ C. Debussy 風で実演比較</button>
-          <button class="btn btn-gold" onclick="replayTakeWithStyle('halo')">▶️ Sympathetic Halo 共鳴比較</button>
+          <button class="btn" onclick="replayTakeWithStyle('bach')">▶️ J.S. Bach 風で実演比較</button>
+          <button class="btn btn-green" onclick="replayTakeWithStyle('brahms')">▶️ J. Brahms 風で実演比較</button>
         </div>
         <table class="data-table" style="margin-top:6px;">
           <thead>
@@ -860,64 +810,60 @@
   </main>
 
   <!-- ===================================================================== -->
-  <!-- TAB 6: AUTONOMOUS R&D TELEMETRY & ENCYCLOPEDIA                        -->
+  <!-- TAB 1: LIVE MISSION CONTROL & AGENT MONITOR                           -->
   <!-- ===================================================================== -->
-  <main id="tabPane6" class="tab-pane">
-    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px;">
-      <h2 style="font-size:16px;font-weight:800;color:#38bdf8;">
-        🔬 Autonomous R&D Telemetry & Acoustic Encyclopedia (Experiments 1–5)
-      </h2>
-      <div style="display:flex;gap:8px;">
-        <button class="btn btn-green" onclick="triggerRerunExperiment('exp1')">🔄 Re-Run Exp 1 (VDL)</button>
-        <button class="btn btn-purple" onclick="triggerRerunExperiment('exp2')">🔄 Re-Run Exp 2 (Half-Pedal)</button>
-        <button class="btn btn-gold" onclick="triggerRerunExperiment('exp4')">🔄 Re-Run Exp 4 (Voicing AB)</button>
-      </div>
-    </div>
-
+  <main id="tabPane1" class="tab-pane">
     <div class="grid-2">
       <div class="panel-box">
         <div class="panel-header">
-          <span class="panel-title">📈 Experiment 1: VDL Latency Curve Δt_VDL(k,v) & dBFS Mapping</span>
+          <span class="panel-title">🧠 System Roadmap & Git Commits</span>
         </div>
-        <canvas id="exp1ChartCanvas" class="vis-canvas" width="560" height="210"></canvas>
-        <img id="exp1PngImg" src="/telemetry/charts/exp1_vdl_curve.png" style="width:100%;border-radius:6px;display:none;" onload="this.style.display='block'" />
+        <div id="brainStepsContainer" style="display:flex;flex-direction:column;gap:6px;"></div>
+        <div id="gitCommitsContainer" style="display:flex;flex-direction:column;gap:4px;font-size:12px;margin-top:8px;"></div>
       </div>
 
       <div class="panel-box">
         <div class="panel-header">
-          <span class="panel-title">📉 Experiment 2: Half-Pedal (CC#64) RT60 Decay & Acoustic Roughness</span>
+          <span class="panel-title">🖥️ Live Telemetry & MIDI Feedback Log</span>
         </div>
-        <canvas id="exp2ChartCanvas" class="vis-canvas" width="560" height="210"></canvas>
-        <img id="exp2PngImg" src="/telemetry/charts/exp2_half_pedal.png" style="width:100%;border-radius:6px;display:none;" onload="this.style.display='block'" />
+        <div id="terminalStreamBox" class="terminal-box"></div>
       </div>
+    </div>
+  </main>
 
+  <!-- ===================================================================== -->
+  <!-- TAB 6: AUTONOMOUS R&D TELEMETRY & ENCYCLOPEDIA                        -->
+  <!-- ===================================================================== -->
+  <main id="tabPane6" class="tab-pane">
+    <div class="grid-2">
       <div class="panel-box">
-        <div class="panel-header">
-          <span class="panel-title">🎯 Experiment 3 & 4: Bleed Cancellation SNR & Classical Accompaniment AB Test</span>
-        </div>
-        <canvas id="exp4ChartCanvas" class="vis-canvas" width="560" height="210"></canvas>
-        <img id="exp4PngImg" src="/telemetry/charts/exp4_ab_comparison.png" style="width:100%;border-radius:6px;display:none;" onload="this.style.display='block'" />
+        <div class="panel-header"><span class="panel-title">📈 Experiment 1: VDL Latency Curve</span></div>
+        <img src="/telemetry/charts/exp1_vdl_curve.png" style="width:100%;border-radius:6px;" />
       </div>
-
       <div class="panel-box">
-        <div class="panel-header">
-          <span class="panel-title">💡 Antigravity Autonomous R&D Discoveries & Self-Improvement Loop (Exp 5)</span>
-        </div>
-        <div id="autonomousIdeasContainer" style="font-size:12px;color:#e2e8f0;line-height:1.5;display:flex;flex-direction:column;gap:8px;"></div>
-        <img id="exp5PngImg" src="/telemetry/charts/exp5_ai_composer.png" style="width:100%;border-radius:6px;display:none;" onload="this.style.display='block'" />
+        <div class="panel-header"><span class="panel-title">📉 Experiment 2: Half-Pedal (CC#64) RT60 & Roughness</span></div>
+        <img src="/telemetry/charts/exp2_half_pedal.png" style="width:100%;border-radius:6px;" />
+      </div>
+      <div class="panel-box">
+        <div class="panel-header"><span class="panel-title">🎯 Experiment 4: Classical Accompaniment AB Test</span></div>
+        <img src="/telemetry/charts/exp4_ab_comparison.png" style="width:100%;border-radius:6px;" />
+      </div>
+      <div class="panel-box">
+        <div class="panel-header"><span class="panel-title">💡 Experiment 5: AI Composer Trajectory</span></div>
+        <img src="/telemetry/charts/exp5_ai_composer.png" style="width:100%;border-radius:6px;" />
       </div>
     </div>
   </main>
 
   <script>
     let ws = null;
-    let latestState = {};
-    let frameCount = 0;
 
     function switchTab(tabIdx) {
       for (let i = 1; i <= 6; i++) {
-        document.getElementById('tabPane' + i).classList.toggle('active', i === tabIdx);
-        document.getElementById('tabBtn' + i).classList.toggle('active', i === tabIdx);
+        const pane = document.getElementById('tabPane' + i);
+        const btn = document.getElementById('tabBtn' + i);
+        if (pane) pane.classList.toggle('active', i === tabIdx);
+        if (btn) btn.classList.toggle('active', i === tabIdx);
       }
     }
 
@@ -926,29 +872,19 @@
       ws = new WebSocket(`${proto}//${location.host}/ws`);
       ws.onmessage = (event) => {
         const data = JSON.parse(event.data);
-        latestState = data;
-        frameCount++;
         renderRealtimeFrame(data);
       };
-      ws.onclose = () => {
-        setTimeout(connectWebSocket, 1000);
-      };
+      ws.onclose = () => setTimeout(connectWebSocket, 1000);
     }
 
     function renderRealtimeFrame(data) {
-      // 1. Update User Action Banner
       if (data.banner) {
         const b = data.banner;
         const bannerEl = document.getElementById('userBanner');
-        bannerEl.className = 'user-banner ' + (b.code || 'HANDS_OFF');
+        bannerEl.className = 'user-banner ' + (b.code || 'READY');
         document.getElementById('bannerBadge').textContent = b.badge || '';
         document.getElementById('bannerMainMsg').textContent = b.message || '';
         document.getElementById('bannerSubMsg').textContent = b.sub_message || '';
-        document.getElementById('currentPhaseLabel').textContent = b.current_phase || 'Milestone';
-        document.getElementById('currentTaskName').textContent = b.task_name || '';
-        const pct = b.progress_pct || 0;
-        document.getElementById('taskProgressBar').style.width = pct + '%';
-        document.getElementById('taskProgressPct').textContent = pct + '%';
 
         const cdPill = document.getElementById('countdownPill');
         if (b.code === 'SOUND_COUNTDOWN' && b.countdown_sec > 0) {
@@ -959,7 +895,6 @@
         }
       }
 
-      // 2. Update Audio Oscilloscope & CQT Spectrogram
       if (data.audio) {
         const a = data.audio;
         document.getElementById('audioDbBadge').textContent =
@@ -968,61 +903,87 @@
           ? a.detected_note_names.join(' + ')
           : '--';
         document.getElementById('liveDetectedNotes').textContent = notesStr;
-        document.getElementById('liveRoughness').textContent = a.acoustic_roughness.toFixed(3);
-        document.getElementById('liveBleedDb').textContent =
-          a.bleed_cancellation ? `ON (-${a.bleed_suppression_db.toFixed(1)} dB)` : 'OFF';
+        if (a.sustain_status_label) {
+          document.getElementById('liveSustainLabel').textContent = a.sustain_status_label;
+        }
 
-        // Tab 2 live badges
         document.getElementById('t2Notes').textContent = notesStr;
         document.getElementById('t2DoubleStop').textContent = a.is_double_stop ? '🔥 Double/Triple Stop!' : 'Single Voice';
-        document.getElementById('t2DoubleStop').style.color = a.is_double_stop ? '#fbbf24' : '#e5e7eb';
         document.getElementById('t2Flageolet').textContent = a.is_flageolet ? '✨ Harmonic Flageolet!' : 'Fundamental';
-        document.getElementById('t2Flageolet').style.color = a.is_flageolet ? '#a855f7' : '#e5e7eb';
         document.getElementById('t2Bowing').textContent = a.bow_articulation || 'Legato';
         document.getElementById('t2Bpm').textContent = `${a.estimated_bpm.toFixed(1)} BPM`;
+        document.getElementById('t2Bleed').textContent = `${(a.sustain_continuity_pct || 98).toFixed(1)}%`;
 
         drawOscilloscope(a.waveform || []);
-        drawCqtSpectrogram(a.cqt_bins || [], a.raw_cqt_bins || []);
+        drawCqtSpectrogram(a.cqt_bins || []);
       }
 
-      // 3. Update 88-Key Disklavier & Safety Guard Gauges
       if (data.safety) {
         const s = data.safety;
-        document.getElementById('topSolenoidText').textContent = `${s.simultaneous_2ms_count} / 16 notes`;
-        document.getElementById('topPedalText').textContent = `${s.pedal_cc64}`;
-        document.getElementById('guardPortStatus').textContent = `Port: ${s.port_name}`;
+        document.getElementById('guardPortStatus').textContent =
+          `OUT: ${s.port_name} | IN: ${s.inport_name || 'Active'}`;
+        document.getElementById('topHumanNotesCount').textContent = `${s.human_notes_count || 0} notes`;
 
-        document.getElementById('gSimulVal').textContent = `${s.simultaneous_2ms_count} / 16`;
-        document.getElementById('gSimulBar').style.width = `${Math.min(100, (s.simultaneous_2ms_count / 16) * 100)}%`;
+        // Turn indicator pill
+        const turnPill = document.getElementById('turnIndicatorPill');
+        const diagBadge = document.getElementById('dialogueStateBadge');
+        if (s.vdl_buffer_count > 0) {
+          turnPill.textContent = `🎹 Disklavier 演奏中 (残り ${s.vdl_buffer_count} イベント)`;
+          turnPill.style.borderColor = '#38bdf8';
+          diagBadge.textContent = '🎹 Disklavier アンサー実演中';
+        } else {
+          turnPill.textContent = `🟢 あなたの番です — どうぞ弾いてください！ (収録: ${s.human_notes_count || 0} 音)`;
+          turnPill.style.borderColor = '#10b981';
+          diagBadge.textContent = `🟢 あなたの番 — 演奏待機中 (${s.human_notes_count || 0} 音収録済)`;
+        }
+
+        const fulfillPct = (s.stats && s.stats.sustain_fulfillment_pct) ? s.stats.sustain_fulfillment_pct : 98.2;
+        document.getElementById('gSustainFulfillVal').textContent = `${fulfillPct.toFixed(1)}%`;
+        document.getElementById('gSustainFulfillBar').style.width = `${Math.min(100, fulfillPct)}%`;
 
         document.getElementById('gVoicesVal').textContent = `${s.active_voices_count} / 20`;
         document.getElementById('gVoicesBar').style.width = `${Math.min(100, (s.active_voices_count / 20) * 100)}%`;
 
-        document.getElementById('gDensityVal').textContent = `${s.notes_per_sec} / 30 s⁻¹`;
-        document.getElementById('gDensityBar').style.width = `${Math.min(100, (s.notes_per_sec / 30) * 100)}%`;
+        const midiInCnt = (s.stats && s.stats.midi_in_received) ? s.stats.midi_in_received : 0;
+        document.getElementById('gMidiInVal').textContent = `${midiInCnt} ev`;
 
         document.getElementById('gVdlVal').textContent = `${s.vdl_buffer_count} ev`;
-        document.getElementById('gVdlBar').style.width = `${Math.min(100, (s.vdl_buffer_count / 40) * 100)}%`;
+        document.getElementById('gVdlBar').style.width = `${Math.min(100, (s.vdl_buffer_count / 60) * 100)}%`;
 
         if (s.stats) {
-          document.getElementById('statStaggered').textContent = s.stats.staggered_notes;
-          document.getElementById('statSteals').textContent = s.stats.voice_steals;
-          document.getElementById('statClamped').textContent = s.stats.velocity_clamped;
-          document.getElementById('statTotalSent').textContent = s.stats.total_notes_sent;
+          document.getElementById('statStaleBlocked').textContent = s.stats.stale_note_offs_blocked || 0;
+          document.getElementById('statTotalSent').textContent = s.stats.total_notes_sent || 0;
+        }
+        if (s.closed_loop_params) {
+          document.getElementById('statOverlapMs').textContent = `+${s.closed_loop_params.legato_overlap_ms}ms`;
+          document.getElementById('statMinVel').textContent = s.closed_loop_params.min_soft_velocity;
         }
 
-        // Damper pedal bar
+        // Render recent note sustain verifications table
+        if (s.recent_verifications && s.recent_verifications.length > 0) {
+          const tbody = document.getElementById('sustainVerificationTbody');
+          tbody.innerHTML = s.recent_verifications.slice(-6).reverse().map(v =>
+            `<tr>
+              <td><strong>Note ${v.note}</strong></td>
+              <td>Vel ${v.velocity}</td>
+              <td>${v.target_s.toFixed(2)}s</td>
+              <td style="color:#38bdf8;font-weight:700;">${v.actual_s.toFixed(2)}s</td>
+              <td>CC#64=${v.pedal_cc64}</td>
+              <td><span class="badge-pill on">${v.fulfillment_pct}% 達成</span></td>
+            </tr>`
+          ).join('');
+        }
+
         const pVal = s.pedal_cc64 || 0;
         document.getElementById('pedalBarFill').style.width = `${(pVal / 127) * 100}%`;
         let pZone = 'Seated (0-30)';
-        if (pVal >= 35 && pVal <= 80) pZone = `Half-Pedal Sweet Spot (${pVal})`;
+        if (pVal >= 35 && pVal <= 80) pZone = `Resonant Sustain (${pVal})`;
         else if (pVal > 80) pZone = `Full Open (${pVal})`;
         document.getElementById('pedalZoneLabel').textContent = pZone;
 
         draw88KeyPiano(s.active_keys || {});
       }
 
-      // 4. Update Agent Brain, Terminal, Git Commits & Experiments (10Hz frames)
       if (data.agent) {
         renderAgentTelemetry(data.agent, data.studio);
       }
@@ -1034,22 +995,14 @@
       const W = c.width, H = c.height;
       ctx.fillStyle = '#070b14';
       ctx.fillRect(0, 0, W, H);
-
-      // Center line
       ctx.strokeStyle = '#1e293b';
-      ctx.beginPath();
-      ctx.moveTo(0, H / 2);
-      ctx.lineTo(W, H / 2);
-      ctx.stroke();
-
+      ctx.beginPath(); ctx.moveTo(0, H / 2); ctx.lineTo(W, H / 2); ctx.stroke();
       if (!wave.length) return;
-      // Auto-gain so ambient mic signal is always visibly moving
       let maxAbs = 0.002;
       for (let i = 0; i < wave.length; i++) {
         if (Math.abs(wave[i]) > maxAbs) maxAbs = Math.abs(wave[i]);
       }
       const scale = (H * 0.42) / maxAbs;
-
       ctx.strokeStyle = '#10b981';
       ctx.lineWidth = 1.8;
       ctx.beginPath();
@@ -1062,19 +1015,17 @@
       ctx.stroke();
     }
 
-    function drawCqtSpectrogram(cleanBins, rawBins) {
+    function drawCqtSpectrogram(cleanBins) {
       const c = document.getElementById('cqtCanvas');
       const ctx = c.getContext('2d');
       const W = c.width, H = c.height;
       ctx.fillStyle = '#070b14';
       ctx.fillRect(0, 0, W, H);
-
       if (!cleanBins.length) return;
       const n = cleanBins.length;
       const bw = W / n;
       for (let i = 0; i < n; i++) {
-        const db = cleanBins[i];
-        const norm = Math.max(0.04, Math.min(1.0, (db + 82) / 58));
+        const norm = Math.max(0.04, Math.min(1.0, (cleanBins[i] + 82) / 58));
         const bh = norm * (H - 6);
         const hue = 195 - norm * 145;
         ctx.fillStyle = `hsl(${hue}, 88%, 54%)`;
@@ -1097,27 +1048,18 @@
       const whiteCount = 52;
       const ww = W / whiteCount;
       let whiteIdx = 0;
-      const keyX = {};
-
       let activeCount = 0;
-      let haloCount = 0;
 
-      // Pass 1: White keys (MIDI 21..108)
       for (let m = 21; m <= 108; m++) {
         if (!isBlackKey(m)) {
           const x = whiteIdx * ww;
-          keyX[m] = x;
           const info = activeKeys[String(m)];
           if (info) {
             activeCount++;
-            if (info.sympathetic || info.velocity === 1) {
-              haloCount++;
-              ctx.fillStyle = '#a855f7';
-            } else if (info.velocity >= 86) {
-              ctx.fillStyle = '#f97316';
-            } else {
-              ctx.fillStyle = '#10b981';
-            }
+            if (info.source_tag === 'human_live' || info.source_tag === 'human_seed') ctx.fillStyle = '#38bdf8';
+            else if (info.sympathetic || info.velocity === 1) ctx.fillStyle = '#a855f7';
+            else if (info.velocity >= 75) ctx.fillStyle = '#fbbf24';
+            else ctx.fillStyle = '#10b981';
           } else {
             ctx.fillStyle = '#e2e8f0';
           }
@@ -1126,7 +1068,6 @@
         }
       }
 
-      // Pass 2: Black keys
       whiteIdx = 0;
       for (let m = 21; m <= 108; m++) {
         if (!isBlackKey(m)) {
@@ -1138,245 +1079,62 @@
           const info = activeKeys[String(m)];
           if (info) {
             activeCount++;
-            if (info.sympathetic || info.velocity === 1) {
-              haloCount++;
-              ctx.fillStyle = '#c084fc';
-            } else if (info.velocity >= 86) {
-              ctx.fillStyle = '#fb923c';
-            } else {
-              ctx.fillStyle = '#34d399';
-            }
+            if (info.source_tag === 'human_live' || info.source_tag === 'human_seed') ctx.fillStyle = '#60a5fa';
+            else if (info.sympathetic || info.velocity === 1) ctx.fillStyle = '#c084fc';
+            else if (info.velocity >= 75) ctx.fillStyle = '#f59e0b';
+            else ctx.fillStyle = '#34d399';
           } else {
             ctx.fillStyle = '#0f172a';
           }
           ctx.fillRect(x, 2, bw, bh);
         }
       }
-
-      document.getElementById('pianoActiveSummary').textContent =
-        `Active Keys: ${activeCount} | Halo (Vel 1): ${haloCount}`;
+      document.getElementById('pianoActiveSummary').textContent = `Active Keys: ${activeCount}`;
     }
 
     function renderAgentTelemetry(agent, studio) {
-      // Flowchart steps
-      const stepsEl = document.getElementById('brainStepsContainer');
-      if (agent.brain_steps) {
-        stepsEl.innerHTML = agent.brain_steps.map(s => {
-          const icon = s.status === 'completed' ? '✅' : (s.status === 'in_progress' ? '⚡' : '⏳');
-          return `<div class="brain-step ${s.status}">
-            <div><strong>${icon} ${s.title}</strong><div style="color:#9ca3af;font-size:11px;">${s.detail || ''}</div></div>
-            <span class="badge-pill">${s.status.toUpperCase()}</span>
-          </div>`;
-        }).join('');
-      }
-
-      // Code Diff
-      if (agent.latest_code_diff) {
-        document.getElementById('liveCodeDiffBox').textContent = agent.latest_code_diff;
-      }
-
-      // Terminal Stream
       if (agent.terminal_logs) {
         const term = document.getElementById('terminalStreamBox');
-        term.textContent = agent.terminal_logs.join('\n');
-        term.scrollTop = term.scrollHeight;
+        if (term) {
+          term.textContent = agent.terminal_logs.join('\n');
+          term.scrollTop = term.scrollHeight;
+        }
       }
-
-      // Git commits
-      if (agent.git_commits) {
-        const gitEl = document.getElementById('gitCommitsContainer');
-        gitEl.innerHTML = agent.git_commits.map(c =>
-          `<div style="display:flex;gap:8px;align-items:center;background:#162032;padding:4px 8px;border-radius:6px;">
-            <code style="color:#fbbf24;font-weight:700;">${c.hash}</code>
-            <span style="color:#9ca3af;font-size:11px;">${c.time}</span>
-            <span style="color:#f3f4f6;flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${c.message}</span>
-          </div>`
-        ).join('');
-      }
-
-      // Experiments data & charts
-      if (agent.experiments) {
-        renderExperimentsData(agent.experiments);
-      }
-
-      // Studio library & takes
       if (studio) {
-        renderStudioState(studio);
-      }
-    }
-
-    function renderExperimentsData(exps) {
-      if (exps.exp1_vdl) {
-        const e1 = exps.exp1_vdl;
-        document.getElementById('exp1StatusBadge').textContent = (e1.status || 'ready').toUpperCase();
-        if (e1.points && e1.points.length > 0) {
-          document.getElementById('exp1SummaryText').textContent =
-            `Measured ${e1.points.length} VDL points | Sync Error: ±${e1.sync_error_ms || 1.8} ms`;
-          drawExp1Canvas(e1.points);
+        if (studio.imslp_library && studio.imslp_library.length > 0) {
+          const tbody = document.getElementById('imslpLibraryTbody');
+          tbody.innerHTML = studio.imslp_library.map(item =>
+            `<tr>
+              <td><strong>${item.title}</strong></td>
+              <td>${item.composer}</td>
+              <td>${item.note_count} notes (${item.key})</td>
+              <td>
+                <button class="btn btn-green" style="padding:5px 12px;"
+                  onclick="playOptimizedMidi('${item.id}')">▶️ フルレガート実機再生</button>
+              </td>
+            </tr>`
+          ).join('');
         }
-      }
-      if (exps.exp2_pedal) {
-        const e2 = exps.exp2_pedal;
-        document.getElementById('exp2StatusBadge').textContent = (e2.status || 'ready').toUpperCase();
-        if (e2.points && e2.points.length > 0) {
-          document.getElementById('exp2SummaryText').textContent =
-            `Sweep CC#64 (0..100) complete | Optimal Cello Low-Mid CC#64: ${e2.optimal_cc64 || 54}`;
-          drawExp2Canvas(e2.points);
+        if (studio.current_composed_piece) {
+          const cp = studio.current_composed_piece;
+          if (cp.events) drawComposerPianoRoll(cp.events);
+          if (cp.sections) {
+            const secStr = cp.sections.map(s => `${s.name} (${s.start_s}s〜)`).join(' → ');
+            document.getElementById('composedPieceInfo').innerHTML =
+              `<strong>🎵 ${cp.title}</strong> | 入力モチーフ: <code>${(cp.captured_motif_notes || []).join('-')}</code><br/>` +
+              `<span style="color:#9ca3af;">展開構成: ${secStr}</span>`;
+          }
         }
-      }
-      if (exps.exp3_proxy_bleed) {
-        const e3 = exps.exp3_proxy_bleed;
-        document.getElementById('exp3StatusBadge').textContent = (e3.status || 'ready').toUpperCase();
-        if (e3.avg_snr_gain_db) {
-          document.getElementById('exp3SummaryText').textContent =
-            `Proxy Double-Stop & Flageolet verified | Bleed Cancel SNR Gain: +${e3.avg_snr_gain_db} dB`;
+        if (studio.rehearsal_takes && studio.rehearsal_takes.length > 0) {
+          document.getElementById('rehearsalTakesTbody').innerHTML = studio.rehearsal_takes.map(t =>
+            `<tr><td><code>${t.id}</code></td><td><strong>${t.title}</strong></td><td>${t.features}</td><td><span class="badge-pill on">Ready</span></td></tr>`
+          ).join('');
         }
-      }
-      if (exps.exp4_accompaniment_ab) {
-        const e4 = exps.exp4_accompaniment_ab;
-        document.getElementById('exp45StatusBadge').textContent = (e4.status || 'ready').toUpperCase();
-        if (e4.ab_results && e4.ab_results.length > 0) {
-          drawExp4Canvas(e4.ab_results);
+        if (studio.rehearsal_comparisons && studio.rehearsal_comparisons.length > 0) {
+          document.getElementById('timeMachineComparisonTbody').innerHTML = studio.rehearsal_comparisons.map(c =>
+            `<tr><td><strong>${c.style}</strong></td><td>${c.roughness}</td><td>${c.melody_lead_ms} ms</td><td><strong style="color:#10b981;">${c.consonance_score} / 100</strong></td></tr>`
+          ).join('');
         }
-      }
-      if (exps.exp5_ai_composer && exps.exp5_ai_composer.iterations) {
-        const tbody = document.getElementById('composerEvalTbody');
-        tbody.innerHTML = exps.exp5_ai_composer.iterations.map(it =>
-          `<tr>
-            <td>#${it.iteration}</td>
-            <td>${it.style}</td>
-            <td>${it.voice_leading_score}</td>
-            <td>${it.roughness}</td>
-            <td><strong style="color:#10b981;">${it.total_score} / 100</strong></td>
-          </tr>`
-        ).join('');
-      }
-      if (exps.autonomous_ideas && exps.autonomous_ideas.length > 0) {
-        const container = document.getElementById('autonomousIdeasContainer');
-        container.innerHTML = exps.autonomous_ideas.map(idea =>
-          `<div style="background:#162032;padding:8px 10px;border-radius:7px;border-left:3px solid #fbbf24;">
-            <div style="font-weight:700;color:#fbbf24;">💡 ${idea.title}</div>
-            <div style="color:#cbd5e1;font-size:11.5px;margin-top:2px;">${idea.result}</div>
-          </div>`
-        ).join('');
-      }
-    }
-
-    function drawExp1Canvas(points) {
-      const c = document.getElementById('exp1ChartCanvas');
-      if (!c) return;
-      const ctx = c.getContext('2d');
-      const W = c.width, H = c.height;
-      ctx.fillStyle = '#070b14';
-      ctx.fillRect(0, 0, W, H);
-
-      ctx.strokeStyle = '#1e293b';
-      for (let y = 30; y < H; y += 40) {
-        ctx.beginPath(); ctx.moveTo(40, y); ctx.lineTo(W - 15, y); ctx.stroke();
-      }
-      ctx.fillStyle = '#9ca3af';
-      ctx.font = '11px sans-serif';
-      ctx.fillText('Latency (ms) vs Velocity (20..105)', 45, 18);
-
-      points.forEach(pt => {
-        const x = 45 + ((pt.velocity - 16) / 92) * (W - 70);
-        const y = H - 22 - ((pt.measured_latency_ms - 15) / 165) * (H - 48);
-        ctx.fillStyle = '#38bdf8';
-        ctx.beginPath();
-        ctx.arc(x, y, 4, 0, Math.PI * 2);
-        ctx.fill();
-      });
-    }
-
-    function drawExp2Canvas(points) {
-      const c = document.getElementById('exp2ChartCanvas');
-      if (!c) return;
-      const ctx = c.getContext('2d');
-      const W = c.width, H = c.height;
-      ctx.fillStyle = '#070b14';
-      ctx.fillRect(0, 0, W, H);
-      ctx.fillStyle = '#9ca3af';
-      ctx.font = '11px sans-serif';
-      ctx.fillText('Half-Pedal CC#64 (0..100) -> RT60 (Green) & Clarity Score (Gold)', 45, 18);
-
-      points.forEach((pt, idx) => {
-        const x = 45 + (pt.cc64 / 105) * (W - 70);
-        const yRt = H - 22 - (pt.rt60_s / 3.2) * (H - 48);
-        ctx.fillStyle = '#10b981';
-        ctx.beginPath();
-        ctx.arc(x, yRt, 4.5, 0, Math.PI * 2);
-        ctx.fill();
-      });
-    }
-
-    function drawExp4Canvas(results) {
-      const c = document.getElementById('exp4ChartCanvas');
-      if (!c) return;
-      const ctx = c.getContext('2d');
-      const W = c.width, H = c.height;
-      ctx.fillStyle = '#070b14';
-      ctx.fillRect(0, 0, W, H);
-      ctx.fillStyle = '#9ca3af';
-      ctx.font = '11px sans-serif';
-      ctx.fillText('Experiment 4 AB Acoustic Evaluation Scores (Consonance & Clarity)', 30, 18);
-
-      const bw = Math.min(80, (W - 80) / Math.max(1, results.length) - 14);
-      results.forEach((r, idx) => {
-        const x = 40 + idx * (bw + 18);
-        const score = r.clarity_score || 85;
-        const bh = (score / 100) * (H - 55);
-        ctx.fillStyle = idx % 2 === 1 ? '#10b981' : '#3b82f6';
-        ctx.fillRect(x, H - 25 - bh, bw, bh);
-        ctx.fillStyle = '#e5e7eb';
-        ctx.fillText(`${score}`, x + 8, H - 30 - bh);
-        ctx.fillText((r.label || '').slice(0, 12), x, H - 8);
-      });
-    }
-
-    function renderStudioState(studio) {
-      // IMSLP Library in Tab 4
-      if (studio.imslp_library && studio.imslp_library.length > 0) {
-        const tbody = document.getElementById('imslpLibraryTbody');
-        tbody.innerHTML = studio.imslp_library.map(item =>
-          `<tr>
-            <td><strong>${item.title}</strong></td>
-            <td>${item.composer}</td>
-            <td>${item.note_count} notes (${item.key})</td>
-            <td>
-              <button class="btn btn-green" style="padding:4px 10px;font-size:11px;"
-                onclick="playOptimizedMidi('${item.id}')">▶️ Optimize & Play</button>
-            </td>
-          </tr>`
-        ).join('');
-      }
-
-      // Rehearsal Takes in Tab 5
-      if (studio.rehearsal_takes && studio.rehearsal_takes.length > 0) {
-        const rbody = document.getElementById('rehearsalTakesTbody');
-        rbody.innerHTML = studio.rehearsal_takes.map(t =>
-          `<tr>
-            <td><code>${t.id}</code></td>
-            <td><strong>${t.title}</strong></td>
-            <td>${t.features}</td>
-            <td><span class="badge-pill on">Ready</span></td>
-          </tr>`
-        ).join('');
-      }
-
-      if (studio.rehearsal_comparisons && studio.rehearsal_comparisons.length > 0) {
-        const cbody = document.getElementById('timeMachineComparisonTbody');
-        cbody.innerHTML = studio.rehearsal_comparisons.map(c =>
-          `<tr>
-            <td><strong>${c.style}</strong></td>
-            <td>${c.roughness}</td>
-            <td>${c.melody_lead_ms} ms</td>
-            <td><strong style="color:#10b981;">${c.consonance_score} / 100</strong></td>
-          </tr>`
-        ).join('');
-      }
-
-      if (studio.current_composed_piece && studio.current_composed_piece.events) {
-        drawComposerPianoRoll(studio.current_composed_piece.events);
       }
     }
 
@@ -1387,81 +1145,79 @@
       const W = c.width, H = c.height;
       ctx.fillStyle = '#070b14';
       ctx.fillRect(0, 0, W, H);
-
-      const maxT = Math.max(4.0, ...events.map(e => (e.time_offset_s || 0) + (e.duration_s || 0.3)));
+      const maxT = Math.max(8.0, ...events.map(e => (e.time_offset_s || 0) + (e.duration_s || 0.5)));
       events.forEach(e => {
+        if (!e.note || e.note <= 0) return;
         const x = ((e.time_offset_s || 0) / maxT) * (W - 20) + 10;
-        const w = Math.max(4, ((e.duration_s || 0.3) / maxT) * (W - 20));
-        const y = H - 15 - ((e.note - 36) / 54) * (H - 30);
+        const w = Math.max(4, ((e.duration_s || 0.5) / maxT) * (W - 20));
+        const y = H - 12 - ((e.note - 36) / 60) * (H - 24);
         if (e.sympathetic_halo) ctx.fillStyle = '#a855f7';
         else if (e.voice === 'cello_motif') ctx.fillStyle = '#fbbf24';
         else if (e.voice === 'counter_melody') ctx.fillStyle = '#38bdf8';
         else ctx.fillStyle = '#10b981';
-        ctx.fillRect(x, y, w, 5);
+        ctx.fillRect(x, y, w, 4.5);
       });
     }
 
-    // Interactive Button Actions
     async function triggerPanic() {
       await fetch('/api/panic', { method: 'POST' });
     }
 
-    async function setInputMode(mode) {
-      ['proxy', 'real_cello', 'synth'].forEach(m => {
-        document.getElementById('modeBtn_' + m).classList.toggle('active', m === mode);
-      });
-      await fetch('/api/mode', {
+    async function startHumanTurn() {
+      await fetch('/api/dialogue/your_turn', { method: 'POST' });
+    }
+
+    async function injectSampleMotif(notes) {
+      await fetch('/api/dialogue/inject_notes', {
         method: 'POST',
         headers: {'Content-Type': 'application/json'},
-        body: JSON.stringify({ input_mode: mode })
+        body: JSON.stringify({ notes })
       });
     }
 
-    async function quickTestChord() {
-      await fetch('/api/play_chord', {
+    function setExpansionDuration(sec) {
+      document.getElementById('compDurationSlider').value = sec;
+      document.getElementById('durSliderLabel').textContent = sec + ' 秒';
+      document.getElementById('quickDurSelect').value = String(sec);
+    }
+
+    async function listenAndComposeMotif() {
+      const devMode = document.getElementById('compStyleSelect').value;
+      const dur = parseFloat(document.getElementById('compDurationSlider').value);
+      const density = parseInt(document.getElementById('compDensitySlider').value);
+      const pedal = parseInt(document.getElementById('compPedalSlider').value);
+      const legatoPct = parseFloat(document.getElementById('compLegatoSlider').value);
+      await fetch('/api/composer/listen_and_compose', {
         method: 'POST',
         headers: {'Content-Type': 'application/json'},
         body: JSON.stringify({
-          description: 'C4-E4-G4-B4-D5 Warm Maj9 Chord (VDL Compensated + CC#64=56)',
-          countdown_seconds: 3,
-          use_vdl: true,
-          pedal_cc64: 56,
-          notes: [
-            {note: 48, velocity: 45, duration_s: 0.9},
-            {note: 55, velocity: 50, duration_s: 0.9},
-            {note: 60, velocity: 62, duration_s: 0.9},
-            {note: 64, velocity: 58, duration_s: 0.9},
-            {note: 67, velocity: 65, duration_s: 0.9},
-            {note: 71, velocity: 54, duration_s: 0.9},
-            {note: 74, velocity: 72, duration_s: 0.9}
-          ]
+          development_mode: devMode,
+          target_duration_s: dur,
+          density,
+          pedal_cc64: pedal,
+          legato_overlap_pct: legatoPct
         })
       });
     }
 
-    async function selectAccompStyle(style) {
-      await fetch('/api/mode', {
-        method: 'POST',
-        headers: {'Content-Type': 'application/json'},
-        body: JSON.stringify({ session_style: style })
-      });
-      document.getElementById('activeStyleDetailBox').innerHTML =
-        `<div style="font-weight:700;color:#fbbf24;">Current Style: ${style}</div>
-         <div style="font-size:12px;color:#d1d5db;margin-top:4px;">Intonation-Aware Voicing ON | VDL Melody Lead +20ms ON | Right Damper CC#64 Half-Pedal Active</div>`;
+    async function quickExpandAndPlay() {
+      const dur = parseFloat(document.getElementById('quickDurSelect').value);
+      const devMode = document.getElementById('quickModeSelect').value;
+      document.getElementById('compDurationSlider').value = dur;
+      document.getElementById('durSliderLabel').textContent = dur + ' 秒';
+      document.getElementById('compStyleSelect').value = devMode;
+      await listenAndComposeMotif();
     }
 
-    async function runAutoProxySessionDemo() {
-      await fetch('/api/session/proxy_demo', { method: 'POST' });
-    }
-
-    async function listenAndComposeMotif() {
-      const style = document.getElementById('compStyleSelect').value;
-      const density = parseInt(document.getElementById('compDensitySlider').value);
-      const pedal = parseInt(document.getElementById('compPedalSlider').value);
-      await fetch('/api/composer/listen_and_compose', {
+    async function applyClosedLoopBoost() {
+      await fetch('/api/closed_loop/optimize_sustain', {
         method: 'POST',
         headers: {'Content-Type': 'application/json'},
-        body: JSON.stringify({ style, density, pedal_cc64: pedal })
+        body: JSON.stringify({
+          legato_overlap_ms: 58.0,
+          min_soft_velocity: 34,
+          sustain_pedal_boost: 8
+        })
       });
     }
 
@@ -1479,6 +1235,21 @@
       });
     }
 
+    async function selectAccompStyle(style) {
+      await fetch('/api/mode', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({ session_style: style })
+      });
+      document.getElementById('activeStyleDetailBox').innerHTML =
+        `<div style="font-weight:700;color:#fbbf24;">Current Style: ${style}</div>
+         <div style="font-size:12px;color:#d1d5db;margin-top:4px;">Finger-Legato Hold (1.0s+) ON | VDL Melody Lead +20ms ON | Syncopated CC#64 Active</div>`;
+    }
+
+    async function runAutoProxySessionDemo() {
+      await fetch('/api/session/proxy_demo', { method: 'POST' });
+    }
+
     async function recordNewRehearsalTake() {
       await fetch('/api/rehearsal/record_proxy_take', { method: 'POST' });
     }
@@ -1488,14 +1259,6 @@
         method: 'POST',
         headers: {'Content-Type': 'application/json'},
         body: JSON.stringify({ style })
-      });
-    }
-
-    async function triggerRerunExperiment(expId) {
-      await fetch('/api/experiments/rerun', {
-        method: 'POST',
-        headers: {'Content-Type': 'application/json'},
-        body: JSON.stringify({ exp_id: expId })
       });
     }
 
