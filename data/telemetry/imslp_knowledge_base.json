@@ -1,0 +1,132 @@
+{
+  "catalog": [
+    {
+      "id": "saint_saens_swan",
+      "title": "Le Cygne (The Swan) — Carnaval des Animaux",
+      "composer": "Camille Saint-Saëns",
+      "key": "G Major",
+      "tempo_bpm": 68,
+      "note_count": 48,
+      "midi_path": "data/imslp_midi/saint_saens_swan.mid",
+      "voice_leading_pattern": "Sextuplet Diatonic Arpeggio + Stepwise Bass"
+    },
+    {
+      "id": "faure_elegie_op24",
+      "title": "Élégie in C Minor, Op. 24",
+      "composer": "Gabriel Fauré",
+      "key": "C Minor",
+      "tempo_bpm": 58,
+      "note_count": 98,
+      "midi_path": "data/imslp_midi/faure_elegie_op24.mid",
+      "voice_leading_pattern": "Repeated Inner-Voice Pulsation + Descending Bass Tetrachord"
+    },
+    {
+      "id": "faure_sicilienne_op78",
+      "title": "Sicilienne in G Minor, Op. 78",
+      "composer": "Gabriel Fauré",
+      "key": "G Minor",
+      "tempo_bpm": 74,
+      "note_count": 36,
+      "midi_path": "data/imslp_midi/faure_sicilienne_op78.mid",
+      "voice_leading_pattern": "6/8 Aeolian Harp Arpeggio + Dorian Modal Inflection"
+    },
+    {
+      "id": "bach_suite1_bwv1007",
+      "title": "Cello Suite No. 1 in G Major, BWV 1007 (Prelude)",
+      "composer": "J.S. Bach",
+      "key": "G Major",
+      "tempo_bpm": 76,
+      "note_count": 36,
+      "midi_path": "data/imslp_midi/bach_suite1_bwv1007.mid",
+      "voice_leading_pattern": "Compound Latent Polyphony (Pedal Bass + Harmonic Bariolage)"
+    },
+    {
+      "id": "brahms_sonata1_op38",
+      "title": "Cello Sonata No. 1 in E Minor, Op. 38 (Allegro non troppo)",
+      "composer": "Johannes Brahms",
+      "key": "E Minor",
+      "tempo_bpm": 66,
+      "note_count": 24,
+      "midi_path": "data/imslp_midi/brahms_sonata1_op38.mid",
+      "voice_leading_pattern": "Open 5th/Octave Cushion + Syncopated Inner Sixth Counterpoint"
+    },
+    {
+      "id": "debussy_clair_sonata",
+      "title": "Clair de Lune & Sonata Harmonic Planing (with Sympathetic Halo)",
+      "composer": "Claude Debussy",
+      "key": "F Minor / D-flat Major",
+      "tempo_bpm": 56,
+      "note_count": 33,
+      "midi_path": "data/imslp_midi/debussy_clair_sonata.mid",
+      "voice_leading_pattern": "Parallel 9th/13th Planing + Velocity-1 Sympathetic String Halo"
+    }
+  ],
+  "knowledge_base_patterns": [
+    {
+      "composer": "Camille Saint-Saëns",
+      "work": "Le Cygne (The Swan) — Carnaval des Animaux",
+      "key": "G Major",
+      "pattern": "Sextuplet Diatonic Arpeggio + Stepwise Bass",
+      "recommended_cc64_range": [
+        44,
+        66
+      ],
+      "intimate_cello_voicing": "Avoid doubling Cello 3rd in middle register; use root+5th+9th+10th arpeggio"
+    },
+    {
+      "composer": "Gabriel Fauré",
+      "work": "Élégie in C Minor, Op. 24",
+      "key": "C Minor",
+      "pattern": "Repeated Inner-Voice Pulsation + Descending Bass Tetrachord",
+      "recommended_cc64_range": [
+        44,
+        66
+      ],
+      "intimate_cello_voicing": "Avoid doubling Cello 3rd in middle register; use root+5th+9th+10th arpeggio"
+    },
+    {
+      "composer": "Gabriel Fauré",
+      "work": "Sicilienne in G Minor, Op. 78",
+      "key": "G Minor",
+      "pattern": "6/8 Aeolian Harp Arpeggio + Dorian Modal Inflection",
+      "recommended_cc64_range": [
+        44,
+        66
+      ],
+      "intimate_cello_voicing": "Avoid doubling Cello 3rd in middle register; use root+5th+9th+10th arpeggio"
+    },
+    {
+      "composer": "J.S. Bach",
+      "work": "Cello Suite No. 1 in G Major, BWV 1007 (Prelude)",
+      "key": "G Major",
+      "pattern": "Compound Latent Polyphony (Pedal Bass + Harmonic Bariolage)",
+      "recommended_cc64_range": [
+        44,
+        66
+      ],
+      "intimate_cello_voicing": "Avoid doubling Cello 3rd in middle register; use root+5th+9th+10th arpeggio"
+    },
+    {
+      "composer": "Johannes Brahms",
+      "work": "Cello Sonata No. 1 in E Minor, Op. 38 (Allegro non troppo)",
+      "key": "E Minor",
+      "pattern": "Open 5th/Octave Cushion + Syncopated Inner Sixth Counterpoint",
+      "recommended_cc64_range": [
+        44,
+        66
+      ],
+      "intimate_cello_voicing": "Avoid doubling Cello 3rd in middle register; use root+5th+9th+10th arpeggio"
+    },
+    {
+      "composer": "Claude Debussy",
+      "work": "Clair de Lune & Sonata Harmonic Planing (with Sympathetic Halo)",
+      "key": "F Minor / D-flat Major",
+      "pattern": "Parallel 9th/13th Planing + Velocity-1 Sympathetic String Halo",
+      "recommended_cc64_range": [
+        44,
+        66
+      ],
+      "intimate_cello_voicing": "Avoid doubling Cello 3rd in middle register; use root+5th+9th+10th arpeggio"
+    }
+  ]
+}
