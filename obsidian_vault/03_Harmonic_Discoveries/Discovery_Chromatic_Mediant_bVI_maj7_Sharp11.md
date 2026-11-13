@@ -13,3 +13,7 @@ tags: ['chromatic-mediant', 'lydian', 'modulation']
 - [[04_Human_Directives]]
 - Applied in [[HoF_Gen003_Score94_Development]] (Gen 3, 94.2 pts)
 - Applied in [[HoF_Gen006_Score92_Metamorphosis]] (Gen 6, 92.0 pts)
+- Applied in [[HoF_Gen014_Score95_Climax]] (Gen 14, 94.6 pts)
+- Applied in [[HoF_Gen015_Score98_Recapitulation]] (Gen 15, 97.5 pts)
+- Applied in [[HoF_Gen018_Score98_Development]] (Gen 18, 98.1 pts)
+- Applied in [[HoF_Gen022_Score99_Exposition]] (Gen 22, 98.9 pts)

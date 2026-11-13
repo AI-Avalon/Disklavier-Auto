@@ -19,8 +19,4 @@ tags: ['imslp', 'seed_memory', 'brahms']
 
 ## 派生した名演・関連ノート (Bidirectional Links)
 - [[Evolution_Overview]]
-- [[HoF_Gen007_Score95_Exposition]]
-- [[HoF_Gen008_Score95_Development]]
-- [[HoF_Gen009_Score94_Climax]]
-- [[HoF_Gen010_Score94_Recapitulation]]
-- [[HoF_Gen011_Score93_Metamorphosis]]
+- [[Evolution_Overview]]

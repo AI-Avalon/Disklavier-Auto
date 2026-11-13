@@ -12,8 +12,9 @@ import json
 import math
 import time
 from pathlib import Path
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Optional, Tuple
 
+import mido
 import numpy as np
 from fastapi import FastAPI, WebSocket, WebSocketDisconnect
 from fastapi.middleware.cors import CORSMiddleware
@@ -21,11 +22,16 @@ from fastapi.responses import FileResponse, HTMLResponse, JSONResponse
 from pydantic import BaseModel
 
 from src.audio.c519ml_monitor import C519MLAudioMonitor, midi_to_name
+from src.evolution.continuous_virtuoso import ContinuousVirtuosoEngine
+from src.evolution.seed_ingestor import SeedMemoryPool
+from src.midi.imslp_library import build_and_persist_imslp_library
+from src.obsidian import ObsidianMusicalBrain
 from src.safety.disklavier_safety_guard import DisklavierSafetyGuard
 from src.telemetry.telemetry_store import BASE_DIR, TELEMETRY_DIR, TelemetryStore
+from src.virtual_twin import VirtualDisklavierTwin
 
 
-app = FastAPI(title="Antigravity 2.0: Cello & Disklavier Autonomous R&D Studio")
+app = FastAPI(title="Antigravity 2.0: Autonomous Self-Evolving Virtuoso & Virtual Disklavier Studio")
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
@@ -38,6 +44,9 @@ safety_guard = DisklavierSafetyGuard(
     port_name="Disklavier",
     on_log_Callback=telemetry_store.log_event,
 )
+virtual_twin = VirtualDisklavierTwin(hardware_connected=safety_guard.outport is not None)
+safety_guard.attach_virtual_twin(virtual_twin)
+
 audio_monitor = C519MLAudioMonitor(
     device_keyword="Steinberg UR22",
     active_notes_provider=lambda: safety_guard.active_notes,
@@ -47,19 +56,53 @@ audio_monitor = C519MLAudioMonitor(
 time.sleep(0.15)
 audio_monitor.noise_floor_dbfs = round(min(-48.0, max(-72.0, audio_monitor.rms_dbfs)), 2)
 telemetry_store.log_event(
-    f"[AUDIO INIT] Connected '{audio_monitor.device_name}' @ 44.1kHz | Noise Floor={audio_monitor.noise_floor_dbfs:.1f} dBFS"
+    f"[AUDIO INIT] Connected '{audio_monitor.device_name}' @ 44.1kHz | Virtual Twin: '{virtual_twin.audio_device_name}'"
 )
 
-# Dynamic state for Tabs 2, 3, 4, 5
+# Initialize Seed Memory Pool, Continuous Virtuoso, and Obsidian Musical Brain
+seed_pool = SeedMemoryPool(auto_ingest=True)
+virtuoso_engine = ContinuousVirtuosoEngine(
+    safety_guard=safety_guard,
+    seed_pool=seed_pool,
+    telemetry_store=telemetry_store,
+)
+obsidian_brain = ObsidianMusicalBrain(
+    seed_motifs=seed_pool.get_all_motifs(),
+    on_directives_changed=virtuoso_engine.update_directives,
+)
+virtuoso_engine.attach_obsidian_brain(obsidian_brain)
+# Apply any persisted directives immediately
+virtuoso_engine.update_directives(obsidian_brain.read_human_directives())
+
+# Dynamic state for Tabs
+imslp_catalog = build_and_persist_imslp_library()
 studio_state: Dict[str, Any] = {
     "session_style": "faure_romantic",
     "session_active": False,
     "composer_pieces": [],
     "current_composed_piece": None,
-    "imslp_library": [],
+    "imslp_library": imslp_catalog,
     "optimizer_comparison": None,
     "rehearsal_takes": [],
 }
+
+
+@app.on_event("startup")
+async def _startup_autonomous_stream() -> None:
+    virtuoso_engine.start_stream()
+    mode_label = (
+        "Hardware Disklavier + Virtual Twin"
+        if safety_guard.outport is not None
+        else "Virtual Disklavier Digital Twin (Mac CoreAudio)"
+    )
+    telemetry_store.update_banner(
+        code="READY",
+        message=f"♾️ 自律型AIピアニスト稼働中 ({mode_label}) — 途切れない連続演奏＆リアルタイム自己採点・自己進化実行中",
+        sub_message=f"Seed Pool: {len(seed_pool.get_all_motifs())} motifs | Obsidian Vault: obsidian_vault/ | 4平行未来ツリー & 5軸Critic稼働中",
+        task_name="Autonomous Self-Evolving Virtuoso Stream",
+        progress_pct=100,
+        current_phase="♾️ NON-STOP STREAMING",
+    )
 
 
 # -------------------------------------------------------------------------
@@ -179,6 +222,9 @@ async def get_full_status():
     return {
         "safety": safety_guard.get_telemetry_snapshot(),
         "audio": audio_monitor.get_telemetry_snapshot(),
+        "twin": virtual_twin.get_telemetry_snapshot(),
+        "virtuoso": virtuoso_engine.get_telemetry_snapshot(),
+        "obsidian": obsidian_brain.get_knowledge_graph_snapshot(),
         "agent": telemetry_store.get_snapshot(),
         "studio": studio_state,
     }
@@ -186,11 +232,12 @@ async def get_full_status():
 
 @app.post("/api/panic")
 async def trigger_emergency_panic():
+    virtuoso_engine.stop_stream()
     snap = safety_guard.emergency_panic()
     telemetry_store.update_banner(
         code="ACTION_NEEDED",
-        message="🔴 EMERGENCY PANIC が実行されました。全88鍵Note-OffおよびダンパーペダルCC#64=0を即時送信しました。",
-        sub_message="安全が確認できたら各タブから操作を再開できます。",
+        message="🔴 EMERGENCY PANIC が実行されました。連続ストリーム停止・全88鍵Note-OffおよびCC#64=0を送信しました。",
+        sub_message="安全が確認できたら『連続ストリーム開始』または各タブから操作を再開できます。",
     )
     return {"status": "panicked", "safety": snap}
 
@@ -511,6 +558,8 @@ async def api_session_proxy_demo():
 
 @app.post("/api/composer/listen_and_compose")
 async def api_composer_listen_and_compose(req: Dict[str, Any]):
+    if virtuoso_engine.streaming_active:
+        virtuoso_engine.stop_stream()
     import importlib
     import src.composer.ai_classical_composer as comp_mod
 
@@ -582,6 +631,8 @@ async def api_composer_export_midi():
 
 @app.post("/api/midi/play_optimized")
 async def api_midi_play_optimized(req: Dict[str, Any]):
+    if virtuoso_engine.streaming_active:
+        virtuoso_engine.stop_stream()
     import importlib
     import src.midi.imslp_library as midi_mod
 
@@ -633,6 +684,149 @@ async def api_experiments_rerun(req: Dict[str, Any]):
     return {"ok": True, "exp_id": exp_id}
 
 
+# -------------------------------------------------------------------------
+# Autonomous Virtuoso, Virtual Digital Twin & Obsidian Brain Endpoints
+# -------------------------------------------------------------------------
+@app.post("/api/virtuoso/toggle_stream")
+async def api_virtuoso_toggle_stream(req: Dict[str, Any]):
+    want_active = req.get("active")
+    if want_active is None:
+        want_active = not virtuoso_engine.streaming_active
+    if bool(want_active):
+        snap = virtuoso_engine.start_stream()
+        telemetry_store.update_banner(
+            code="READY",
+            message="♾️ 途切れない自律演奏ストリーム稼働中 — 4平行未来候補をリアルタイム自己採点・進化中",
+            sub_message=f"Gen {snap['current_generation']} | Best {snap['best_score_ever']} pts | Virtual Sound={'ON' if virtual_twin.virtual_sound_enabled else 'OFF'}",
+            current_phase="♾️ NON-STOP STREAMING",
+        )
+    else:
+        snap = virtuoso_engine.stop_stream()
+        telemetry_store.update_banner(
+            code="READY",
+            message="⏸️ 自律連続ストリーム一時停止中 — 再開ボタンまたは高速進化トレーニングを実行できます",
+            current_phase="⏸️ STREAM PAUSED",
+        )
+    return {"ok": True, "virtuoso": snap}
+
+
+@app.post("/api/virtuoso/hyper_evolve")
+async def api_virtuoso_hyper_evolve(req: Dict[str, Any]):
+    num_gens = int(req.get("generations", 15))
+    speed_x = float(req.get("speed_multiplier", 25.0))
+    res = await asyncio.to_thread(
+        virtuoso_engine.run_hyper_speed_training,
+        num_generations=num_gens,
+        speed_multiplier=speed_x,
+    )
+    return {
+        "ok": True,
+        "result": res,
+        "virtuoso": virtuoso_engine.get_telemetry_snapshot(),
+        "obsidian": obsidian_brain.get_knowledge_graph_snapshot(),
+    }
+
+
+@app.post("/api/virtuoso/inject_motif")
+async def api_virtuoso_inject_motif(req: Dict[str, Any]):
+    notes = [int(x) for x in req.get("notes", [62, 65, 69, 68, 65, 62])]
+    source = str(req.get("source", "gui_motif_injection"))
+    res = virtuoso_engine.absorb_live_motif(notes=notes, source=source)
+    return {"ok": True, **res}
+
+
+@app.post("/api/twin/config")
+async def api_twin_config(req: Dict[str, Any]):
+    snap = virtual_twin.set_config(
+        virtual_sound_enabled=req.get("virtual_sound_enabled"),
+        hardware_output_enabled=req.get("hardware_output_enabled"),
+        output_mode=req.get("output_mode"),
+        master_volume=req.get("master_volume"),
+    )
+    telemetry_store.log_event(
+        f"[DIGITAL TWIN] Sound={'ON' if snap['virtual_sound_enabled'] else 'OFF'}, "
+        f"Hardware={'ON' if snap['hardware_output_enabled'] else 'OFF'}, Mode={snap['output_mode']}"
+    )
+    return {"ok": True, "twin": snap}
+
+
+@app.get("/api/obsidian/graph")
+async def api_obsidian_graph():
+    return obsidian_brain.get_knowledge_graph_snapshot()
+
+
+@app.get("/api/obsidian/note/{note_id}")
+async def api_obsidian_note(note_id: str):
+    note = obsidian_brain.get_note_content(note_id)
+    if note is None:
+        return JSONResponse({"error": "Note not found"}, status_code=404)
+    return note
+
+
+@app.post("/api/obsidian/directives")
+async def api_obsidian_directives(req: Dict[str, Any]):
+    text = str(req.get("text", ""))
+    parsed = obsidian_brain.write_human_directives(text)
+    return {
+        "ok": True,
+        "parsed": parsed,
+        "virtuoso": virtuoso_engine.get_telemetry_snapshot(),
+    }
+
+
+@app.post("/api/obsidian/play_hof")
+async def api_obsidian_play_hof(req: Dict[str, Any]):
+    midi_rel = str(req.get("midi_rel", ""))
+    midi_path = obsidian_brain.vault_dir / midi_rel
+    if not midi_rel or not midi_path.exists():
+        return JSONResponse({"error": "Hall of Fame MIDI not found"}, status_code=404)
+
+    was_streaming = virtuoso_engine.streaming_active
+    if was_streaming:
+        virtuoso_engine.stop_stream()
+
+    mid = mido.MidiFile(str(midi_path))
+    tempo_us = 500000
+    abs_t = 0.0
+    note_ons: Dict[int, Tuple[float, int]] = {}
+    base_t = time.perf_counter() + 0.18
+    scheduled = 0
+
+    for msg in mido.merge_tracks(mid.tracks):
+        abs_t += mido.tick2second(msg.time, mid.ticks_per_beat, tempo_us)
+        if msg.type == "set_tempo":
+            tempo_us = msg.tempo
+        elif msg.type == "control_change" and msg.control == 64:
+            safety_guard.schedule_chord_or_notes(
+                notes=[],
+                target_sound_time=base_t + abs_t,
+                use_vdl_compensation=False,
+                pedal_cc64=int(msg.value),
+                pedal_preroll_ms=35.0,
+                source_tag="hof_playback",
+            )
+        elif msg.type == "note_on" and msg.velocity > 0:
+            note_ons[msg.note] = (abs_t, int(msg.velocity))
+        elif msg.type == "note_off" or (msg.type == "note_on" and msg.velocity == 0):
+            if msg.note in note_ons:
+                t_on, vel = note_ons.pop(msg.note)
+                dur = max(0.05, abs_t - t_on)
+                safety_guard.schedule_chord_or_notes(
+                    notes=[(int(msg.note), vel, dur)],
+                    target_sound_time=base_t + t_on,
+                    use_vdl_compensation=True,
+                    sympathetic_halo=(vel == 1),
+                    legato_overlap_s=0.010,
+                    source_tag="hof_playback",
+                )
+                scheduled += 1
+
+    telemetry_store.log_event(
+        f"🏆 [OBSIDIAN HoF PLAYBACK] Playing {midi_path.name} ({scheduled} notes) on Digital Twin / Disklavier"
+    )
+    return {"ok": True, "midi_name": midi_path.name, "scheduled_notes": scheduled}
+
+
 
 # -------------------------------------------------------------------------
 # 60fps Real-Time WebSocket Stream
@@ -644,16 +838,21 @@ async def websocket_endpoint(ws: WebSocket):
     try:
         while True:
             tick += 1
-            # Stream audio & piano keys at 60fps; include heavier agent/git/experiment metadata every 6th frame (10Hz)
+            # Stream audio, twin, & piano keys at 60fps; virtuoso at 20Hz; obsidian & agent at 5-10Hz
             frame: Dict[str, Any] = {
                 "ts": time.time(),
                 "banner": telemetry_store.banner_state,
                 "audio": audio_monitor.get_telemetry_snapshot(),
                 "safety": safety_guard.get_telemetry_snapshot(),
+                "twin": virtual_twin.get_telemetry_snapshot(),
             }
+            if tick % 3 == 1:
+                frame["virtuoso"] = virtuoso_engine.get_telemetry_snapshot()
             if tick % 6 == 1:
                 frame["agent"] = telemetry_store.get_snapshot()
                 frame["studio"] = studio_state
+            if tick % 15 == 1:
+                frame["obsidian"] = obsidian_brain.get_knowledge_graph_snapshot()
             await ws.send_json(frame)
             await asyncio.sleep(1.0 / 60.0)
     except WebSocketDisconnect:

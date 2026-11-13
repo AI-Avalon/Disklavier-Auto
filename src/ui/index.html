@@ -3,13 +3,14 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Antigravity 2.0 — Interactive Dialogue & Legato R&D Studio for Cello & Disklavier</title>
+  <title>Antigravity 2.0 — Autonomous Self-Evolving Virtuoso & Virtual Disklavier Digital Twin</title>
   <style>
     :root {
-      --bg-dark: #090d16;
-      --bg-panel: #111827;
-      --bg-card: #1a2333;
-      --border: #2a364f;
+      color-scheme: dark;
+      --bg-dark: #070b14;
+      --bg-panel: #101726;
+      --bg-card: #172133;
+      --border: #28354d;
       --text-main: #f3f4f6;
       --text-muted: #9ca3af;
       --accent-blue: #38bdf8;
@@ -17,6 +18,7 @@
       --accent-green: #10b981;
       --accent-red: #ef4444;
       --accent-purple: #a855f7;
+      accent-color: var(--accent-blue);
     }
     * { box-sizing: border-box; margin: 0; padding: 0; }
     body {
@@ -24,360 +26,211 @@
       color: var(--text-main);
       font-family: -apple-system, BlinkMacSystemFont, "SF Pro Display", "Segoe UI", Roboto, sans-serif;
       overflow-x: hidden;
-      user-select: none;
+    }
+
+    @supports not (accent-color: #38bdf8) {
+      input[type="range"] { -webkit-appearance: none; appearance: none; background: transparent; }
+      input[type="range"]::-webkit-slider-runnable-track { height: 6px; background: #334155; border-radius: 4px; }
+      input[type="range"]::-webkit-slider-thumb { -webkit-appearance: none; height: 14px; width: 14px; border-radius: 50%; background: #38bdf8; margin-top: -4px; }
     }
 
     .global-header {
       position: sticky;
       top: 0;
       z-index: 1000;
-      background: rgba(13, 19, 33, 0.97);
+      background: rgba(11, 16, 29, 0.97);
       backdrop-filter: blur(12px);
       border-bottom: 2px solid var(--border);
       padding: 8px 14px;
       display: flex;
       flex-direction: column;
-      gap: 8px;
-      box-shadow: 0 6px 24px rgba(0,0,0,0.6);
+      gap: 7px;
+      box-shadow: 0 6px 24px rgba(0,0,0,0.65);
     }
 
     .user-banner {
       display: flex;
       align-items: center;
       justify-content: space-between;
-      padding: 10px 16px;
+      gap: 12px;
+      padding: 8px 14px;
       border-radius: 10px;
-      border: 2px solid #10b981;
-      background: linear-gradient(90deg, rgba(16,185,129,0.22) 0%, rgba(17,24,39,0.95) 100%);
-      transition: all 0.2s ease;
+      border: 2px solid #38bdf8;
+      background: linear-gradient(90deg, rgba(56,189,248,0.20) 0%, rgba(16,23,38,0.95) 100%);
     }
-    .user-banner.HANDS_OFF {
-      border-color: #10b981;
-      background: linear-gradient(90deg, rgba(16,185,129,0.22) 0%, rgba(17,24,39,0.95) 100%);
-    }
-    .user-banner.SOUND_COUNTDOWN {
-      border-color: #f59e0b;
-      background: linear-gradient(90deg, rgba(245,158,11,0.38) 0%, rgba(120,53,15,0.65) 100%);
-      animation: pulseWarn 0.6s infinite alternate;
-    }
-    .user-banner.READY, .user-banner.ALL_READY {
-      border-color: #38bdf8;
-      background: linear-gradient(90deg, rgba(56,189,248,0.25) 0%, rgba(17,24,39,0.95) 100%);
-    }
-    .user-banner.ACTION_NEEDED {
-      border-color: #ef4444;
-      background: linear-gradient(90deg, rgba(239,68,68,0.35) 0%, rgba(17,24,39,0.95) 100%);
-    }
-    @keyframes pulseWarn {
-      from { box-shadow: 0 0 8px rgba(245,158,11,0.4); }
-      to { box-shadow: 0 0 26px rgba(245,158,11,0.95); }
-    }
-    .banner-left {
-      display: flex;
-      align-items: center;
-      gap: 14px;
-      flex: 1;
-    }
+    .user-banner.HANDS_OFF { border-color: #10b981; background: linear-gradient(90deg, rgba(16,185,129,0.22) 0%, rgba(16,23,38,0.95) 100%); }
+    .user-banner.SOUND_COUNTDOWN { border-color: #f59e0b; background: linear-gradient(90deg, rgba(245,158,11,0.38) 0%, rgba(120,53,15,0.65) 100%); }
+    .user-banner.ACTION_NEEDED { border-color: #ef4444; background: linear-gradient(90deg, rgba(239,68,68,0.35) 0%, rgba(16,23,38,0.95) 100%); }
+
+    .banner-left { display: flex; align-items: center; gap: 12px; flex: 1; min-width: 0; }
     .banner-badge {
-      font-weight: 800;
-      font-size: 14px;
-      padding: 6px 12px;
-      border-radius: 6px;
-      background: rgba(0,0,0,0.45);
-      white-space: nowrap;
+      font-weight: 800; font-size: 13px; padding: 5px 10px; border-radius: 6px;
+      background: rgba(0,0,0,0.45); white-space: nowrap;
     }
-    .banner-text-wrap {
-      display: flex;
-      flex-direction: column;
-      gap: 2px;
-    }
-    .banner-main-msg {
-      font-size: 15px;
-      font-weight: 700;
-      color: #ffffff;
-    }
-    .banner-sub-msg {
-      font-size: 12px;
-      color: #d1d5db;
+    .banner-main-msg { font-size: 14px; font-weight: 700; color: #fff; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .banner-sub-msg { font-size: 11.5px; color: #cbd5e1; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .gen-hero-pill {
+      display: flex; align-items: center; gap: 10px; background: rgba(15,23,42,0.9);
+      border: 1px solid #fbbf24; border-radius: 8px; padding: 5px 12px; font-size: 12.5px; font-weight: 800; white-space: nowrap;
     }
     .countdown-pill {
-      display: none;
-      font-size: 22px;
-      font-weight: 900;
-      color: #fef08a;
-      background: rgba(0,0,0,0.6);
-      padding: 4px 16px;
-      border-radius: 8px;
-      border: 1px solid #facc15;
+      display: none; font-size: 20px; font-weight: 900; color: #fef08a;
+      background: rgba(0,0,0,0.6); padding: 4px 14px; border-radius: 8px; border: 1px solid #facc15;
     }
 
-    /* INTERACTIVE DIALOGUE QUICK BAR (ALWAYS VISIBLE) */
-    .dialogue-quick-bar {
-      display: flex;
-      align-items: center;
-      justify-content: space-between;
-      gap: 10px;
-      background: linear-gradient(90deg, rgba(59,130,246,0.16), rgba(168,85,247,0.16));
-      border: 1px solid #3b82f6;
-      border-radius: 8px;
-      padding: 6px 12px;
-      flex-wrap: wrap;
+    .virtuoso-quick-bar {
+      display: flex; align-items: center; justify-content: space-between; gap: 8px; flex-wrap: wrap;
+      background: linear-gradient(90deg, rgba(168,85,247,0.16), rgba(56,189,248,0.14));
+      border: 1px solid #3b82f6; border-radius: 8px; padding: 6px 10px;
     }
-    .turn-indicator-pill {
-      padding: 5px 12px;
-      border-radius: 6px;
-      font-weight: 800;
-      font-size: 12.5px;
-      background: rgba(16, 185, 129, 0.25);
-      border: 1px solid #10b981;
-      color: #a7f3d0;
-    }
+    .btn-group { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
 
-    .top-controls-row {
-      display: flex;
-      align-items: center;
-      justify-content: space-between;
-      gap: 10px;
-      flex-wrap: wrap;
+    .btn {
+      background: #2563eb; color: #fff; border: 1px solid #60a5fa;
+      padding: 6px 11px; border-radius: 7px; font-size: 12px; font-weight: 700; cursor: pointer;
+      transition: transform 0.1s, background 0.15s;
     }
-    .mode-selector {
-      display: flex;
-      gap: 4px;
-      background: var(--bg-card);
-      padding: 4px;
-      border-radius: 8px;
-      border: 1px solid var(--border);
-    }
-    .mode-btn {
-      background: transparent;
-      color: var(--text-muted);
-      border: none;
-      padding: 5px 10px;
-      border-radius: 6px;
-      font-size: 12px;
-      font-weight: 600;
-      cursor: pointer;
-    }
-    .mode-btn.active {
-      background: #2563eb;
-      color: #fff;
-    }
-    .solenoid-load-pill {
-      display: flex;
-      align-items: center;
-      gap: 8px;
-      background: var(--bg-card);
-      padding: 5px 12px;
-      border-radius: 8px;
-      border: 1px solid var(--border);
-      font-size: 12px;
-      font-weight: 700;
-    }
+    .btn:hover { background: #1d4ed8; }
+    .btn:active { transform: scale(0.98); }
+    .btn-green { background: #059669; border-color: #34d399; }
+    .btn-green:hover { background: #047857; }
+    .btn-purple { background: #7c3aed; border-color: #c084fc; }
+    .btn-purple:hover { background: #6d28d9; }
+    .btn-gold { background: #d97706; border-color: #fbbf24; }
+    .btn-gold:hover { background: #b45309; }
+    .btn-outline { background: #1e293b; border-color: #475569; color: #e2e8f0; }
+    .btn-outline.active-toggle { background: #059669; border-color: #34d399; color: #fff; }
     .panic-btn {
-      background: linear-gradient(135deg, #dc2626, #991b1b);
-      color: #fff;
-      border: 2px solid #f87171;
-      padding: 7px 16px;
-      border-radius: 8px;
-      font-weight: 900;
-      font-size: 13px;
-      cursor: pointer;
-      box-shadow: 0 0 14px rgba(239,68,68,0.5);
+      background: linear-gradient(135deg, #dc2626, #991b1b); color: #fff; border: 2px solid #f87171;
+      padding: 6px 14px; border-radius: 8px; font-weight: 900; font-size: 12.5px; cursor: pointer;
+      box-shadow: 0 0 12px rgba(239,68,68,0.45);
     }
 
+    /* 60fps Heartbeat Digital Twin Dock */
+    .heartbeat-dock {
+      display: grid;
+      grid-template-columns: 1.15fr 1.75fr 1.15fr;
+      gap: 10px;
+      padding: 9px 14px;
+      background: #0b111e;
+      border-bottom: 1px solid var(--border);
+    }
+    .hb-card, .panel-box {
+      background: var(--bg-panel);
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      padding: 9px 11px;
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+      content-visibility: auto;
+      contain-intrinsic-size: auto 320px;
+    }
+    @supports not (content-visibility: auto) {
+      .hb-card, .panel-box { contain: layout style paint; }
+    }
+    .hb-title {
+      display: flex; justify-content: space-between; align-items: center;
+      font-size: 11.5px; font-weight: 800; color: var(--accent-blue); text-transform: uppercase;
+    }
+    canvas.vis-canvas {
+      width: 100%; background: #050811; border-radius: 6px; border: 1px solid #1e293b; display: block;
+    }
+
+    .gauges-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; }
+    .gauge-item {
+      background: var(--bg-card); border: 1px solid #263248; border-radius: 6px; padding: 5px 8px;
+    }
+    .gauge-label { font-size: 10.5px; color: var(--text-muted); display: flex; justify-content: space-between; }
+    .gauge-val { font-size: 14px; font-weight: 800; color: #fff; margin: 1px 0; }
+    .gauge-bar { height: 5px; background: #070b14; border-radius: 4px; overflow: hidden; }
+    .gauge-fill { height: 100%; background: #10b981; width: 0%; transition: width 0.08s linear; }
+
+    /* Tabs following modern-web-guidance (single row, aria-selected underline) */
     .nav-tabs {
       display: flex;
-      gap: 6px;
-      padding: 8px 14px 0 14px;
-      background: #0d1322;
+      gap: 4px;
+      padding: 6px 14px 0 14px;
+      background: #0c1220;
       border-bottom: 1px solid var(--border);
       overflow-x: auto;
+      scrollbar-width: thin;
     }
     .tab-btn {
+      position: relative;
+      flex: none;
       background: #162032;
       color: var(--text-muted);
       border: 1px solid var(--border);
       border-bottom: none;
-      padding: 9px 14px;
+      padding: 8px 13px;
       border-radius: 8px 8px 0 0;
       font-size: 12.5px;
       font-weight: 700;
       cursor: pointer;
       white-space: nowrap;
     }
-    .tab-btn.active {
+    .tab-btn[aria-selected="true"] {
       background: var(--bg-panel);
       color: var(--accent-blue);
-      border-top: 2px solid var(--accent-blue);
+    }
+    .tab-btn[aria-selected="true"]::after {
+      content: "";
+      position: absolute;
+      inset: auto 0 0;
+      border-block-end: 3px solid var(--accent-blue);
     }
 
-    .heartbeat-dock {
-      display: grid;
-      grid-template-columns: 1.25fr 1.65fr 1.1fr;
-      gap: 10px;
-      padding: 10px 14px;
-      background: #0c1220;
-      border-bottom: 1px solid var(--border);
-    }
-    .hb-card {
-      background: var(--bg-panel);
-      border: 1px solid var(--border);
-      border-radius: 10px;
-      padding: 8px 10px;
-      display: flex;
-      flex-direction: column;
-      gap: 6px;
-    }
-    .hb-title {
-      display: flex;
-      justify-content: space-between;
-      align-items: center;
-      font-size: 11.5px;
-      font-weight: 700;
-      color: var(--accent-blue);
-      text-transform: uppercase;
-    }
-    canvas.vis-canvas {
-      width: 100%;
-      background: #070b14;
-      border-radius: 6px;
-      border: 1px solid #1e293b;
-      display: block;
-    }
-    .gauges-grid {
-      display: grid;
-      grid-template-columns: 1fr 1fr;
-      gap: 6px;
-    }
-    .gauge-item {
-      background: var(--bg-card);
-      border: 1px solid #263248;
-      border-radius: 6px;
-      padding: 6px 8px;
-    }
-    .gauge-label {
-      font-size: 10.5px;
-      color: var(--text-muted);
-      display: flex;
-      justify-content: space-between;
-    }
-    .gauge-val {
-      font-size: 14.5px;
-      font-weight: 800;
-      color: #fff;
-      margin: 2px 0;
-    }
-    .gauge-bar {
-      height: 5px;
-      background: #090d16;
-      border-radius: 4px;
-      overflow: hidden;
-    }
-    .gauge-fill {
-      height: 100%;
-      background: #10b981;
-      width: 0%;
-      transition: width 0.08s linear;
-    }
+    .tab-pane { padding: 12px 14px 28px 14px; }
+    .tab-pane[hidden] { display: none; }
+    .grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+    .grid-cockpit { display: grid; grid-template-columns: 1.32fr 1fr; gap: 12px; }
+    .grid-3 { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 10px; }
 
-    .tab-pane {
-      display: none;
-      padding: 12px 14px 28px 14px;
-    }
-    .tab-pane.active {
-      display: block;
-    }
-    .grid-2 {
-      display: grid;
-      grid-template-columns: 1fr 1fr;
-      gap: 12px;
-    }
-    .grid-3 {
-      display: grid;
-      grid-template-columns: 1fr 1fr 1fr;
-      gap: 12px;
-    }
-    .panel-box {
-      background: var(--bg-panel);
-      border: 1px solid var(--border);
-      border-radius: 10px;
-      padding: 12px;
-      display: flex;
-      flex-direction: column;
-      gap: 10px;
-    }
     .panel-header {
-      display: flex;
-      justify-content: space-between;
-      align-items: center;
-      border-bottom: 1px solid #1f2937;
-      padding-bottom: 6px;
-      flex-wrap: wrap;
-      gap: 6px;
+      display: flex; justify-content: space-between; align-items: center;
+      border-bottom: 1px solid #1f2937; padding-bottom: 6px; flex-wrap: wrap; gap: 6px;
     }
-    .panel-title {
-      font-size: 14px;
-      font-weight: 800;
-      color: #f8fafc;
-    }
-    .btn {
-      background: #2563eb;
-      color: #fff;
-      border: 1px solid #60a5fa;
-      padding: 7px 13px;
-      border-radius: 7px;
-      font-size: 12px;
-      font-weight: 700;
-      cursor: pointer;
-      transition: all 0.15s;
-    }
-    .btn:hover { background: #1d4ed8; }
-    .btn-green { background: #059669; border-color: #34d399; }
-    .btn-purple { background: #7c3aed; border-color: #c084fc; }
-    .btn-gold { background: #d97706; border-color: #fbbf24; }
-    .btn-outline { background: #1e293b; border-color: #475569; color: #e2e8f0; }
-    .btn-outline.selected { background: #2563eb; border-color: #60a5fa; color: #fff; }
+    .panel-title { font-size: 13.5px; font-weight: 800; color: #f8fafc; }
 
     .terminal-box {
-      background: #050811;
-      border: 1px solid #1e293b;
-      border-radius: 8px;
-      padding: 8px 10px;
-      font-family: "SF Mono", Menlo, monospace;
-      font-size: 11.5px;
-      line-height: 1.45;
-      color: #a7f3d0;
-      height: 190px;
-      overflow-y: auto;
-      white-space: pre-wrap;
+      background: #050811; border: 1px solid #1e293b; border-radius: 8px; padding: 8px 10px;
+      font-family: "SF Mono", Menlo, monospace; font-size: 11.5px; line-height: 1.48; color: #a7f3d0;
+      height: 185px; overflow-y: auto; white-space: pre-wrap;
     }
     .badge-pill {
-      padding: 3px 8px;
-      border-radius: 99px;
-      font-size: 11px;
-      font-weight: 700;
-      background: #1e293b;
-      color: #cbd5e1;
+      padding: 3px 8px; border-radius: 99px; font-size: 11px; font-weight: 700;
+      background: #1e293b; color: #cbd5e1;
     }
-    .badge-pill.on {
-      background: rgba(16,185,129,0.22);
-      color: #a7f3d0;
-      border: 1px solid #10b981;
-    }
-    table.data-table {
-      width: 100%;
-      border-collapse: collapse;
-      font-size: 12px;
-    }
+    .badge-pill.on { background: rgba(16,185,129,0.22); color: #a7f3d0; border: 1px solid #10b981; }
+    .badge-pill.gold { background: rgba(251,191,36,0.2); color: #fde68a; border: 1px solid #fbbf24; }
+
+    table.data-table { width: 100%; border-collapse: collapse; font-size: 12px; }
     table.data-table th, table.data-table td {
-      padding: 6px 8px;
-      border-bottom: 1px solid #1f2937;
-      text-align: left;
+      padding: 6px 8px; border-bottom: 1px solid #1f2937; text-align: left;
     }
-    table.data-table th {
-      color: var(--text-muted);
-      font-weight: 700;
-      background: rgba(0,0,0,0.25);
+    table.data-table th { color: var(--text-muted); font-weight: 700; background: rgba(0,0,0,0.25); }
+
+    .arc-track {
+      display: flex; gap: 6px; align-items: center; flex-wrap: wrap; font-size: 11px;
+    }
+    .arc-node {
+      padding: 4px 8px; border-radius: 6px; background: #172133; border: 1px solid #334155; color: #94a3b8; font-weight: 700;
+    }
+    .arc-node.active {
+      background: rgba(168,85,247,0.26); border-color: #c084fc; color: #f3e8ff;
+      box-shadow: 0 0 10px rgba(168,85,247,0.45);
+    }
+
+    textarea.directives-editor {
+      width: 100%; min-height: 150px; background: #050811; color: #e2e8f0; border: 1px solid #334155;
+      border-radius: 8px; padding: 9px; font-family: "SF Mono", Menlo, monospace; font-size: 12px; line-height: 1.5;
+      resize: vertical;
+    }
+    pre.md-preview {
+      background: #050811; border: 1px solid #1e293b; border-radius: 8px; padding: 10px;
+      font-family: "SF Mono", Menlo, monospace; font-size: 11.5px; line-height: 1.5; color: #cbd5e1;
+      max-height: 230px; overflow-y: auto; white-space: pre-wrap;
     }
   </style>
 </head>
@@ -385,424 +238,385 @@
 
   <!-- GLOBAL TOP BAR -->
   <header class="global-header">
-    <!-- 1. USER ACTION & STATUS BANNER -->
     <div id="userBanner" class="user-banner READY">
       <div class="banner-left">
-        <span id="bannerBadge" class="banner-badge">🟢 [🎹 対話・操作可能]</span>
-        <div class="banner-text-wrap">
+        <span id="bannerBadge" class="banner-badge">♾️ [AUTONOMOUS VIRTUOSO]</span>
+        <div style="min-width:0;">
           <div id="bannerMainMsg" class="banner-main-msg">
-            あなたが弾いても、AIに展開作曲させても、ドビュッシー等のフルレガート名曲を聴いてもOKです！
+            自律型AIピアニスト稼働中 — Virtual Disklavier Digital Twin 上で途切れない音楽を生成・自己採点・進化中
           </div>
           <div id="bannerSubMsg" class="banner-sub-msg">
-            Disklavier 双方向MIDI (IN/OUT) + C519ML 音響持続フィードバック稼働中
+            Look-Ahead Double Ring Buffer + 5-Axis Actor-Critic + Obsidian Musical Brain 稼働中
           </div>
         </div>
+      </div>
+      <div class="gen-hero-pill">
+        <span>🧬 Gen <strong id="topGenNum" style="color:#38bdf8;">1</strong></span>
+        <span>|</span>
+        <span>🎯 Latest <strong id="topLatestScore" style="color:#10b981;">--</strong></span>
+        <span>|</span>
+        <span>🏆 Peak <strong id="topBestScore" style="color:#fbbf24;">--</strong></span>
       </div>
       <div id="countdownPill" class="countdown-pill">🔊 3s</div>
     </div>
 
-    <!-- 2. INTERACTIVE DIALOGUE & SUSTAIN MONITOR BAR (ALWAYS VISIBLE) -->
-    <div class="dialogue-quick-bar">
-      <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;">
-        <span id="turnIndicatorPill" class="turn-indicator-pill">
-          🎹 あなたがいつでも弾けます (MIDI IN 待機中)
-        </span>
-        <button class="btn btn-green" onclick="startHumanTurn()">
-          🟢 1.「私が弾く」モード開始 (録音リセット)
+    <!-- CONTINUOUS STREAM, DIGITAL TWIN AUDIO, HYPER-EVOLUTION & MOTIF INJECTION BAR -->
+    <div class="virtuoso-quick-bar">
+      <div class="btn-group">
+        <button id="btnStreamToggle" class="btn btn-green" onclick="toggleContinuousStream()">
+          ♾️ 連続演奏ストリーム: ON
         </button>
-        <span style="font-size:12px;color:#e2e8f0;">
-          収録済みのあなたの音: <strong id="topHumanNotesCount" style="color:#fbbf24;">0 notes</strong>
-        </span>
-      </div>
-
-      <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;">
-        <span style="font-size:12px;color:#cbd5e1;">展開秒数:</span>
-        <select id="quickDurSelect" style="background:#0f172a;color:#fbbf24;font-weight:800;padding:5px 8px;border-radius:6px;border:1px solid #3b82f6;">
-          <option value="12">12秒 (短い対話アンサー)</option>
-          <option value="20">20秒 (2フレーズ展開)</option>
-          <option value="30" selected>30秒 (本格小品 A-B-A')</option>
-          <option value="45">45秒 (ソナタ展開部付き)</option>
-          <option value="60">60秒 (大曲ファンタジア)</option>
-        </select>
-        <select id="quickModeSelect" style="background:#0f172a;color:#38bdf8;font-weight:700;padding:5px 8px;border-radius:6px;border:1px solid #3b82f6;">
-          <option value="debussy_impressionist">🌊 ドビュッシー印象派レガート展開</option>
-          <option value="call_and_response">💬 対話コール＆レスポンス展開</option>
-          <option value="faure_chopin_lyric">🎻 フォーレ／ショパン叙情展開</option>
-          <option value="bach_counterpoint">🏛️ バッハ4声部対位法展開</option>
-          <option value="dramatic_crescendo">🔥 ブラームス劇的クライマックス展開</option>
-        </select>
-        <button class="btn btn-purple" onclick="quickExpandAndPlay()">
-          ✨ 2. 収録した演奏を指定秒数で展開作曲＆実演
+        <button id="btnVirtualSound" class="btn btn-outline active-toggle" onclick="toggleVirtualSound()">
+          🔊 Mac内蔵音源で聴く: ON
         </button>
-        <button class="btn btn-gold" onclick="playOptimizedMidi('debussy_clair_sonata')">
-          🌙 ドビュッシー『月の光』フルレガート再生
+        <button id="btnHardwareOut" class="btn btn-outline" onclick="toggleHardwareOutput()">
+          🎹 実機Disklavier出力: AUTO
+        </button>
+        <button class="btn btn-purple" onclick="runHyperEvolution(15, 30)">
+          ⚡ 高速脳内進化 (15世代 @ 30x)
         </button>
       </div>
 
-      <button class="panic-btn" onclick="triggerPanic()">🔴 STOP / PANIC</button>
+      <div class="btn-group">
+        <span style="font-size:11.5px;color:#cbd5e1;font-weight:700;">🎻 モチーフ即時吸収 (無停止):</span>
+        <button class="btn btn-outline" onclick="injectLiveMotif([62, 65, 69, 68, 65, 62], 'cello_lament')">チェロ短調主題</button>
+        <button class="btn btn-outline" onclick="injectLiveMotif([61, 65, 68, 73, 70, 68, 65], 'debussy_moon')">ドビュッシー主題</button>
+        <button class="btn btn-outline" onclick="injectLiveMotif([43, 50, 59, 57, 59, 62, 67], 'bach_bariolage')">バッハ対位主題</button>
+        <button class="panic-btn" onclick="triggerPanic()">🔴 STOP / PANIC</button>
+      </div>
     </div>
   </header>
 
-  <!-- ALWAYS-VISIBLE 60FPS VISUAL HEARTBEAT (ELEMENTS 1, 2, 3) -->
+  <!-- ALWAYS-VISIBLE 60FPS DIGITAL TWIN & PHYSICS DOCK -->
   <section class="heartbeat-dock">
-    <!-- Heartbeat 1: Live Audio Oscilloscope, CQT & SUSTAIN CONTINUITY VERIFIER -->
+    <!-- 1. Virtual Twin Acoustic Output & C519ML Mic Spectrum -->
     <div class="hb-card">
       <div class="hb-title">
-        <span>🎙️ 1. C519ML 波形・スペクトログラム ＆ 音の伸び診断</span>
-        <span id="audioDbBadge" style="color:#10b981;">RMS: -58.5 dBFS</span>
+        <span>🔊 1. Virtual Twin 音響出力 & C519ML スペクトル</span>
+        <span id="audioDbBadge" style="color:#10b981;">Twin: -40.0 dBFS</span>
       </div>
-      <canvas id="oscCanvas" class="vis-canvas" width="440" height="52"></canvas>
-      <canvas id="cqtCanvas" class="vis-canvas" width="440" height="62"></canvas>
-      <div style="display:flex;justify-content:space-between;font-size:11px;color:#d1d5db;background:#162032;padding:4px 8px;border-radius:5px;">
-        <span>🔍 音の伸び診断: <strong id="liveSustainLabel" style="color:#10b981;">🟢 98.2% 良好に持続</strong></span>
-        <span>検出音: <strong id="liveDetectedNotes" style="color:#fbbf24;">--</strong></span>
+      <canvas id="oscCanvas" class="vis-canvas" width="440" height="54"></canvas>
+      <canvas id="cqtCanvas" class="vis-canvas" width="440" height="58"></canvas>
+      <div style="display:flex;justify-content:space-between;font-size:11px;color:#cbd5e1;background:#162032;padding:4px 8px;border-radius:5px;">
+        <span>出力デバイス: <strong id="twinAudioDev" style="color:#38bdf8;">CoreAudio</strong></span>
+        <span>検出/演奏音: <strong id="liveDetectedNotes" style="color:#fbbf24;">--</strong></span>
       </div>
     </div>
 
-    <!-- Heartbeat 2: 88-Key Disklavier & Right Damper Pedal (CC#64) Visualizer -->
+    <!-- 2. 88-Key Virtual & Physical Disklavier + VDL Prelay Bars + CC#64 Inertia -->
     <div class="hb-card">
       <div class="hb-title">
-        <span>🎹 2. 88-Key Disklavier (双方向MIDI IN/OUT) & 右ダンパーペダル (CC#64)</span>
-        <span id="pianoActiveSummary" style="color:#fbbf24;">Active Keys: 0</span>
+        <span>🎹 2. 88-Key Disklavier Digital Twin (打鍵・VDL先行 ms・Half-Pedal CC#64)</span>
+        <span id="pianoActiveSummary" style="color:#fbbf24;">Active Keys: 0 | VDL: -- ms</span>
       </div>
-      <canvas id="pianoCanvas" class="vis-canvas" width="580" height="86"></canvas>
-      <div style="display:flex;align-items:center;gap:10px;margin-top:2px;">
+      <canvas id="pianoCanvas" class="vis-canvas" width="600" height="88"></canvas>
+      <div style="display:flex;align-items:center;gap:10px;">
         <span style="font-size:11px;font-weight:700;color:#cbd5e1;white-space:nowrap;">
-          🦶 右ペダル (CC#64 シンコペーション制御):
+          🦶 右ペダル CC#64 (45ms慣性):
         </span>
-        <div style="flex:1;height:14px;background:#070b14;border-radius:6px;border:1px solid #334155;position:relative;overflow:hidden;">
-          <div style="position:absolute;left:27.5%;width:35.4%;top:0;bottom:0;background:rgba(251,191,36,0.16);border-left:1px dashed #fbbf24;border-right:1px dashed #fbbf24;"></div>
+        <div style="flex:1;height:13px;background:#070b14;border-radius:6px;border:1px solid #334155;position:relative;overflow:hidden;">
+          <div style="position:absolute;left:24.4%;width:42.5%;top:0;bottom:0;background:rgba(251,191,36,0.16);border-left:1px dashed #fbbf24;border-right:1px dashed #fbbf24;" title="Half-Pedal Sweet Spot (31-85)"></div>
           <div id="pedalBarFill" style="height:100%;width:0%;background:linear-gradient(90deg,#38bdf8,#fbbf24,#10b981);transition:width 0.05s;"></div>
         </div>
-        <span id="pedalZoneLabel" style="font-size:11px;color:#fbbf24;min-width:135px;text-align:right;">
-          0 (Seated)
-        </span>
+        <span id="pedalZoneLabel" style="font-size:11px;color:#fbbf24;min-width:155px;text-align:right;">0 (Seated)</span>
       </div>
       <div style="display:flex;justify-content:space-between;font-size:10.5px;color:#9ca3af;">
-        <span>🟢 演奏ノート | 🔵 あなたが弾いた鍵盤 (MIDI IN) | 🟣 共鳴Halo (Vel 1)</span>
-        <span>途切れ防止ブロック済: <strong id="statStaleBlocked" style="color:#10b981;">0</strong></span>
+        <span>🟢 Piano | 🟡 Cello Motif | 🔵 Human MIDI IN | 🟣 Halo (Vel 1) | 水色バー=VDL先行補正ms</span>
+        <span>途切れ防止ブロック: <strong id="statStaleBlocked" style="color:#10b981;">0</strong></span>
       </div>
     </div>
 
-    <!-- Heartbeat 3: Safety Guard & Closed-Loop Sustain Telemetry -->
+    <!-- 3. Look-Ahead Double Ring Buffer & Disklavier Physics Simulator -->
     <div class="hb-card">
       <div class="hb-title">
-        <span>🛡️ 3. SafetyGuard & MIDIフィードバック改善メーター</span>
-        <span id="guardPortStatus" style="color:#10b981;">IN/OUT: Disklavier</span>
+        <span>🛡️ 3. 先読みリングバッファ & 物理シミュレータ検証</span>
+        <span id="guardPortStatus" style="color:#10b981;">0 Crashes</span>
       </div>
       <div class="gauges-grid">
         <div class="gauge-item">
-          <div class="gauge-label"><span>音の伸び達成率</span><span>Target 100%</span></div>
-          <div class="gauge-val" id="gSustainFulfillVal" style="color:#10b981;">98.2%</div>
-          <div class="gauge-bar"><div class="gauge-fill" id="gSustainFulfillBar" style="width:98%;"></div></div>
+          <div class="gauge-label"><span>先読み Horizon</span><span id="bufSlotLabel">Buffer A</span></div>
+          <div class="gauge-val" id="gHorizonVal" style="color:#38bdf8;">0.00 s</div>
+          <div class="gauge-bar"><div class="gauge-fill" id="gHorizonBar" style="background:#38bdf8;"></div></div>
         </div>
         <div class="gauge-item">
-          <div class="gauge-label"><span>保持ボイス数</span><span>Max 20</span></div>
+          <div class="gauge-label"><span>ソレノイド同時負荷</span><span>Max 16 / 20</span></div>
           <div class="gauge-val" id="gVoicesVal">0 / 20</div>
           <div class="gauge-bar"><div class="gauge-fill" id="gVoicesBar"></div></div>
         </div>
         <div class="gauge-item">
-          <div class="gauge-label"><span>MIDI IN 収集数</span><span>双方向監視</span></div>
-          <div class="gauge-val" id="gMidiInVal" style="color:#38bdf8;">0 ev</div>
-          <div class="gauge-bar"><div class="gauge-fill" id="gMidiInBar" style="background:#38bdf8;width:50%;"></div></div>
+          <div class="gauge-label"><span>VDL 先行誤差</span><span>目標 &lt; 5ms</span></div>
+          <div class="gauge-val" id="gVdlErrVal" style="color:#10b981;">0.0 ms</div>
+          <div class="gauge-bar"><div class="gauge-fill" id="gVdlErrBar" style="width:95%;"></div></div>
         </div>
         <div class="gauge-item">
-          <div class="gauge-label"><span>VDL 先読みキュー</span><span>Lookahead</span></div>
-          <div class="gauge-val" id="gVdlVal">0 ev</div>
-          <div class="gauge-bar"><div class="gauge-fill" id="gVdlBar" style="background:#a855f7;"></div></div>
+          <div class="gauge-label"><span>物理エラー (Ghost/Sag/Crash)</span><span>SafetyGuard</span></div>
+          <div class="gauge-val" id="gPhysicsHealthVal" style="color:#10b981;">0 Errors</div>
+          <div class="gauge-bar"><div class="gauge-fill" id="gPhysicsHealthBar" style="width:100%;"></div></div>
         </div>
       </div>
       <div style="display:flex;justify-content:space-between;font-size:10.5px;color:#9ca3af;">
-        <span>LegatoOverlap: <strong id="statOverlapMs" style="color:#fff;">+38ms</strong></span>
-        <span>MinVel: <strong id="statMinVel" style="color:#fff;">28</strong></span>
+        <span>LegatoOverlap: <strong id="statOverlapMs" style="color:#fff;">+10ms</strong></span>
+        <span>HalfPedalRes: <strong id="statHalfPedalRes" style="color:#fbbf24;">0.00</strong></span>
         <span>Sent: <strong id="statTotalSent" style="color:#10b981;">0</strong></span>
       </div>
     </div>
   </section>
 
-  <!-- 6-TAB NAVIGATION BAR -->
-  <nav class="nav-tabs">
-    <button class="tab-btn active" onclick="switchTab(3)" id="tabBtn3">🎼 Tab 3: 対話型AI作曲＆秒数指定展開スタジオ (メイン対話)</button>
-    <button class="tab-btn" onclick="switchTab(4)" id="tabBtn4">🎹 Tab 4: ドビュッシー＆IMSLP フルレガート名曲再生</button>
-    <button class="tab-btn" onclick="switchTab(2)" id="tabBtn2">🎻 Tab 2: リアルタイム・チェロ＆ピアノセッション</button>
-    <button class="tab-btn" onclick="switchTab(5)" id="tabBtn5">📼 Tab 5: リハーサル Time-Machine 聴き比べ</button>
-    <button class="tab-btn" onclick="switchTab(1)" id="tabBtn1">📡 Tab 1: ミッションコントロール＆音の伸び診断ログ</button>
-    <button class="tab-btn" onclick="switchTab(6)" id="tabBtn6">🔬 Tab 6: 自律実験データ図鑑 (Exp 1–5)</button>
+  <!-- NAVIGATION TABS -->
+  <nav class="nav-tabs" role="tablist" aria-label="Virtuoso Studio Views">
+    <button type="button" role="tab" aria-selected="true" class="tab-btn" onclick="switchTab(1)" id="tabBtn1">
+      🧠 Tab 1: 自律進化・平行未来ツリー＆5軸採点コックピット
+    </button>
+    <button type="button" role="tab" aria-selected="false" class="tab-btn" onclick="switchTab(2)" id="tabBtn2">
+      🕸️ Tab 2: Obsidian 音楽脳グラフ＆進化履歴ビューア
+    </button>
+    <button type="button" role="tab" aria-selected="false" class="tab-btn" onclick="switchTab(3)" id="tabBtn3">
+      🎼 Tab 3: 対話型AI作曲＆秒数指定展開スタジオ
+    </button>
+    <button type="button" role="tab" aria-selected="false" class="tab-btn" onclick="switchTab(4)" id="tabBtn4">
+      🎹 Tab 4: IMSLP フルレガート名曲再生
+    </button>
+    <button type="button" role="tab" aria-selected="false" class="tab-btn" onclick="switchTab(5)" id="tabBtn5">
+      🎻 Tab 5: チェロ伴奏＆Time-Machine 聴き比べ
+    </button>
+    <button type="button" role="tab" aria-selected="false" class="tab-btn" onclick="switchTab(6)" id="tabBtn6">
+      🔬 Tab 6: 自律実験データ図鑑 (Exp 1–5)
+    </button>
   </nav>
 
   <!-- ===================================================================== -->
-  <!-- TAB 3 (DEFAULT ACTIVE): INTERACTIVE DIALOGUE & EXPANSION STUDIO       -->
+  <!-- TAB 1 (MAIN COCKPIT): MULTIVERSE FUTURE TREE & 5-AXIS CRITIC RADAR    -->
   <!-- ===================================================================== -->
-  <main id="tabPane3" class="tab-pane active">
-    <div class="grid-2">
-      <!-- Left: Turn-Taking Capture + Expansion Controls -->
+  <main id="tabPane1" role="tabpanel" aria-labelledby="tabBtn1" class="tab-pane">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px;gap:10px;flex-wrap:wrap;background:#101726;padding:8px 12px;border-radius:10px;border:1px solid #28354d;">
+      <div class="arc-track" id="storyArcTrack">
+        <span style="font-weight:800;color:#c084fc;margin-right:4px;">🎭 音楽の呼吸 (Story Arc):</span>
+        <span class="arc-node" data-arc="Exposition">① 主題提示 (Exposition)</span>
+        <span>→</span>
+        <span class="arc-node" data-arc="Development">② 動機展開 (Development)</span>
+        <span>→</span>
+        <span class="arc-node" data-arc="Climax">③ クライマックス (Climax)</span>
+        <span>→</span>
+        <span class="arc-node" data-arc="Recapitulation">④ 静謐な再現 (Recapitulation)</span>
+        <span>→</span>
+        <span class="arc-node" data-arc="Metamorphosis">⑤ 主題変容 (Metamorphosis)</span>
+      </div>
+      <div style="font-size:12px;color:#e2e8f0;">
+        現在の核モチーフ: <strong id="activeMotifTitle" style="color:#fbbf24;">Loading...</strong>
+        (<span id="activeMotifKey" style="color:#38bdf8;">--</span>) |
+        小節: <strong id="virtuosoBarCount" style="color:#10b981;">0</strong>
+      </div>
+    </div>
+
+    <div class="grid-cockpit">
+      <!-- Left: Multiverse Future Branch Visualizer + Live Critic Log -->
       <div class="panel-box">
         <div class="panel-header">
-          <span class="panel-title">🎹 Step 1: あなたの演奏を撮る（Disklavier鍵盤 MIDI IN / C519MLマイク / 画面ボタン）</span>
-          <span class="badge-pill on" id="dialogueStateBadge">🟢 あなたの番 — 演奏待機中</span>
+          <span class="panel-title">🌳 Multiverse Future Branch Visualizer (4平行未来候補リアルタイム採点・選択)</span>
+          <span class="badge-pill gold" id="hyperTrainingBadge">Hyper-Speed Ready</span>
         </div>
-
-        <div style="background:#162032;border:1px solid #3b82f6;border-radius:8px;padding:10px;font-size:12.5px;line-height:1.55;">
-          <div>👤 <strong>今すぐ弾いていい？ → はい！いつでもDisklavierの鍵盤またはチェロを弾いてください。</strong></div>
-          <div style="color:#9ca3af;margin-top:3px;">
-            DisklavierのMIDI INポートとC519MLマイクが常時あなたの演奏をキャプチャしています。ピアノの前にいない場合も、下のボタンでモチーフを鳴らしてキャプチャできます：
-          </div>
-          <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:8px;">
-            <button class="btn btn-green" onclick="startHumanTurn()">🟢 録音をクリアして「私が弾く」開始</button>
-            <button class="btn btn-outline" onclick="injectSampleMotif([61, 65, 68, 73, 70, 68, 65])">
-              🌙 サンプル主題① (ドビュッシー風 D♭-F-A♭-D♭) を入力
-            </button>
-            <button class="btn btn-outline" onclick="injectSampleMotif([55, 62, 71, 69, 67, 64, 66, 67])">
-              🦢 サンプル主題② (サン＝サーンス/フォーレ風) を入力
-            </button>
-            <button class="btn btn-outline" onclick="injectSampleMotif([48, 55, 60, 63, 62, 58, 55, 48])">
-              🎻 サンプル主題③ (チェロ重厚C minor主題) を入力
-            </button>
-          </div>
-        </div>
+        <canvas id="multiverseTreeCanvas" class="vis-canvas" width="760" height="285"></canvas>
 
         <div class="panel-header" style="margin-top:4px;">
-          <span class="panel-title">🎼 Step 2: 何秒で・どう展開して作曲＆演奏するか設定</span>
+          <span class="panel-title">💬 AI Critic ライブ実況講評ログ (Generation Evolution Stream)</span>
+          <span class="badge-pill on" id="activeDirectiveSummary">Fitness: Classical Balanced</span>
         </div>
-
-        <div style="display:flex;flex-direction:column;gap:10px;background:#162032;padding:10px;border-radius:8px;">
-          <div style="display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap;">
-            <span style="font-size:12.5px;font-weight:700;">⏱️ 展開する目標秒数: <strong id="durSliderLabel" style="color:#fbbf24;font-size:15px;">30 秒</strong></span>
-            <div style="display:flex;gap:6px;">
-              <button class="btn btn-outline" onclick="setExpansionDuration(12)">12秒</button>
-              <button class="btn btn-outline" onclick="setExpansionDuration(20)">20秒</button>
-              <button class="btn btn-outline selected" onclick="setExpansionDuration(30)">30秒</button>
-              <button class="btn btn-outline" onclick="setExpansionDuration(45)">45秒</button>
-              <button class="btn btn-outline" onclick="setExpansionDuration(60)">60秒</button>
-            </div>
-          </div>
-          <input type="range" id="compDurationSlider" min="10" max="75" step="5" value="30"
-            oninput="document.getElementById('durSliderLabel').textContent = this.value + ' 秒'; document.getElementById('quickDurSelect').value = this.value;" />
-
-          <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;font-size:12px;">
-            <label>🎨 展開・変奏スタイル:
-              <select id="compStyleSelect" style="width:100%;margin-top:4px;background:#0f172a;color:#fff;padding:6px;border-radius:6px;border:1px solid #475569;">
-                <option value="debussy_impressionist">🌊 ドビュッシー印象派風・色彩レガート展開 (9th/11th + 指ペダル)</option>
-                <option value="call_and_response">💬 対話型コール＆レスポンス展開 (主題応答＋変奏)</option>
-                <option value="faure_chopin_lyric">🎻 フォーレ／ショパン風・叙情カンタービレ展開</option>
-                <option value="bach_counterpoint">🏛️ バッハ風・4声部対位法カノン展開</option>
-                <option value="dramatic_crescendo">🔥 ブラームス風・劇的クライマックスソナタ展開</option>
-              </select>
-            </label>
-            <label>🔗 レガートの繋がり深さ (Overlap %):
-              <input type="range" id="compLegatoSlider" min="105" max="135" value="115" style="width:100%;margin-top:8px;" />
-            </label>
-            <label>🎹 伴奏アルペジオ密度 (1–5):
-              <input type="range" id="compDensitySlider" min="2" max="5" value="3" style="width:100%;margin-top:6px;" />
-            </label>
-            <label>🦶 右ダンパーペダル深さ (CC#64: 50–76):
-              <input type="range" id="compPedalSlider" min="50" max="76" value="68" style="width:100%;margin-top:6px;" />
-            </label>
-          </div>
-
-          <div style="display:flex;gap:10px;margin-top:4px;">
-            <button class="btn btn-purple" style="flex:1;padding:10px;font-size:14px;" onclick="listenAndComposeMotif()">
-              ✨ 撮った演奏をこの秒数・スタイルで展開作曲してDisklavier実演 (3秒予告付)
-            </button>
-            <button class="btn btn-outline" onclick="exportComposedMidi()">💾 SMF (.mid) 保存</button>
-          </div>
-        </div>
+        <div id="criticLogsBox" class="terminal-box" style="height:175px;"></div>
       </div>
 
-      <!-- Right: Generated 4-Section Score & Live Sustain Verification -->
+      <!-- Right: 5-Axis Self-Scoring Radar Chart & Evolvable Genome Parameters -->
       <div class="panel-box">
         <div class="panel-header">
-          <span class="panel-title">📊 生成された展開スコア（4部構成ピアノロール）＆ 音の伸びフィードバック検証</span>
+          <span class="panel-title">🎯 5軸・100点満点 自己採点レーダーチャート (Actor-Critic)</span>
+          <span id="radarTotalBadge" style="font-size:15px;font-weight:900;color:#fbbf24;">-- / 100 pts</span>
         </div>
-        <canvas id="composerPianoRollCanvas" class="vis-canvas" width="600" height="175"></canvas>
-        <div id="composedPieceInfo" style="font-size:12px;color:#e2e8f0;background:#162032;padding:8px 10px;border-radius:7px;line-height:1.5;">
-          <strong>構成プレビュー</strong>: Section I (主題提示＆レガート応答) → Section II (対話的展開＆色彩変奏) → Section III (叙情クライマックス) → Section IV (余韻コーダ)
-        </div>
+        <canvas id="criticRadarCanvas" class="vis-canvas" width="480" height="275"></canvas>
 
         <div class="panel-header" style="margin-top:2px;">
-          <span class="panel-title">🔍 演奏結果のMIDI＆音響持続フィードバック（音が希望通り伸びているか）</span>
-          <button class="btn btn-green" style="padding:4px 10px;font-size:11px;" onclick="applyClosedLoopBoost()">
-            🔧 実測に基づきレガート＆ペダルをさらに深める (+Overlap)
+          <span class="panel-title">🧬 自己進化ゲノム重み (Elite MusicalGenome)</span>
+        </div>
+        <div class="gauges-grid" id="genomeParamsGrid">
+          <div class="gauge-item">
+            <div class="gauge-label"><span>反行率重み (Contrary Motion)</span><span id="gGenomeContrary">--</span></div>
+            <div class="gauge-bar"><div class="gauge-fill" id="bGenomeContrary" style="background:#38bdf8;"></div></div>
+          </div>
+          <div class="gauge-item">
+            <div class="gauge-label"><span>半音階バス (Chromatic Bass)</span><span id="gGenomeChroma">--</span></div>
+            <div class="gauge-bar"><div class="gauge-fill" id="bGenomeChroma" style="background:#a855f7;"></div></div>
+          </div>
+          <div class="gauge-item">
+            <div class="gauge-label"><span>対位法密度 (Counterpoint)</span><span id="gGenomeCp">--</span></div>
+            <div class="gauge-bar"><div class="gauge-fill" id="bGenomeCp" style="background:#10b981;"></div></div>
+          </div>
+          <div class="gauge-item">
+            <div class="gauge-label"><span>スタッカート/レガート対比</span><span id="gGenomeContrast">--</span></div>
+            <div class="gauge-bar"><div class="gauge-fill" id="bGenomeContrast" style="background:#fbbf24;"></div></div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </main>
+
+  <!-- ===================================================================== -->
+  <!-- TAB 2: OBSIDIAN KNOWLEDGE GRAPH & EVOLUTION HISTORY                   -->
+  <!-- ===================================================================== -->
+  <main id="tabPane2" role="tabpanel" aria-labelledby="tabBtn2" class="tab-pane" hidden>
+    <div class="grid-2">
+      <!-- Left: Evolution Score Trajectory + Obsidian Knowledge Graph Canvas -->
+      <div class="panel-box">
+        <div class="panel-header">
+          <span class="panel-title">📈 世代別進化スコア曲線 (Gen 1 → Current Gen)</span>
+          <span class="badge-pill on" id="obsidianStatsBadge">Vault: 0 notes | 0 links</span>
+        </div>
+        <canvas id="evolutionHistoryCanvas" class="vis-canvas" width="640" height="175"></canvas>
+
+        <div class="panel-header" style="margin-top:4px;">
+          <span class="panel-title">🕸️ Obsidian 知識グラフ (クリックしてノート閲覧・MIDI再生)</span>
+        </div>
+        <canvas id="obsidianGraphCanvas" class="vis-canvas" width="640" height="270" style="cursor:pointer;"></canvas>
+      </div>
+
+      <!-- Right: Selected Note Preview, Hall of Fame Leaderboard, Live Directives Editor -->
+      <div class="panel-box">
+        <div class="panel-header">
+          <span class="panel-title">🏆 Hall of Fame 殿堂入り名演 (85点以上・最適化MIDI保存済)</span>
+        </div>
+        <div style="max-height:145px;overflow-y:auto;">
+          <table class="data-table">
+            <thead>
+              <tr><th>Note</th><th>Gen</th><th>Score</th><th>再生</th></tr>
+            </thead>
+            <tbody id="hofLeaderboardTbody"></tbody>
+          </table>
+        </div>
+
+        <div class="panel-header">
+          <span class="panel-title" id="selectedObsidianNoteTitle">📄 ノートプレビュー (グラフ上のノードをクリック)</span>
+          <button id="btnPlaySelectedHof" class="btn btn-gold" style="display:none;padding:4px 10px;" onclick="playSelectedHofMidi()">
+            ▶️ この名演の最適化MIDIを再生
           </button>
         </div>
-        <table class="data-table">
-          <thead>
-            <tr>
-              <th>Note</th>
-              <th>Velocity</th>
-              <th>目標持続長 (Target)</th>
-              <th>実測持続長 (Actual)</th>
-              <th>ペダル CC#64</th>
-              <th>伸び達成率</th>
-            </tr>
-          </thead>
-          <tbody id="sustainVerificationTbody">
-            <tr><td colspan="6" style="color:#9ca3af;">演奏が開始されると、各ノートの目標長と実測持続長がリアルタイム表示されます</td></tr>
-          </tbody>
-        </table>
+        <pre id="selectedObsidianNoteContent" class="md-preview">グラフ上のノードまたはHall of Fame行をクリックすると、Obsidian VaultのMarkdown分析ノートが表示されます。</pre>
+
+        <div class="panel-header">
+          <span class="panel-title">📝 04_Human_Directives.md (人間からのリアルタイム進化指示)</span>
+          <div class="btn-group">
+            <button class="btn btn-outline" style="padding:3px 8px;font-size:11px;" onclick="appendDirectivePreset('短調の半音階的バス (chromatic bass) を増やす')">+短調半音階バス</button>
+            <button class="btn btn-outline" style="padding:3px 8px;font-size:11px;" onclick="appendDirectivePreset('スタッカートとレガートの対比を強くする')">+緩急対比強化</button>
+            <button class="btn btn-green" style="padding:4px 10px;font-size:11px;" onclick="saveHumanDirectives()">💾 保存して即時反映</button>
+          </div>
+        </div>
+        <textarea id="directivesTextarea" class="directives-editor"></textarea>
       </div>
     </div>
   </main>
 
   <!-- ===================================================================== -->
-  <!-- TAB 4: PRECISION MIDI PLAYER & IMSLP LIBRARY (FULL LEGATO EDITION)    -->
+  <!-- TAB 3: INTERACTIVE DIALOGUE & DURATION-CONFIGURABLE COMPOSER          -->
   <!-- ===================================================================== -->
-  <main id="tabPane4" class="tab-pane">
+  <main id="tabPane3" role="tabpanel" aria-labelledby="tabBtn3" class="tab-pane" hidden>
     <div class="grid-2">
       <div class="panel-box">
         <div class="panel-header">
-          <span class="panel-title">📚 IMSLP クラシック名曲ライブラリ（途切れ完全解消・フィンガーレガート＆シンコペーションペダル版）</span>
-        </div>
-        <table class="data-table">
-          <thead>
-            <tr>
-              <th>曲名 (Masterwork)</th>
-              <th>作曲家</th>
-              <th>ノート数・調性</th>
-              <th>実機再生 (3秒予告付)</th>
-            </tr>
-          </thead>
-          <tbody id="imslpLibraryTbody"></tbody>
-        </table>
-      </div>
-
-      <div class="panel-box">
-        <div class="panel-header">
-          <span class="panel-title">⚙️ なぜ途切れなくなったか：Disklavier レガート＆VDL持続補正エンジン v2.0</span>
-        </div>
-        <div style="font-size:12.5px;line-height:1.6;color:#cbd5e1;background:#162032;padding:10px;border-radius:8px;">
-          <p><strong>💡 修正された3つの根本原因：</strong></p>
-          <ol style="margin-left:18px;margin-top:6px;">
-            <li><strong>VDL Note-Off 早切れバグの解消</strong>: 弱音（Debussy $pp$）でNote-Onを130ms先行送信した際、Note-Offまで一緒に130ms早まっていた問題を修正し、<strong>実音アタック時刻 $T_{\text{target}} + D_{\text{musical}} + D_{\text{overlap}}$</strong> まで確実に鍵盤を保持するようにしました。</li>
-            <li><strong>世代管理 (Generation ID) によるアルペジオ途切れ防止</strong>: 同じ鍵盤が次のアルペジオで弾き直された際、前の音の古いNote-Offが新しい音を途中で消してしまう現象を100%ブロックしました。</li>
-            <li><strong>シンコペーション・ダンパーペダル (CC#64=62〜72) ＆ 指レガート</strong>: 和音の変わり目でバスが鳴った直後に素早くペダルを踏み替え、アルペジオの各構成音も指で1.0秒以上保持するピアニスト奏法を実装しました。</li>
-          </ol>
-        </div>
-        <table class="data-table" id="optimizerDiffTable">
-          <thead>
-            <tr>
-              <th>最適化ステージ</th>
-              <th>従来 (途切れ発生時)</th>
-              <th>v2.0 フルレガート最適化後</th>
-            </tr>
-          </thead>
-          <tbody>
-            <tr><td>① VDL Note-Off 基準時刻</td><td>send_t + dur (弱音が130ms早切れ)</td><td><strong>target_sound_time + dur + 45ms</strong> (完全持続)</td></tr>
-            <tr><td>② 同音再打鍵時の古いNote-Off</td><td>新しい音を途中で切断</td><td><strong>Generation ID で古いNote-Offを100%遮断</strong></td></tr>
-            <tr><td>③ アルペジオ保持長 (Debussy等)</td><td>0.24s (スタッカート状の隙間)</td><td><strong>1.15s〜2.40s (指ペダル・レガート保持)</strong></td></tr>
-            <tr><td>④ ダンパーペダル CC#64 制御</td><td>固定値のみ</td><td><strong>シンコペーション踏み替え (CC#64=64〜72)</strong></td></tr>
-            <tr><td>⑤ 異音ジャンプ (+12半音転移)</td><td>63回発生</td><td><strong>0回 (ピッチ改変を完全禁止)</strong></td></tr>
-          </tbody>
-        </table>
-      </div>
-    </div>
-  </main>
-
-  <!-- ===================================================================== -->
-  <!-- TAB 2: LIVE CELLO & DISKLAVIER SESSION                                -->
-  <!-- ===================================================================== -->
-  <main id="tabPane2" class="tab-pane">
-    <div class="grid-2">
-      <div class="panel-box">
-        <div class="panel-header">
-          <span class="panel-title">🎻 リアルタイム・チェロ音響特徴検知 (C519ML) ＆ 自動アンサンブル</span>
-          <button class="btn btn-green" onclick="runAutoProxySessionDemo()">
-            ▶️ One-Click「Auto Proxy Session Demo」(3s予告付)
-          </button>
-        </div>
-        <div class="grid-3">
-          <div class="gauge-item">
-            <div class="gauge-label">Detected Notes</div>
-            <div class="gauge-val" id="t2Notes" style="color:#38bdf8;">--</div>
-          </div>
-          <div class="gauge-item">
-            <div class="gauge-label">Double / Triple Stop</div>
-            <div class="gauge-val" id="t2DoubleStop">Single Voice</div>
-          </div>
-          <div class="gauge-item">
-            <div class="gauge-label">Flageolet (Harmonic)</div>
-            <div class="gauge-val" id="t2Flageolet">Normal</div>
-          </div>
-          <div class="gauge-item">
-            <div class="gauge-label">Bow Articulation</div>
-            <div class="gauge-val" id="t2Bowing" style="font-size:13px;">Legato / Sostenuto</div>
-          </div>
-          <div class="gauge-item">
-            <div class="gauge-label">Rubato Tempo (BPM)</div>
-            <div class="gauge-val" id="t2Bpm" style="color:#10b981;">72.0 BPM</div>
-          </div>
-          <div class="gauge-item">
-            <div class="gauge-label">Sustain Continuity</div>
-            <div class="gauge-val" id="t2Bleed" style="color:#10b981;">98.2%</div>
-          </div>
-        </div>
-      </div>
-
-      <div class="panel-box">
-        <div class="panel-header">
-          <span class="panel-title">🎹 クラシック伴奏スタイル切り替え（すべてレガート＆ペダル持続対応）</span>
-        </div>
-        <div class="grid-2">
-          <button class="btn" onclick="selectAccompStyle('debussy_impressionist')">1. C. Debussy 印象派レガート (9th/11th & CC#64=68)</button>
-          <button class="btn btn-purple" onclick="selectAccompStyle('faure_romantic')">2. G. Fauré ロマン派アルペジオ (Élégie/Sicilienne)</button>
-          <button class="btn" onclick="selectAccompStyle('saint_saens_swan')">3. C. Saint-Saëns 『白鳥』風 連続6連符</button>
-          <button class="btn" onclick="selectAccompStyle('bach_counterpoint')">4. J.S. Bach 対位法 (2/3-Voice Counterpoint)</button>
-          <button class="btn" onclick="selectAccompStyle('brahms_sonata')">5. J. Brahms 重厚和声 & 3度クッション</button>
-          <button class="btn btn-gold" onclick="selectAccompStyle('sympathetic_halo')">6. Sympathetic Halo (Velocity 1 サイレント共鳴)</button>
-        </div>
-        <div id="activeStyleDetailBox" class="gauge-item" style="margin-top:6px;padding:10px;">
-          <div style="font-weight:700;color:#fbbf24;">Current Style: Gabriel Fauré / Claude Debussy Legato</div>
-          <div style="font-size:12px;color:#d1d5db;margin-top:4px;">
-            Finger-Legato Arpeggio Hold (1.0s+) ON | VDL Melody Lead +20ms ON | Optimal Half-Pedal CC#64=66
-          </div>
-        </div>
-      </div>
-    </div>
-  </main>
-
-  <!-- ===================================================================== -->
-  <!-- TAB 5: REHEARSAL TIME-MACHINE                                         -->
-  <!-- ===================================================================== -->
-  <main id="tabPane5" class="tab-pane">
-    <div class="grid-2">
-      <div class="panel-box">
-        <div class="panel-header">
-          <span class="panel-title">📼 Recorded Cello / Human Takes</span>
-          <button class="btn btn-green" onclick="recordNewRehearsalTake()">🔴 新規テイクを収録 (3s予告付)</button>
-        </div>
-        <table class="data-table">
-          <thead>
-            <tr>
-              <th>Take ID</th>
-              <th>Theme / Motif</th>
-              <th>Features Detected</th>
-              <th>Status</th>
-            </tr>
-          </thead>
-          <tbody id="rehearsalTakesTbody"></tbody>
-        </table>
-      </div>
-
-      <div class="panel-box">
-        <div class="panel-header">
-          <span class="panel-title">🔄 作曲家スタイル別・実機聴き比べ (Time-Machine)</span>
+          <span class="panel-title">🎹 Step 1: あなたの演奏を撮る（Disklavier鍵盤 / マイク / 画面ボタン）</span>
+          <span class="badge-pill on" id="dialogueStateBadge">🟢 待機中</span>
         </div>
         <div style="display:flex;gap:8px;flex-wrap:wrap;">
-          <button class="btn btn-gold" onclick="replayTakeWithStyle('debussy')">▶️ C. Debussy 風で実演比較</button>
-          <button class="btn btn-purple" onclick="replayTakeWithStyle('faure')">▶️ G. Fauré 風で実演比較</button>
-          <button class="btn" onclick="replayTakeWithStyle('saint_saens')">▶️ Saint-Saëns 風で実演比較</button>
-          <button class="btn" onclick="replayTakeWithStyle('bach')">▶️ J.S. Bach 風で実演比較</button>
-          <button class="btn btn-green" onclick="replayTakeWithStyle('brahms')">▶️ J. Brahms 風で実演比較</button>
+          <button class="btn btn-green" onclick="startHumanTurn()">🟢 録音をクリアして「私が弾く」開始</button>
+          <button class="btn btn-outline" onclick="injectSampleMotif([61, 65, 68, 73, 70, 68, 65])">🌙 ドビュッシー風主題</button>
+          <button class="btn btn-outline" onclick="injectSampleMotif([55, 62, 71, 69, 67, 64, 66, 67])">🦢 サン＝サーンス風主題</button>
+          <button class="btn btn-outline" onclick="injectSampleMotif([48, 55, 60, 63, 62, 58, 55, 48])">🎻 チェロC minor主題</button>
+          <span style="font-size:12px;align-self:center;">収録済: <strong id="topHumanNotesCount" style="color:#fbbf24;">0 notes</strong></span>
         </div>
-        <table class="data-table" style="margin-top:6px;">
-          <thead>
-            <tr>
-              <th>Accompaniment Style</th>
-              <th>Acoustic Roughness</th>
-              <th>Melody Lead Sync</th>
-              <th>Harmonic Consonance</th>
-            </tr>
-          </thead>
+
+        <div class="panel-header"><span class="panel-title">🎼 Step 2: 展開秒数・スタイル指定</span></div>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;font-size:12px;">
+          <label>⏱️ 目標秒数: <strong id="durSliderLabel" style="color:#fbbf24;">30 秒</strong>
+            <input type="range" id="compDurationSlider" min="10" max="75" step="5" value="30" style="width:100%;"
+              oninput="document.getElementById('durSliderLabel').textContent = this.value + ' 秒';" />
+          </label>
+          <label>🎨 展開スタイル:
+            <select id="compStyleSelect" style="width:100%;background:#0f172a;color:#fff;padding:6px;border-radius:6px;border:1px solid #475569;">
+              <option value="debussy_impressionist">🌊 ドビュッシー印象派レガート展開</option>
+              <option value="call_and_response">💬 対話コール＆レスポンス展開</option>
+              <option value="faure_chopin_lyric">🎻 フォーレ／ショパン叙情展開</option>
+              <option value="bach_counterpoint">🏛️ バッハ4声部対位法展開</option>
+              <option value="dramatic_crescendo">🔥 ブラームス劇的クライマックス展開</option>
+            </select>
+          </label>
+          <label>🔗 レガート重複 (%): <input type="range" id="compLegatoSlider" min="105" max="135" value="115" style="width:100%;" /></label>
+          <label>🎹 アルペジオ密度: <input type="range" id="compDensitySlider" min="2" max="5" value="3" style="width:100%;" /></label>
+          <label>🦶 CC#64 深さ: <input type="range" id="compPedalSlider" min="50" max="76" value="68" style="width:100%;" /></label>
+        </div>
+        <div style="display:flex;gap:8px;">
+          <button class="btn btn-purple" style="flex:1;" onclick="listenAndComposeMotif()">✨ 展開作曲＆実演</button>
+          <button class="btn btn-outline" onclick="exportComposedMidi()">💾 SMF保存</button>
+        </div>
+      </div>
+
+      <div class="panel-box">
+        <div class="panel-header"><span class="panel-title">📊 生成スコア & MIDI持続検証</span></div>
+        <canvas id="composerPianoRollCanvas" class="vis-canvas" width="600" height="170"></canvas>
+        <div id="composedPieceInfo" style="font-size:12px;color:#e2e8f0;background:#162032;padding:8px;border-radius:7px;">待機中</div>
+        <table class="data-table">
+          <thead><tr><th>Note</th><th>Vel</th><th>Target</th><th>Actual</th><th>CC#64</th><th>達成率</th></tr></thead>
+          <tbody id="sustainVerificationTbody"></tbody>
+        </table>
+      </div>
+    </div>
+  </main>
+
+  <!-- ===================================================================== -->
+  <!-- TAB 4: IMSLP LIBRARY                                                  -->
+  <!-- ===================================================================== -->
+  <main id="tabPane4" role="tabpanel" aria-labelledby="tabBtn4" class="tab-pane" hidden>
+    <div class="panel-box">
+      <div class="panel-header"><span class="panel-title">📚 IMSLP クラシック名曲ライブラリ（フルレガート＆シンコペーションペダル最適化）</span></div>
+      <table class="data-table">
+        <thead><tr><th>曲名</th><th>作曲家</th><th>ノート数・調性</th><th>実機 / Twin 再生</th></tr></thead>
+        <tbody id="imslpLibraryTbody"></tbody>
+      </table>
+    </div>
+  </main>
+
+  <!-- ===================================================================== -->
+  <!-- TAB 5: LIVE CELLO & TIME-MACHINE                                      -->
+  <!-- ===================================================================== -->
+  <main id="tabPane5" role="tabpanel" aria-labelledby="tabBtn5" class="tab-pane" hidden>
+    <div class="grid-2">
+      <div class="panel-box">
+        <div class="panel-header">
+          <span class="panel-title">🎻 リアルタイム・チェロ音響検知 & Proxy Session</span>
+          <button class="btn btn-green" onclick="runAutoProxySessionDemo()">▶️ Auto Proxy Session Demo</button>
+        </div>
+        <div class="grid-3">
+          <div class="gauge-item"><div class="gauge-label">Detected</div><div class="gauge-val" id="t2Notes">--</div></div>
+          <div class="gauge-item"><div class="gauge-label">Double Stop</div><div class="gauge-val" id="t2DoubleStop">Single</div></div>
+          <div class="gauge-item"><div class="gauge-label">Flageolet</div><div class="gauge-val" id="t2Flageolet">Normal</div></div>
+          <div class="gauge-item"><div class="gauge-label">Bowing</div><div class="gauge-val" id="t2Bowing" style="font-size:12px;">Legato</div></div>
+          <div class="gauge-item"><div class="gauge-label">BPM</div><div class="gauge-val" id="t2Bpm">72.0</div></div>
+          <div class="gauge-item"><div class="gauge-label">Sustain %</div><div class="gauge-val" id="t2Bleed">98.2%</div></div>
+        </div>
+      </div>
+
+      <div class="panel-box">
+        <div class="panel-header">
+          <span class="panel-title">📼 Time-Machine 聴き比べ</span>
+          <button class="btn btn-green" onclick="recordNewRehearsalTake()">🔴 テイク収録</button>
+        </div>
+        <div style="display:flex;gap:6px;flex-wrap:wrap;">
+          <button class="btn btn-gold" onclick="replayTakeWithStyle('debussy')">Debussy</button>
+          <button class="btn btn-purple" onclick="replayTakeWithStyle('faure')">Fauré</button>
+          <button class="btn" onclick="replayTakeWithStyle('saint_saens')">Saint-Saëns</button>
+          <button class="btn" onclick="replayTakeWithStyle('bach')">Bach</button>
+          <button class="btn btn-green" onclick="replayTakeWithStyle('brahms')">Brahms</button>
+        </div>
+        <table class="data-table">
+          <thead><tr><th>Take</th><th>Theme</th><th>Features</th><th>Status</th></tr></thead>
+          <tbody id="rehearsalTakesTbody"></tbody>
+        </table>
+        <table class="data-table">
+          <thead><tr><th>Style</th><th>Roughness</th><th>Melody Lead</th><th>Consonance</th></tr></thead>
           <tbody id="timeMachineComparisonTbody"></tbody>
         </table>
       </div>
@@ -810,60 +624,43 @@
   </main>
 
   <!-- ===================================================================== -->
-  <!-- TAB 1: LIVE MISSION CONTROL & AGENT MONITOR                           -->
+  <!-- TAB 6: R&D TELEMETRY & LOGS                                           -->
   <!-- ===================================================================== -->
-  <main id="tabPane1" class="tab-pane">
+  <main id="tabPane6" role="tabpanel" aria-labelledby="tabBtn6" class="tab-pane" hidden>
     <div class="grid-2">
       <div class="panel-box">
-        <div class="panel-header">
-          <span class="panel-title">🧠 System Roadmap & Git Commits</span>
-        </div>
-        <div id="brainStepsContainer" style="display:flex;flex-direction:column;gap:6px;"></div>
-        <div id="gitCommitsContainer" style="display:flex;flex-direction:column;gap:4px;font-size:12px;margin-top:8px;"></div>
-      </div>
-
-      <div class="panel-box">
-        <div class="panel-header">
-          <span class="panel-title">🖥️ Live Telemetry & MIDI Feedback Log</span>
-        </div>
+        <div class="panel-header"><span class="panel-title">🖥️ Live System Telemetry & Git Commits</span></div>
         <div id="terminalStreamBox" class="terminal-box"></div>
-      </div>
-    </div>
-  </main>
-
-  <!-- ===================================================================== -->
-  <!-- TAB 6: AUTONOMOUS R&D TELEMETRY & ENCYCLOPEDIA                        -->
-  <!-- ===================================================================== -->
-  <main id="tabPane6" class="tab-pane">
-    <div class="grid-2">
-      <div class="panel-box">
-        <div class="panel-header"><span class="panel-title">📈 Experiment 1: VDL Latency Curve</span></div>
-        <img src="/telemetry/charts/exp1_vdl_curve.png" style="width:100%;border-radius:6px;" />
+        <div id="gitCommitsContainer" style="display:flex;flex-direction:column;gap:4px;font-size:12px;"></div>
       </div>
       <div class="panel-box">
-        <div class="panel-header"><span class="panel-title">📉 Experiment 2: Half-Pedal (CC#64) RT60 & Roughness</span></div>
-        <img src="/telemetry/charts/exp2_half_pedal.png" style="width:100%;border-radius:6px;" />
-      </div>
-      <div class="panel-box">
-        <div class="panel-header"><span class="panel-title">🎯 Experiment 4: Classical Accompaniment AB Test</span></div>
-        <img src="/telemetry/charts/exp4_ab_comparison.png" style="width:100%;border-radius:6px;" />
-      </div>
-      <div class="panel-box">
-        <div class="panel-header"><span class="panel-title">💡 Experiment 5: AI Composer Trajectory</span></div>
-        <img src="/telemetry/charts/exp5_ai_composer.png" style="width:100%;border-radius:6px;" />
+        <div class="panel-header"><span class="panel-title">📈 Experiment 1–5 Charts</span></div>
+        <div class="grid-2">
+          <img src="/telemetry/charts/exp1_vdl_curve.png" style="width:100%;border-radius:6px;" alt="Exp 1 VDL Curve" />
+          <img src="/telemetry/charts/exp2_half_pedal.png" style="width:100%;border-radius:6px;" alt="Exp 2 Half Pedal" />
+          <img src="/telemetry/charts/exp4_ab_comparison.png" style="width:100%;border-radius:6px;" alt="Exp 4 AB Comparison" />
+          <img src="/telemetry/charts/exp5_ai_composer.png" style="width:100%;border-radius:6px;" alt="Exp 5 AI Composer" />
+        </div>
       </div>
     </div>
   </main>
 
   <script>
     let ws = null;
+    let latestVirtuoso = null;
+    let latestObsidian = null;
+    let selectedHofMidiRel = null;
+    let obsidianNodePositions = [];
+    let directivesDirty = false;
+    let animPhase = 0;
 
     function switchTab(tabIdx) {
       for (let i = 1; i <= 6; i++) {
         const pane = document.getElementById('tabPane' + i);
         const btn = document.getElementById('tabBtn' + i);
-        if (pane) pane.classList.toggle('active', i === tabIdx);
-        if (btn) btn.classList.toggle('active', i === tabIdx);
+        const isSel = i === tabIdx;
+        if (pane) pane.hidden = !isSel;
+        if (btn) btn.setAttribute('aria-selected', isSel ? 'true' : 'false');
       }
     }
 
@@ -878,14 +675,15 @@
     }
 
     function renderRealtimeFrame(data) {
+      animPhase += 0.08;
+
       if (data.banner) {
         const b = data.banner;
         const bannerEl = document.getElementById('userBanner');
         bannerEl.className = 'user-banner ' + (b.code || 'READY');
-        document.getElementById('bannerBadge').textContent = b.badge || '';
+        document.getElementById('bannerBadge').textContent = b.badge || '♾️ [AUTONOMOUS VIRTUOSO]';
         document.getElementById('bannerMainMsg').textContent = b.message || '';
         document.getElementById('bannerSubMsg').textContent = b.sub_message || '';
-
         const cdPill = document.getElementById('countdownPill');
         if (b.code === 'SOUND_COUNTDOWN' && b.countdown_sec > 0) {
           cdPill.style.display = 'block';
@@ -895,93 +693,97 @@
         }
       }
 
+      if (data.twin) {
+        const t = data.twin;
+        document.getElementById('twinAudioDev').textContent = (t.audio_device_name || 'Mac CoreAudio').slice(0, 24);
+        document.getElementById('audioDbBadge').textContent =
+          `Twin: ${t.twin_rms_dbfs.toFixed(1)} dBFS | Voices: ${t.active_synth_voices}`;
+
+        const btnVS = document.getElementById('btnVirtualSound');
+        btnVS.textContent = `🔊 Mac内蔵音源で聴く: ${t.virtual_sound_enabled ? 'ON' : 'OFF'}`;
+        btnVS.classList.toggle('active-toggle', !!t.virtual_sound_enabled);
+
+        const btnHW = document.getElementById('btnHardwareOut');
+        btnHW.textContent = `🎹 実機Disklavier出力: ${t.hardware_output_enabled ? 'ON' : (t.hardware_connected ? 'OFF' : 'VIRTUAL TWIN')}`;
+        btnHW.classList.toggle('active-toggle', !!t.hardware_output_enabled);
+
+        const p = t.physics && t.physics.stats ? t.physics.stats : {};
+        const prelayErr = p.mean_prelay_error_ms || 0;
+        document.getElementById('gVdlErrVal').textContent = `${prelayErr.toFixed(1)} ms`;
+        document.getElementById('gVdlErrBar').style.width = `${Math.max(15, Math.min(100, 100 - prelayErr * 3))}%`;
+
+        const errCount = (p.ghost_notes_simulated || 0) + (p.solenoid_sags_detected || 0) + (p.crashes_detected || 0);
+        document.getElementById('gPhysicsHealthVal').textContent = errCount === 0 ? '0 Errors (Safe)' : `${errCount} Alerts`;
+        document.getElementById('statHalfPedalRes').textContent = (p.half_pedal_resonance_factor || 0).toFixed(2);
+        document.getElementById('guardPortStatus').textContent =
+          `${p.crashes_detected || 0} Crashes | Last VDL ${p.last_vdl_ms || 0}ms`;
+
+        // Draw live waveform from Virtual Twin when active, else mic
+        const wave = (t.virtual_sound_enabled && t.twin_rms_dbfs > -62)
+          ? (t.twin_waveform || [])
+          : ((data.audio && data.audio.waveform) || []);
+        drawOscilloscope(wave);
+      }
+
       if (data.audio) {
         const a = data.audio;
-        document.getElementById('audioDbBadge').textContent =
-          `RMS: ${a.rms_dbfs.toFixed(1)} dBFS | Peak: ${a.peak_dbfs.toFixed(1)} dBFS`;
+        drawCqtSpectrogram(a.cqt_bins || []);
         const notesStr = (a.detected_note_names && a.detected_note_names.length > 0)
           ? a.detected_note_names.join(' + ')
           : '--';
-        document.getElementById('liveDetectedNotes').textContent = notesStr;
-        if (a.sustain_status_label) {
-          document.getElementById('liveSustainLabel').textContent = a.sustain_status_label;
-        }
-
         document.getElementById('t2Notes').textContent = notesStr;
-        document.getElementById('t2DoubleStop').textContent = a.is_double_stop ? '🔥 Double/Triple Stop!' : 'Single Voice';
-        document.getElementById('t2Flageolet').textContent = a.is_flageolet ? '✨ Harmonic Flageolet!' : 'Fundamental';
+        document.getElementById('t2DoubleStop').textContent = a.is_double_stop ? '🔥 Double/Triple Stop!' : 'Single';
+        document.getElementById('t2Flageolet').textContent = a.is_flageolet ? '✨ Flageolet' : 'Normal';
         document.getElementById('t2Bowing').textContent = a.bow_articulation || 'Legato';
         document.getElementById('t2Bpm').textContent = `${a.estimated_bpm.toFixed(1)} BPM`;
         document.getElementById('t2Bleed').textContent = `${(a.sustain_continuity_pct || 98).toFixed(1)}%`;
-
-        drawOscilloscope(a.waveform || []);
-        drawCqtSpectrogram(a.cqt_bins || []);
       }
 
       if (data.safety) {
         const s = data.safety;
-        document.getElementById('guardPortStatus').textContent =
-          `OUT: ${s.port_name} | IN: ${s.inport_name || 'Active'}`;
         document.getElementById('topHumanNotesCount').textContent = `${s.human_notes_count || 0} notes`;
-
-        // Turn indicator pill
-        const turnPill = document.getElementById('turnIndicatorPill');
-        const diagBadge = document.getElementById('dialogueStateBadge');
-        if (s.vdl_buffer_count > 0) {
-          turnPill.textContent = `🎹 Disklavier 演奏中 (残り ${s.vdl_buffer_count} イベント)`;
-          turnPill.style.borderColor = '#38bdf8';
-          diagBadge.textContent = '🎹 Disklavier アンサー実演中';
-        } else {
-          turnPill.textContent = `🟢 あなたの番です — どうぞ弾いてください！ (収録: ${s.human_notes_count || 0} 音)`;
-          turnPill.style.borderColor = '#10b981';
-          diagBadge.textContent = `🟢 あなたの番 — 演奏待機中 (${s.human_notes_count || 0} 音収録済)`;
-        }
-
-        const fulfillPct = (s.stats && s.stats.sustain_fulfillment_pct) ? s.stats.sustain_fulfillment_pct : 98.2;
-        document.getElementById('gSustainFulfillVal').textContent = `${fulfillPct.toFixed(1)}%`;
-        document.getElementById('gSustainFulfillBar').style.width = `${Math.min(100, fulfillPct)}%`;
-
         document.getElementById('gVoicesVal').textContent = `${s.active_voices_count} / 20`;
         document.getElementById('gVoicesBar').style.width = `${Math.min(100, (s.active_voices_count / 20) * 100)}%`;
-
-        const midiInCnt = (s.stats && s.stats.midi_in_received) ? s.stats.midi_in_received : 0;
-        document.getElementById('gMidiInVal').textContent = `${midiInCnt} ev`;
-
-        document.getElementById('gVdlVal').textContent = `${s.vdl_buffer_count} ev`;
-        document.getElementById('gVdlBar').style.width = `${Math.min(100, (s.vdl_buffer_count / 60) * 100)}%`;
 
         if (s.stats) {
           document.getElementById('statStaleBlocked').textContent = s.stats.stale_note_offs_blocked || 0;
           document.getElementById('statTotalSent').textContent = s.stats.total_notes_sent || 0;
         }
-        if (s.closed_loop_params) {
-          document.getElementById('statOverlapMs').textContent = `+${s.closed_loop_params.legato_overlap_ms}ms`;
-          document.getElementById('statMinVel').textContent = s.closed_loop_params.min_soft_velocity;
-        }
 
-        // Render recent note sustain verifications table
-        if (s.recent_verifications && s.recent_verifications.length > 0) {
-          const tbody = document.getElementById('sustainVerificationTbody');
-          tbody.innerHTML = s.recent_verifications.slice(-6).reverse().map(v =>
-            `<tr>
-              <td><strong>Note ${v.note}</strong></td>
-              <td>Vel ${v.velocity}</td>
-              <td>${v.target_s.toFixed(2)}s</td>
-              <td style="color:#38bdf8;font-weight:700;">${v.actual_s.toFixed(2)}s</td>
-              <td>CC#64=${v.pedal_cc64}</td>
-              <td><span class="badge-pill on">${v.fulfillment_pct}% 達成</span></td>
-            </tr>`
-          ).join('');
+        const activeKeys = s.active_keys || {};
+        const keyNames = Object.keys(activeKeys).map(k => midiToNoteName(parseInt(k, 10)));
+        if (keyNames.length > 0) {
+          document.getElementById('liveDetectedNotes').textContent = keyNames.slice(0, 5).join(' ');
         }
 
         const pVal = s.pedal_cc64 || 0;
         document.getElementById('pedalBarFill').style.width = `${(pVal / 127) * 100}%`;
-        let pZone = 'Seated (0-30)';
-        if (pVal >= 35 && pVal <= 80) pZone = `Resonant Sustain (${pVal})`;
-        else if (pVal > 80) pZone = `Full Open (${pVal})`;
+        let pZone = `${pVal} (Seated)`;
+        if (pVal >= 31 && pVal <= 85) pZone = `${pVal} (Half-Pedal Sweet Spot)`;
+        else if (pVal > 85) pZone = `${pVal} (Full Open)`;
         document.getElementById('pedalZoneLabel').textContent = pZone;
 
-        draw88KeyPiano(s.active_keys || {});
+        draw88KeyPiano(activeKeys);
+
+        if (s.recent_verifications && s.recent_verifications.length > 0) {
+          const tbody = document.getElementById('sustainVerificationTbody');
+          tbody.innerHTML = s.recent_verifications.slice(-6).reverse().map(v =>
+            `<tr><td><strong>${midiToNoteName(v.note)}</strong></td><td>${v.velocity}</td><td>${v.target_s.toFixed(2)}s</td><td>${v.actual_s.toFixed(2)}s</td><td>${v.pedal_cc64}</td><td><span class="badge-pill on">${v.fulfillment_pct}%</span></td></tr>`
+          ).join('');
+        }
+      }
+
+      if (data.virtuoso) {
+        latestVirtuoso = data.virtuoso;
+        renderVirtuosoCockpit(data.virtuoso);
+      } else if (latestVirtuoso) {
+        // Keep 60fps smooth particle animation on multiverse tree even between 20Hz backend updates
+        drawMultiverseTree(latestVirtuoso);
+      }
+
+      if (data.obsidian) {
+        latestObsidian = data.obsidian;
+        renderObsidianPanel(data.obsidian);
       }
 
       if (data.agent) {
@@ -989,19 +791,428 @@
       }
     }
 
+    const NOTE_NAMES = ['C','C#','D','D#','E','F','F#','G','G#','A','A#','B'];
+    function midiToNoteName(m) {
+      return NOTE_NAMES[m % 12] + (Math.floor(m / 12) - 1);
+    }
+
+    function renderVirtuosoCockpit(v) {
+      document.getElementById('topGenNum').textContent = v.current_generation;
+      document.getElementById('topLatestScore').textContent = `${v.latest_score.toFixed(1)} pts`;
+      document.getElementById('topBestScore').textContent = `${v.best_score_ever.toFixed(1)} pts`;
+
+      const btnStream = document.getElementById('btnStreamToggle');
+      btnStream.textContent = v.streaming_active ? '♾️ 連続演奏ストリーム: ON' : '⏸️ 連続演奏ストリーム: PAUSED';
+      btnStream.className = v.streaming_active ? 'btn btn-green' : 'btn btn-outline';
+
+      document.getElementById('gHorizonVal').textContent = `${v.lookahead_horizon_s.toFixed(2)} s`;
+      document.getElementById('gHorizonBar').style.width = `${Math.min(100, (v.lookahead_horizon_s / 9.0) * 100)}%`;
+      document.getElementById('bufSlotLabel').textContent = `${v.active_buffer_slot} (${v.buffer_slots_queued} queued)`;
+
+      document.getElementById('activeMotifTitle').textContent = (v.active_motif && v.active_motif.title) || '--';
+      document.getElementById('activeMotifKey').textContent = (v.active_motif && v.active_motif.key) || '--';
+      document.getElementById('virtuosoBarCount').textContent = v.bar_index;
+
+      // Story Arc highlight
+      document.querySelectorAll('#storyArcTrack .arc-node').forEach(el => {
+        el.classList.toggle('active', el.dataset.arc === v.story_arc_stage);
+      });
+
+      // Genome meters
+      if (v.elite_genome) {
+        const g = v.elite_genome;
+        document.getElementById('statOverlapMs').textContent = `+${g.legato_overlap_ms.toFixed(1)}ms`;
+        document.getElementById('gGenomeContrary').textContent = `${Math.round(g.contrary_motion_weight * 100)}%`;
+        document.getElementById('bGenomeContrary').style.width = `${g.contrary_motion_weight * 100}%`;
+        document.getElementById('gGenomeChroma').textContent = `${Math.round(g.bass_chromaticism * 100)}%`;
+        document.getElementById('bGenomeChroma').style.width = `${g.bass_chromaticism * 100}%`;
+        document.getElementById('gGenomeCp').textContent = `${Math.round(g.counterpoint_density * 100)}%`;
+        document.getElementById('bGenomeCp').style.width = `${g.counterpoint_density * 100}%`;
+        document.getElementById('gGenomeContrast').textContent = `${Math.round(g.staccato_contrast_ratio * 100)}%`;
+        document.getElementById('bGenomeContrast').style.width = `${Math.min(100, g.staccato_contrast_ratio * 180)}%`;
+      }
+
+      if (v.directives) {
+        document.getElementById('activeDirectiveSummary').textContent = `Fitness: ${v.directives.summary || 'Balanced'}`;
+      }
+      if (v.hyper_training) {
+        document.getElementById('hyperTrainingBadge').textContent = v.hyper_training.last_run_summary || 'Ready';
+      }
+
+      document.getElementById('radarTotalBadge').textContent = `${v.latest_score.toFixed(1)} / 100 pts`;
+
+      if (v.critic_logs) {
+        const box = document.getElementById('criticLogsBox');
+        box.textContent = v.critic_logs.join('\n');
+        box.scrollTop = box.scrollHeight;
+      }
+
+      drawMultiverseTree(v);
+      drawCriticRadar(v.latest_axes || {});
+      drawEvolutionHistory(v.evolution_history || []);
+    }
+
+    function drawMultiverseTree(v) {
+      const c = document.getElementById('multiverseTreeCanvas');
+      if (!c) return;
+      const ctx = c.getContext('2d');
+      const W = c.width, H = c.height;
+      ctx.fillStyle = '#050811';
+      ctx.fillRect(0, 0, W, H);
+
+      const branches = v.branches || [];
+      const rootX = 85, rootY = H / 2;
+
+      // Subtle background grid
+      ctx.strokeStyle = 'rgba(56,189,248,0.07)';
+      ctx.lineWidth = 1;
+      for (let gx = 40; gx < W; gx += 60) {
+        ctx.beginPath(); ctx.moveTo(gx, 0); ctx.lineTo(gx, H); ctx.stroke();
+      }
+
+      // Draw each of the 4 candidate branches
+      branches.forEach((b, idx) => {
+        const targetY = 42 + idx * ((H - 84) / Math.max(1, branches.length - 1));
+        const targetX = W - 265;
+        const isAdopted = b.status === 'ADOPTED';
+        const isBackup = b.status === 'BACKUP';
+
+        ctx.save();
+        ctx.beginPath();
+        ctx.moveTo(rootX, rootY);
+        ctx.bezierCurveTo(rootX + 130, rootY, targetX - 130, targetY, targetX, targetY);
+
+        if (isAdopted) {
+          ctx.strokeStyle = '#fbbf24';
+          ctx.lineWidth = 4.0;
+          ctx.shadowColor = '#fbbf24';
+          ctx.shadowBlur = 14;
+        } else if (isBackup) {
+          ctx.strokeStyle = '#38bdf8';
+          ctx.lineWidth = 2.0;
+        } else {
+          ctx.strokeStyle = 'rgba(148,163,184,0.32)';
+          ctx.lineWidth = 1.4;
+          ctx.setLineDash([5, 5]);
+        }
+        ctx.stroke();
+        ctx.restore();
+
+        // Flowing pulse particle along the adopted branch
+        if (isAdopted) {
+          const t = (animPhase * 0.35) % 1.0;
+          const u = 1 - t;
+          const px = u*u*u*rootX + 3*u*u*t*(rootX+130) + 3*u*t*t*(targetX-130) + t*t*t*targetX;
+          const py = u*u*u*rootY + 3*u*u*t*rootY + 3*u*t*t*targetY + t*t*t*targetY;
+          ctx.fillStyle = '#fef08a';
+          ctx.beginPath();
+          ctx.arc(px, py, 5.5, 0, Math.PI * 2);
+          ctx.fill();
+        }
+
+        // Branch label card
+        const cardX = targetX + 8, cardY = targetY - 25, cardW = 248, cardH = 50;
+        ctx.fillStyle = isAdopted ? 'rgba(251,191,36,0.16)' : (isBackup ? 'rgba(56,189,248,0.10)' : 'rgba(15,23,42,0.85)');
+        ctx.strokeStyle = isAdopted ? '#fbbf24' : (isBackup ? '#38bdf8' : '#334155');
+        ctx.lineWidth = isAdopted ? 2 : 1;
+        ctx.beginPath();
+        ctx.roundRect(cardX, cardY, cardW, cardH, 8);
+        ctx.fill();
+        ctx.stroke();
+
+        ctx.fillStyle = isAdopted ? '#fef08a' : (isBackup ? '#bae6fd' : '#94a3b8');
+        ctx.font = 'bold 12px -apple-system, sans-serif';
+        const badge = isAdopted ? '[ADOPTED ✨]' : (isBackup ? '[BACKUP]' : '[REJECTED]');
+        ctx.fillText(`${b.branch_id}: ${b.score.toFixed(1)} pts ${badge}`, cardX + 9, cardY + 19);
+
+        ctx.fillStyle = isAdopted ? '#e2e8f0' : '#64748b';
+        ctx.font = '11px -apple-system, sans-serif';
+        ctx.fillText(`${b.transform_type} | ${b.chord_label}`.slice(0, 34), cardX + 9, cardY + 37);
+      });
+
+      // Root node (Current Playing Bar M_t)
+      ctx.fillStyle = '#10b981';
+      ctx.beginPath();
+      ctx.arc(rootX, rootY, 34, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.strokeStyle = '#a7f3d0';
+      ctx.lineWidth = 2.5;
+      ctx.stroke();
+
+      ctx.fillStyle = '#052e16';
+      ctx.font = 'bold 12px -apple-system, sans-serif';
+      ctx.textAlign = 'center';
+      ctx.fillText(`M_${v.bar_index}`, rootX, rootY - 3);
+      ctx.font = 'bold 10px -apple-system, sans-serif';
+      ctx.fillText(`Gen ${v.current_generation}`, rootX, rootY + 13);
+      ctx.textAlign = 'left';
+    }
+
+    function drawCriticRadar(axes) {
+      const c = document.getElementById('criticRadarCanvas');
+      if (!c) return;
+      const ctx = c.getContext('2d');
+      const W = c.width, H = c.height;
+      ctx.fillStyle = '#050811';
+      ctx.fillRect(0, 0, W, H);
+
+      const cx = W / 2, cy = H / 2 + 8, R = 92;
+      const specs = [
+        { key: 'voice_leading', max: 25, label: '声部連結 /25' },
+        { key: 'motivic_continuity', max: 20, label: '動機接続 /20' },
+        { key: 'harmonic_originality', max: 20, label: '和声独創 /20' },
+        { key: 'expressive_articulation', max: 15, label: 'タッチ表現 /15' },
+        { key: 'physical_playability', max: 20, label: '物理適性 /20' },
+      ];
+
+      // Concentric web rings
+      for (let ring = 0.25; ring <= 1.0; ring += 0.25) {
+        ctx.strokeStyle = ring === 1.0 ? '#334155' : 'rgba(51,65,85,0.45)';
+        ctx.beginPath();
+        specs.forEach((s, i) => {
+          const ang = -Math.PI / 2 + (i * 2 * Math.PI) / 5;
+          const x = cx + Math.cos(ang) * R * ring;
+          const y = cy + Math.sin(ang) * R * ring;
+          if (i === 0) ctx.moveTo(x, y); else ctx.lineTo(x, y);
+        });
+        ctx.closePath();
+        ctx.stroke();
+      }
+
+      // Axis spokes + labels
+      specs.forEach((s, i) => {
+        const ang = -Math.PI / 2 + (i * 2 * Math.PI) / 5;
+        const x = cx + Math.cos(ang) * R;
+        const y = cy + Math.sin(ang) * R;
+        ctx.strokeStyle = '#1e293b';
+        ctx.beginPath(); ctx.moveTo(cx, cy); ctx.lineTo(x, y); ctx.stroke();
+
+        const val = Number(axes[s.key] || 0);
+        const lx = cx + Math.cos(ang) * (R + 24);
+        const ly = cy + Math.sin(ang) * (R + 18);
+        ctx.fillStyle = '#cbd5e1';
+        ctx.font = 'bold 11px -apple-system, sans-serif';
+        ctx.textAlign = 'center';
+        ctx.fillText(`${s.label}`, lx, ly - 2);
+        ctx.fillStyle = '#fbbf24';
+        ctx.fillText(`${val.toFixed(1)}`, lx, ly + 11);
+      });
+      ctx.textAlign = 'left';
+
+      // Score polygon
+      ctx.fillStyle = 'rgba(56,189,248,0.28)';
+      ctx.strokeStyle = '#38bdf8';
+      ctx.lineWidth = 2.5;
+      ctx.beginPath();
+      specs.forEach((s, i) => {
+        const norm = Math.max(0.05, Math.min(1.0, Number(axes[s.key] || 0) / s.max));
+        const ang = -Math.PI / 2 + (i * 2 * Math.PI) / 5;
+        const x = cx + Math.cos(ang) * R * norm;
+        const y = cy + Math.sin(ang) * R * norm;
+        if (i === 0) ctx.moveTo(x, y); else ctx.lineTo(x, y);
+      });
+      ctx.closePath();
+      ctx.fill();
+      ctx.stroke();
+    }
+
+    function drawEvolutionHistory(history) {
+      const c = document.getElementById('evolutionHistoryCanvas');
+      if (!c) return;
+      const ctx = c.getContext('2d');
+      const W = c.width, H = c.height;
+      ctx.fillStyle = '#050811';
+      ctx.fillRect(0, 0, W, H);
+
+      // Grid lines (60..100)
+      ctx.font = '10.5px monospace';
+      [60, 70, 80, 90, 100].forEach(val => {
+        const y = H - 20 - ((val - 60) / 40) * (H - 36);
+        ctx.strokeStyle = val === 90 ? 'rgba(251,191,36,0.35)' : '#1e293b';
+        ctx.beginPath(); ctx.moveTo(36, y); ctx.lineTo(W - 12, y); ctx.stroke();
+        ctx.fillStyle = '#94a3b8';
+        ctx.fillText(String(val), 6, y + 4);
+      });
+
+      if (!history.length) return;
+      const plotLine = (key, color, width) => {
+        ctx.strokeStyle = color;
+        ctx.lineWidth = width;
+        ctx.beginPath();
+        history.forEach((h, i) => {
+          const x = 36 + (i / Math.max(1, history.length - 1)) * (W - 54);
+          const y = H - 20 - ((Math.max(60, Math.min(100, h[key])) - 60) / 40) * (H - 36);
+          if (i === 0) ctx.moveTo(x, y); else ctx.lineTo(x, y);
+        });
+        ctx.stroke();
+      };
+      plotLine('mean_score', '#38bdf8', 1.8);
+      plotLine('best_score', '#fbbf24', 2.8);
+
+      ctx.fillStyle = '#fbbf24'; ctx.fillText('● Adopted Best Score', 46, 14);
+      ctx.fillStyle = '#38bdf8'; ctx.fillText('● Candidate Mean Score', 190, 14);
+    }
+
+    function renderObsidianPanel(obs) {
+      if (obs.stats) {
+        document.getElementById('obsidianStatsBadge').textContent =
+          `Vault: ${obs.stats.total_notes} notes | ${obs.stats.total_links} WikiLinks | ${obs.stats.hof_count} HoF`;
+      }
+      if (obs.hof_leaderboard) {
+        document.getElementById('hofLeaderboardTbody').innerHTML = obs.hof_leaderboard.map(r =>
+          `<tr style="cursor:pointer;" onclick="loadObsidianNote('${r.note_id}')">
+            <td><strong>${r.note_id}</strong></td>
+            <td>Gen ${r.generation}</td>
+            <td><strong style="color:#fbbf24;">${r.total_score.toFixed(1)}</strong></td>
+            <td><button class="btn btn-gold" style="padding:2px 8px;font-size:11px;" onclick="event.stopPropagation(); playHofMidi('${r.midi_rel}')">▶️</button></td>
+          </tr>`
+        ).join('') || '<tr><td colspan="4" style="color:#9ca3af;">85点以上の名演が自動で殿堂入りします</td></tr>';
+      }
+      if (!directivesDirty && obs.directives_raw) {
+        document.getElementById('directivesTextarea').value = obs.directives_raw;
+      }
+      drawObsidianGraph(obs);
+    }
+
+    function drawObsidianGraph(obs) {
+      const c = document.getElementById('obsidianGraphCanvas');
+      if (!c || !obs.nodes) return;
+      const ctx = c.getContext('2d');
+      const W = c.width, H = c.height;
+      ctx.fillStyle = '#050811';
+      ctx.fillRect(0, 0, W, H);
+
+      const cx = W / 2, cy = H / 2;
+      const posMap = {};
+      obsidianNodePositions = [];
+
+      const byCat = { dashboard: [], directives: [], discovery: [], motif: [], hall_of_fame: [] };
+      obs.nodes.forEach(n => (byCat[n.category] || byCat.motif).push(n));
+
+      const placeRing = (arr, radiusX, radiusY, startAng) => {
+        arr.forEach((n, idx) => {
+          const ang = startAng + (idx / Math.max(1, arr.length)) * Math.PI * 2;
+          const x = cx + Math.cos(ang) * radiusX;
+          const y = cy + Math.sin(ang) * radiusY;
+          posMap[n.id] = { x, y, node: n };
+          obsidianNodePositions.push({ x, y, r: 10, node: n });
+        });
+      };
+
+      if (byCat.dashboard[0]) {
+        const d = byCat.dashboard[0];
+        posMap[d.id] = { x: cx, y: cy, node: d };
+        obsidianNodePositions.push({ x: cx, y: cy, r: 14, node: d });
+      }
+      if (byCat.directives[0]) {
+        const dr = byCat.directives[0];
+        posMap[dr.id] = { x: cx, y: 36, node: dr };
+        obsidianNodePositions.push({ x: cx, y: 36, r: 12, node: dr });
+      }
+      placeRing(byCat.discovery, 105, 58, 0.4);
+      placeRing(byCat.motif, 240, 104, 0.2);
+      placeRing(byCat.hall_of_fame.slice(0, 12), 185, 92, 0.8);
+
+      // Draw WikiLink edges
+      ctx.strokeStyle = 'rgba(148,163,184,0.22)';
+      ctx.lineWidth = 1;
+      (obs.edges || []).forEach(e => {
+        const p1 = posMap[e.source], p2 = posMap[e.target];
+        if (p1 && p2) {
+          ctx.beginPath(); ctx.moveTo(p1.x, p1.y); ctx.lineTo(p2.x, p2.y); ctx.stroke();
+        }
+      });
+
+      const colors = {
+        dashboard: '#ffffff',
+        directives: '#ef4444',
+        discovery: '#a855f7',
+        motif: '#38bdf8',
+        hall_of_fame: '#fbbf24',
+      };
+      obsidianNodePositions.forEach(item => {
+        const col = colors[item.node.category] || '#10b981';
+        ctx.fillStyle = col;
+        ctx.beginPath();
+        ctx.arc(item.x, item.y, item.r * 0.65, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.fillStyle = '#cbd5e1';
+        ctx.font = '9.5px sans-serif';
+        ctx.fillText(item.node.id.replace('motif_', '').slice(0, 16), item.x + 8, item.y + 3);
+      });
+    }
+
+    document.getElementById('obsidianGraphCanvas').addEventListener('click', (ev) => {
+      const c = ev.currentTarget;
+      const rect = c.getBoundingClientRect();
+      const sx = (ev.clientX - rect.left) * (c.width / rect.width);
+      const sy = (ev.clientY - rect.top) * (c.height / rect.height);
+      const hit = obsidianNodePositions.find(p => Math.hypot(p.x - sx, p.y - sy) <= 14);
+      if (hit) loadObsidianNote(hit.node.id);
+    });
+
+    document.getElementById('directivesTextarea').addEventListener('input', () => {
+      directivesDirty = true;
+    });
+
+    async function loadObsidianNote(noteId) {
+      const res = await fetch(`/api/obsidian/note/${encodeURIComponent(noteId)}`);
+      if (!res.ok) return;
+      const data = await res.json();
+      document.getElementById('selectedObsidianNoteTitle').textContent = `📄 ${data.path}`;
+      document.getElementById('selectedObsidianNoteContent').textContent = data.markdown;
+      const playBtn = document.getElementById('btnPlaySelectedHof');
+      if (data.midi_rel) {
+        selectedHofMidiRel = data.midi_rel;
+        playBtn.style.display = 'inline-block';
+      } else {
+        selectedHofMidiRel = null;
+        playBtn.style.display = 'none';
+      }
+    }
+
+    async function playHofMidi(midiRel) {
+      if (!midiRel) return;
+      await fetch('/api/obsidian/play_hof', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({ midi_rel: midiRel })
+      });
+    }
+
+    async function playSelectedHofMidi() {
+      if (selectedHofMidiRel) await playHofMidi(selectedHofMidiRel);
+    }
+
+    function appendDirectivePreset(line) {
+      const ta = document.getElementById('directivesTextarea');
+      if (!ta.value.includes(line)) {
+        ta.value = ta.value.trimEnd() + `\n- [x] ${line}\n`;
+        directivesDirty = true;
+      }
+    }
+
+    async function saveHumanDirectives() {
+      const text = document.getElementById('directivesTextarea').value;
+      directivesDirty = false;
+      await fetch('/api/obsidian/directives', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({ text })
+      });
+    }
+
     function drawOscilloscope(wave) {
       const c = document.getElementById('oscCanvas');
       const ctx = c.getContext('2d');
       const W = c.width, H = c.height;
-      ctx.fillStyle = '#070b14';
+      ctx.fillStyle = '#050811';
       ctx.fillRect(0, 0, W, H);
       ctx.strokeStyle = '#1e293b';
-      ctx.beginPath(); ctx.moveTo(0, H / 2); ctx.lineTo(W, H / 2); ctx.stroke();
+      ctx.beginPath(); ctx.moveTo(0, H/2); ctx.lineTo(W, H/2); ctx.stroke();
       if (!wave.length) return;
-      let maxAbs = 0.002;
-      for (let i = 0; i < wave.length; i++) {
-        if (Math.abs(wave[i]) > maxAbs) maxAbs = Math.abs(wave[i]);
-      }
+      let maxAbs = 0.004;
+      for (let i = 0; i < wave.length; i++) if (Math.abs(wave[i]) > maxAbs) maxAbs = Math.abs(wave[i]);
       const scale = (H * 0.42) / maxAbs;
       ctx.strokeStyle = '#10b981';
       ctx.lineWidth = 1.8;
@@ -1009,8 +1220,7 @@
       for (let i = 0; i < wave.length; i++) {
         const x = (i / (wave.length - 1)) * W;
         const y = H / 2 - wave[i] * scale;
-        if (i === 0) ctx.moveTo(x, y);
-        else ctx.lineTo(x, y);
+        if (i === 0) ctx.moveTo(x, y); else ctx.lineTo(x, y);
       }
       ctx.stroke();
     }
@@ -1019,11 +1229,10 @@
       const c = document.getElementById('cqtCanvas');
       const ctx = c.getContext('2d');
       const W = c.width, H = c.height;
-      ctx.fillStyle = '#070b14';
+      ctx.fillStyle = '#050811';
       ctx.fillRect(0, 0, W, H);
       if (!cleanBins.length) return;
-      const n = cleanBins.length;
-      const bw = W / n;
+      const n = cleanBins.length, bw = W / n;
       for (let i = 0; i < n; i++) {
         const norm = Math.max(0.04, Math.min(1.0, (cleanBins[i] + 82) / 58));
         const bh = norm * (H - 6);
@@ -1042,13 +1251,18 @@
       const c = document.getElementById('pianoCanvas');
       const ctx = c.getContext('2d');
       const W = c.width, H = c.height;
-      ctx.fillStyle = '#070b14';
+      ctx.fillStyle = '#050811';
       ctx.fillRect(0, 0, W, H);
+
+      const vdlBarH = 16; // Top strip showing per-key VDL prelay ms (25..160ms)
+      const keyTop = vdlBarH + 2;
+      const keyH = H - keyTop - 2;
 
       const whiteCount = 52;
       const ww = W / whiteCount;
       let whiteIdx = 0;
       let activeCount = 0;
+      let avgVdl = 0;
 
       for (let m = 21; m <= 108; m++) {
         if (!isBlackKey(m)) {
@@ -1056,14 +1270,20 @@
           const info = activeKeys[String(m)];
           if (info) {
             activeCount++;
-            if (info.source_tag === 'human_live' || info.source_tag === 'human_seed') ctx.fillStyle = '#38bdf8';
+            avgVdl += (info.vdl_ms || 55);
+            const tag = info.source_tag || '';
+            if (tag.includes('human')) ctx.fillStyle = '#38bdf8';
+            else if (tag.includes('cello')) ctx.fillStyle = '#fbbf24';
             else if (info.sympathetic || info.velocity === 1) ctx.fillStyle = '#a855f7';
-            else if (info.velocity >= 75) ctx.fillStyle = '#fbbf24';
             else ctx.fillStyle = '#10b981';
+
+            // VDL prelay indicator bar above active key
+            const vdlH = Math.min(vdlBarH, Math.max(4, ((info.vdl_ms || 60) / 160) * vdlBarH));
+            ctx.fillRect(x + 1, vdlBarH - vdlH, ww - 2, vdlH);
           } else {
             ctx.fillStyle = '#e2e8f0';
           }
-          ctx.fillRect(x + 0.5, 2, ww - 1, H - 4);
+          ctx.fillRect(x + 0.5, keyTop, ww - 1, keyH);
           whiteIdx++;
         }
       }
@@ -1075,64 +1295,60 @@
         } else {
           const x = (whiteIdx - 0.35) * ww;
           const bw = ww * 0.68;
-          const bh = H * 0.60;
+          const bh = keyH * 0.60;
           const info = activeKeys[String(m)];
           if (info) {
             activeCount++;
-            if (info.source_tag === 'human_live' || info.source_tag === 'human_seed') ctx.fillStyle = '#60a5fa';
+            avgVdl += (info.vdl_ms || 55);
+            const tag = info.source_tag || '';
+            if (tag.includes('human')) ctx.fillStyle = '#60a5fa';
+            else if (tag.includes('cello')) ctx.fillStyle = '#f59e0b';
             else if (info.sympathetic || info.velocity === 1) ctx.fillStyle = '#c084fc';
-            else if (info.velocity >= 75) ctx.fillStyle = '#f59e0b';
             else ctx.fillStyle = '#34d399';
+            ctx.fillRect(x, 2, bw, 12);
           } else {
             ctx.fillStyle = '#0f172a';
           }
-          ctx.fillRect(x, 2, bw, bh);
+          ctx.fillRect(x, keyTop, bw, bh);
         }
       }
-      document.getElementById('pianoActiveSummary').textContent = `Active Keys: ${activeCount}`;
+      const vdlStr = activeCount > 0 ? `${(avgVdl / activeCount).toFixed(0)} ms` : '-- ms';
+      document.getElementById('pianoActiveSummary').textContent = `Active Keys: ${activeCount} | VDL Prelay: ${vdlStr}`;
     }
 
     function renderAgentTelemetry(agent, studio) {
       if (agent.terminal_logs) {
         const term = document.getElementById('terminalStreamBox');
-        if (term) {
-          term.textContent = agent.terminal_logs.join('\n');
-          term.scrollTop = term.scrollHeight;
+        if (term) { term.textContent = agent.terminal_logs.join('\n'); term.scrollTop = term.scrollHeight; }
+      }
+      if (agent.git_commits) {
+        const gc = document.getElementById('gitCommitsContainer');
+        if (gc) {
+          gc.innerHTML = agent.git_commits.map(c =>
+            `<div style="background:#162032;padding:4px 8px;border-radius:5px;"><code>${c.hash}</code> <span style="color:#9ca3af;">[${c.time}]</span> ${c.message}</div>`
+          ).join('');
         }
       }
       if (studio) {
         if (studio.imslp_library && studio.imslp_library.length > 0) {
-          const tbody = document.getElementById('imslpLibraryTbody');
-          tbody.innerHTML = studio.imslp_library.map(item =>
-            `<tr>
-              <td><strong>${item.title}</strong></td>
-              <td>${item.composer}</td>
-              <td>${item.note_count} notes (${item.key})</td>
-              <td>
-                <button class="btn btn-green" style="padding:5px 12px;"
-                  onclick="playOptimizedMidi('${item.id}')">▶️ フルレガート実機再生</button>
-              </td>
-            </tr>`
+          document.getElementById('imslpLibraryTbody').innerHTML = studio.imslp_library.map(item =>
+            `<tr><td><strong>${item.title}</strong></td><td>${item.composer}</td><td>${item.note_count} (${item.key})</td>
+            <td><button class="btn btn-green" style="padding:4px 10px;" onclick="playOptimizedMidi('${item.id}')">▶️</button></td></tr>`
           ).join('');
         }
         if (studio.current_composed_piece) {
           const cp = studio.current_composed_piece;
           if (cp.events) drawComposerPianoRoll(cp.events);
-          if (cp.sections) {
-            const secStr = cp.sections.map(s => `${s.name} (${s.start_s}s〜)`).join(' → ');
-            document.getElementById('composedPieceInfo').innerHTML =
-              `<strong>🎵 ${cp.title}</strong> | 入力モチーフ: <code>${(cp.captured_motif_notes || []).join('-')}</code><br/>` +
-              `<span style="color:#9ca3af;">展開構成: ${secStr}</span>`;
-          }
+          document.getElementById('composedPieceInfo').innerHTML = `<strong>${cp.title}</strong>`;
         }
         if (studio.rehearsal_takes && studio.rehearsal_takes.length > 0) {
           document.getElementById('rehearsalTakesTbody').innerHTML = studio.rehearsal_takes.map(t =>
-            `<tr><td><code>${t.id}</code></td><td><strong>${t.title}</strong></td><td>${t.features}</td><td><span class="badge-pill on">Ready</span></td></tr>`
+            `<tr><td><code>${t.id}</code></td><td>${t.title}</td><td>${t.features}</td><td>Ready</td></tr>`
           ).join('');
         }
         if (studio.rehearsal_comparisons && studio.rehearsal_comparisons.length > 0) {
           document.getElementById('timeMachineComparisonTbody').innerHTML = studio.rehearsal_comparisons.map(c =>
-            `<tr><td><strong>${c.style}</strong></td><td>${c.roughness}</td><td>${c.melody_lead_ms} ms</td><td><strong style="color:#10b981;">${c.consonance_score} / 100</strong></td></tr>`
+            `<tr><td><strong>${c.style}</strong></td><td>${c.roughness}</td><td>${c.melody_lead_ms} ms</td><td>${c.consonance_score}/100</td></tr>`
           ).join('');
         }
       }
@@ -1143,123 +1359,61 @@
       if (!c || !events.length) return;
       const ctx = c.getContext('2d');
       const W = c.width, H = c.height;
-      ctx.fillStyle = '#070b14';
-      ctx.fillRect(0, 0, W, H);
+      ctx.fillStyle = '#050811'; ctx.fillRect(0, 0, W, H);
       const maxT = Math.max(8.0, ...events.map(e => (e.time_offset_s || 0) + (e.duration_s || 0.5)));
       events.forEach(e => {
         if (!e.note || e.note <= 0) return;
         const x = ((e.time_offset_s || 0) / maxT) * (W - 20) + 10;
         const w = Math.max(4, ((e.duration_s || 0.5) / maxT) * (W - 20));
         const y = H - 12 - ((e.note - 36) / 60) * (H - 24);
-        if (e.sympathetic_halo) ctx.fillStyle = '#a855f7';
-        else if (e.voice === 'cello_motif') ctx.fillStyle = '#fbbf24';
-        else if (e.voice === 'counter_melody') ctx.fillStyle = '#38bdf8';
-        else ctx.fillStyle = '#10b981';
-        ctx.fillRect(x, y, w, 4.5);
+        ctx.fillStyle = e.voice === 'cello_motif' ? '#fbbf24' : '#10b981';
+        ctx.fillRect(x, y, w, 4);
       });
     }
 
-    async function triggerPanic() {
-      await fetch('/api/panic', { method: 'POST' });
+    async function toggleContinuousStream() {
+      await fetch('/api/virtuoso/toggle_stream', { method: 'POST', headers: {'Content-Type': 'application/json'}, body: '{}' });
     }
-
-    async function startHumanTurn() {
-      await fetch('/api/dialogue/your_turn', { method: 'POST' });
+    async function toggleVirtualSound() {
+      const cur = document.getElementById('btnVirtualSound').classList.contains('active-toggle');
+      await fetch('/api/twin/config', { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({ virtual_sound_enabled: !cur }) });
     }
-
+    async function toggleHardwareOutput() {
+      const cur = document.getElementById('btnHardwareOut').classList.contains('active-toggle');
+      await fetch('/api/twin/config', { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({ hardware_output_enabled: !cur }) });
+    }
+    async function runHyperEvolution(gens, speedX) {
+      document.getElementById('hyperTrainingBadge').textContent = `Running ${gens} gens @ ${speedX}x...`;
+      await fetch('/api/virtuoso/hyper_evolve', { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({ generations: gens, speed_multiplier: speedX }) });
+    }
+    async function injectLiveMotif(notes, source) {
+      await fetch('/api/virtuoso/inject_motif', { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({ notes, source }) });
+    }
+    async function triggerPanic() { await fetch('/api/panic', { method: 'POST' }); }
+    async function startHumanTurn() { await fetch('/api/dialogue/your_turn', { method: 'POST' }); }
     async function injectSampleMotif(notes) {
-      await fetch('/api/dialogue/inject_notes', {
-        method: 'POST',
-        headers: {'Content-Type': 'application/json'},
-        body: JSON.stringify({ notes })
-      });
+      await fetch('/api/dialogue/inject_notes', { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({ notes }) });
     }
-
-    function setExpansionDuration(sec) {
-      document.getElementById('compDurationSlider').value = sec;
-      document.getElementById('durSliderLabel').textContent = sec + ' 秒';
-      document.getElementById('quickDurSelect').value = String(sec);
-    }
-
     async function listenAndComposeMotif() {
-      const devMode = document.getElementById('compStyleSelect').value;
-      const dur = parseFloat(document.getElementById('compDurationSlider').value);
-      const density = parseInt(document.getElementById('compDensitySlider').value);
-      const pedal = parseInt(document.getElementById('compPedalSlider').value);
-      const legatoPct = parseFloat(document.getElementById('compLegatoSlider').value);
       await fetch('/api/composer/listen_and_compose', {
-        method: 'POST',
-        headers: {'Content-Type': 'application/json'},
+        method: 'POST', headers: {'Content-Type': 'application/json'},
         body: JSON.stringify({
-          development_mode: devMode,
-          target_duration_s: dur,
-          density,
-          pedal_cc64: pedal,
-          legato_overlap_pct: legatoPct
+          development_mode: document.getElementById('compStyleSelect').value,
+          target_duration_s: parseFloat(document.getElementById('compDurationSlider').value),
+          density: parseInt(document.getElementById('compDensitySlider').value, 10),
+          pedal_cc64: parseInt(document.getElementById('compPedalSlider').value, 10),
+          legato_overlap_pct: parseFloat(document.getElementById('compLegatoSlider').value)
         })
       });
     }
-
-    async function quickExpandAndPlay() {
-      const dur = parseFloat(document.getElementById('quickDurSelect').value);
-      const devMode = document.getElementById('quickModeSelect').value;
-      document.getElementById('compDurationSlider').value = dur;
-      document.getElementById('durSliderLabel').textContent = dur + ' 秒';
-      document.getElementById('compStyleSelect').value = devMode;
-      await listenAndComposeMotif();
-    }
-
-    async function applyClosedLoopBoost() {
-      await fetch('/api/closed_loop/optimize_sustain', {
-        method: 'POST',
-        headers: {'Content-Type': 'application/json'},
-        body: JSON.stringify({
-          legato_overlap_ms: 58.0,
-          min_soft_velocity: 34,
-          sustain_pedal_boost: 8
-        })
-      });
-    }
-
-    async function exportComposedMidi() {
-      const res = await fetch('/api/composer/export_midi', { method: 'POST' });
-      const data = await res.json();
-      alert('Saved SMF MIDI to: ' + (data.path || 'data/telemetry/composed_masterwork.mid'));
-    }
-
+    async function exportComposedMidi() { await fetch('/api/composer/export_midi', { method: 'POST' }); }
     async function playOptimizedMidi(pieceId) {
-      await fetch('/api/midi/play_optimized', {
-        method: 'POST',
-        headers: {'Content-Type': 'application/json'},
-        body: JSON.stringify({ piece_id: pieceId })
-      });
+      await fetch('/api/midi/play_optimized', { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({ piece_id: pieceId }) });
     }
-
-    async function selectAccompStyle(style) {
-      await fetch('/api/mode', {
-        method: 'POST',
-        headers: {'Content-Type': 'application/json'},
-        body: JSON.stringify({ session_style: style })
-      });
-      document.getElementById('activeStyleDetailBox').innerHTML =
-        `<div style="font-weight:700;color:#fbbf24;">Current Style: ${style}</div>
-         <div style="font-size:12px;color:#d1d5db;margin-top:4px;">Finger-Legato Hold (1.0s+) ON | VDL Melody Lead +20ms ON | Syncopated CC#64 Active</div>`;
-    }
-
-    async function runAutoProxySessionDemo() {
-      await fetch('/api/session/proxy_demo', { method: 'POST' });
-    }
-
-    async function recordNewRehearsalTake() {
-      await fetch('/api/rehearsal/record_proxy_take', { method: 'POST' });
-    }
-
+    async function runAutoProxySessionDemo() { await fetch('/api/session/proxy_demo', { method: 'POST' }); }
+    async function recordNewRehearsalTake() { await fetch('/api/rehearsal/record_proxy_take', { method: 'POST' }); }
     async function replayTakeWithStyle(style) {
-      await fetch('/api/rehearsal/replay_style', {
-        method: 'POST',
-        headers: {'Content-Type': 'application/json'},
-        body: JSON.stringify({ style })
-      });
+      await fetch('/api/rehearsal/replay_style', { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({ style }) });
     }
 
     connectWebSocket();

@@ -19,4 +19,6 @@ tags: ['imslp', 'seed_memory', 'debussy']
 
 ## 派生した名演・関連ノート (Bidirectional Links)
 - [[Evolution_Overview]]
-- [[Evolution_Overview]]
+- [[HoF_Gen022_Score99_Exposition]]
+- [[HoF_Gen023_Score97_Development]]
+- [[HoF_Gen024_Score99_Climax]]
