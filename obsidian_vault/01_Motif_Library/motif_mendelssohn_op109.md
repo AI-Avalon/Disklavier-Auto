@@ -19,4 +19,7 @@ tags: ['imslp', 'seed_memory', 'mendelssohn']
 
 ## 派生した名演・関連ノート (Bidirectional Links)
 - [[Evolution_Overview]]
-- [[Evolution_Overview]]
+- [[HoF_Gen037_Score91_Exposition]]
+- [[HoF_Gen038_Score94_Development]]
+- [[HoF_Gen039_Score94_Climax]]
+- [[HoF_Gen040_Score92_Recapitulation]]

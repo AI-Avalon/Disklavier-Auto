@@ -19,4 +19,4 @@ tags: ['imslp', 'seed_memory', 'bach']
 
 ## 派生した名演・関連ノート (Bidirectional Links)
 - [[Evolution_Overview]]
-- [[Evolution_Overview]]
+- [[HoF_Gen066_Score95_Metamorphosis]]
