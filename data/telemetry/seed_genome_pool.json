@@ -1,0 +1,651 @@
+{
+  "total_motifs": 11,
+  "motifs": [
+    {
+      "motif_id": "motif_bach_suite1_bwv1007",
+      "title": "Cello Suite No. 1 in G Major, BWV 1007 (Prelude)",
+      "composer": "J.S. Bach",
+      "key": "G Major",
+      "tonic_midi": 55,
+      "scale_intervals": [
+        0,
+        2,
+        4,
+        5,
+        7,
+        9,
+        11
+      ],
+      "melody_pitches": [
+        43,
+        50,
+        59,
+        57,
+        59,
+        50,
+        59,
+        50
+      ],
+      "interval_vector": [
+        0,
+        7,
+        16,
+        14,
+        16,
+        7,
+        16,
+        7
+      ],
+      "rhythm_ratios": [
+        8.03,
+        1.0,
+        1.0,
+        1.0,
+        2.01,
+        1.0,
+        1.0,
+        1.0
+      ],
+      "contrary_motion_ratio": 0.45,
+      "half_pedal_profile": {
+        "mean_cc64": 52,
+        "min_cc64": 18,
+        "max_cc64": 52
+      },
+      "voicing_spread": 31,
+      "voice_leading_pattern": "Finger-Sustained Pedal Bass + Overlapping Bariolage",
+      "source_file": "data/imslp_midi/bach_suite1_bwv1007.mid",
+      "tags": [
+        "imslp",
+        "seed_memory",
+        "bach"
+      ]
+    },
+    {
+      "motif_id": "motif_brahms_sonata1_op38",
+      "title": "Cello Sonata No. 1 in E Minor, Op. 38",
+      "composer": "Johannes Brahms",
+      "key": "E Minor",
+      "tonic_midi": 52,
+      "scale_intervals": [
+        0,
+        2,
+        3,
+        5,
+        7,
+        8,
+        10
+      ],
+      "melody_pitches": [
+        52,
+        55,
+        59,
+        64,
+        62,
+        59,
+        63
+      ],
+      "interval_vector": [
+        0,
+        3,
+        7,
+        12,
+        10,
+        7,
+        11
+      ],
+      "rhythm_ratios": [
+        3.44,
+        1.0,
+        1.31,
+        3.13,
+        1.31,
+        3.13
+      ],
+      "contrary_motion_ratio": 0.83,
+      "half_pedal_profile": {
+        "mean_cc64": 62,
+        "min_cc64": 18,
+        "max_cc64": 64
+      },
+      "voicing_spread": 32,
+      "voice_leading_pattern": "Sonorous Low Bass + Warm Sixths Legato Counterpoint",
+      "source_file": "data/imslp_midi/brahms_sonata1_op38.mid",
+      "tags": [
+        "imslp",
+        "seed_memory",
+        "brahms"
+      ]
+    },
+    {
+      "motif_id": "motif_chopin_nocturne_sonata",
+      "title": "Nocturne in E-flat Major, Op. 9 No. 2 (Bel Canto Legato)",
+      "composer": "Frédéric Chopin",
+      "key": "E-flat Major",
+      "tonic_midi": 58,
+      "scale_intervals": [
+        0,
+        2,
+        4,
+        5,
+        7,
+        9,
+        11
+      ],
+      "melody_pitches": [
+        58,
+        67,
+        65,
+        63,
+        67,
+        65,
+        63,
+        68
+      ],
+      "interval_vector": [
+        0,
+        9,
+        7,
+        5,
+        9,
+        7,
+        5,
+        10
+      ],
+      "rhythm_ratios": [
+        5.96,
+        2.66,
+        5.14,
+        2.65,
+        2.66,
+        3.4,
+        3.38,
+        1.0
+      ],
+      "contrary_motion_ratio": 0.57,
+      "half_pedal_profile": {
+        "mean_cc64": 66,
+        "min_cc64": 18,
+        "max_cc64": 68
+      },
+      "voicing_spread": 33,
+      "voice_leading_pattern": "Syncopated Pedal Bass + Singing Bel Canto Legato",
+      "source_file": "data/imslp_midi/chopin_nocturne_sonata.mid",
+      "tags": [
+        "imslp",
+        "seed_memory",
+        "chopin"
+      ]
+    },
+    {
+      "motif_id": "motif_debussy_clair_sonata",
+      "title": "Clair de Lune (Suite bergamasque, L. 75 — Full Legato Edition)",
+      "composer": "Claude Debussy",
+      "key": "D-flat Major",
+      "tonic_midi": 65,
+      "scale_intervals": [
+        0,
+        2,
+        3,
+        5,
+        7,
+        8,
+        10
+      ],
+      "melody_pitches": [
+        77,
+        80,
+        73,
+        77,
+        75,
+        78,
+        73,
+        77
+      ],
+      "interval_vector": [
+        0,
+        3,
+        -4,
+        0,
+        -2,
+        1,
+        -4,
+        0
+      ],
+      "rhythm_ratios": [
+        1.0,
+        1.87,
+        1.87,
+        1.0,
+        4.72,
+        6.59,
+        3.71,
+        1.0
+      ],
+      "contrary_motion_ratio": 0.55,
+      "half_pedal_profile": {
+        "mean_cc64": 69,
+        "min_cc64": 18,
+        "max_cc64": 72
+      },
+      "voicing_spread": 60,
+      "voice_leading_pattern": "9/8 Finger-Pedaled Harmonic Planing + Syncopated CC#64 Sustain",
+      "source_file": "data/imslp_midi/debussy_clair_sonata.mid",
+      "tags": [
+        "imslp",
+        "seed_memory",
+        "debussy"
+      ]
+    },
+    {
+      "motif_id": "motif_faure_elegie_op24",
+      "title": "Élégie in C Minor, Op. 24",
+      "composer": "Gabriel Fauré",
+      "key": "C Minor",
+      "tonic_midi": 55,
+      "scale_intervals": [
+        0,
+        2,
+        4,
+        5,
+        7,
+        9,
+        11
+      ],
+      "melody_pitches": [
+        67,
+        68,
+        67,
+        65,
+        63,
+        62,
+        60,
+        67
+      ],
+      "interval_vector": [
+        0,
+        1,
+        0,
+        -2,
+        -4,
+        -5,
+        -7,
+        0
+      ],
+      "rhythm_ratios": [
+        1.0,
+        7.49,
+        7.49,
+        4.12,
+        3.37,
+        7.27,
+        14.36,
+        15.62
+      ],
+      "contrary_motion_ratio": 0.45,
+      "half_pedal_profile": {
+        "mean_cc64": 62,
+        "min_cc64": 18,
+        "max_cc64": 66
+      },
+      "voicing_spread": 41,
+      "voice_leading_pattern": "Sustained Bass Tetrachord + Legato Pulsating Chords",
+      "source_file": "data/imslp_midi/faure_elegie_op24.mid",
+      "tags": [
+        "imslp",
+        "seed_memory",
+        "faure"
+      ]
+    },
+    {
+      "motif_id": "motif_faure_sicilienne_op78",
+      "title": "Sicilienne in G Minor, Op. 78",
+      "composer": "Gabriel Fauré",
+      "key": "G Minor",
+      "tonic_midi": 55,
+      "scale_intervals": [
+        0,
+        2,
+        3,
+        5,
+        7,
+        8,
+        10
+      ],
+      "melody_pitches": [
+        67,
+        70,
+        69,
+        65,
+        67,
+        62,
+        63,
+        62
+      ],
+      "interval_vector": [
+        0,
+        3,
+        2,
+        -2,
+        0,
+        -5,
+        -4,
+        -5
+      ],
+      "rhythm_ratios": [
+        13.11,
+        1.0,
+        4.58,
+        1.41,
+        3.17,
+        4.58,
+        13.13,
+        1.0
+      ],
+      "contrary_motion_ratio": 0.45,
+      "half_pedal_profile": {
+        "mean_cc64": 62,
+        "min_cc64": 18,
+        "max_cc64": 64
+      },
+      "voicing_spread": 32,
+      "voice_leading_pattern": "6/8 Aeolian Harp Legato Arpeggio + Dorian Cantabile",
+      "source_file": "data/imslp_midi/faure_sicilienne_op78.mid",
+      "tags": [
+        "imslp",
+        "seed_memory",
+        "faure"
+      ]
+    },
+    {
+      "motif_id": "motif_mendelssohn_op109",
+      "title": "Lied ohne Worte (Song Without Words), Op. 109 in D Major",
+      "composer": "Felix Mendelssohn",
+      "key": "D Major",
+      "tonic_midi": 54,
+      "scale_intervals": [
+        0,
+        2,
+        3,
+        5,
+        7,
+        8,
+        10
+      ],
+      "melody_pitches": [
+        66,
+        69,
+        67,
+        64,
+        71,
+        69,
+        66
+      ],
+      "interval_vector": [
+        0,
+        3,
+        1,
+        -2,
+        5,
+        3,
+        0
+      ],
+      "rhythm_ratios": [
+        2.33,
+        1.0,
+        1.56,
+        2.33,
+        1.0,
+        1.56,
+        2.33,
+        1.0
+      ],
+      "contrary_motion_ratio": 0.45,
+      "half_pedal_profile": {
+        "mean_cc64": 62,
+        "min_cc64": 18,
+        "max_cc64": 64
+      },
+      "voicing_spread": 36,
+      "voice_leading_pattern": "Romantic Cantabile Melody + Sustained Broken Triads",
+      "source_file": "data/imslp_midi/mendelssohn_op109.mid",
+      "tags": [
+        "imslp",
+        "seed_memory",
+        "mendelssohn"
+      ]
+    },
+    {
+      "motif_id": "motif_saint_saens_swan",
+      "title": "Le Cygne (The Swan) — Carnaval des Animaux",
+      "composer": "Camille Saint-Saëns",
+      "key": "G Major",
+      "tonic_midi": 59,
+      "scale_intervals": [
+        0,
+        2,
+        4,
+        5,
+        7,
+        9,
+        11
+      ],
+      "melody_pitches": [
+        71,
+        69,
+        67,
+        64,
+        66,
+        67,
+        69,
+        71
+      ],
+      "interval_vector": [
+        0,
+        -2,
+        -4,
+        -7,
+        -5,
+        -4,
+        -2,
+        0
+      ],
+      "rhythm_ratios": [
+        2.02,
+        1.0,
+        1.0,
+        4.0,
+        1.0,
+        1.0,
+        2.01,
+        2.02
+      ],
+      "contrary_motion_ratio": 0.6,
+      "half_pedal_profile": {
+        "mean_cc64": 64,
+        "min_cc64": 18,
+        "max_cc64": 68
+      },
+      "voicing_spread": 43,
+      "voice_leading_pattern": "Overlapping Harp Sextuplets + Legato Cantabile Melody",
+      "source_file": "data/imslp_midi/saint_saens_swan.mid",
+      "tags": [
+        "imslp",
+        "seed_memory",
+        "saint"
+      ]
+    },
+    {
+      "motif_id": "motif_composed_masterwork",
+      "title": "Previous Session Masterwork (composed_masterwork)",
+      "composer": "Human x Antigravity Archive",
+      "key": "Evolved Concert Key",
+      "tonic_midi": 58,
+      "scale_intervals": [
+        0,
+        2,
+        4,
+        5,
+        7,
+        9,
+        11
+      ],
+      "melody_pitches": [
+        70,
+        94,
+        101,
+        65,
+        62,
+        65,
+        72,
+        69
+      ],
+      "interval_vector": [
+        0,
+        24,
+        31,
+        -5,
+        -8,
+        -5,
+        2,
+        -1
+      ],
+      "rhythm_ratios": [
+        1.0,
+        1.0,
+        1.0,
+        4.44,
+        3.69,
+        1.62,
+        2.06,
+        3.67
+      ],
+      "contrary_motion_ratio": 0.9,
+      "half_pedal_profile": {
+        "mean_cc64": 68,
+        "min_cc64": 18,
+        "max_cc64": 68
+      },
+      "voicing_spread": 65,
+      "voice_leading_pattern": "Captured Dialogue & Syncopated Legato",
+      "source_file": "data/telemetry/composed_masterwork.mid",
+      "tags": [
+        "archive",
+        "telemetry_midi"
+      ]
+    },
+    {
+      "motif_id": "motif_cello_elegy_d_minor",
+      "title": "D Minor Contrapuntal Cello Lament",
+      "composer": "Seed Polyphony Pool",
+      "key": "D Minor",
+      "tonic_midi": 50,
+      "scale_intervals": [
+        0,
+        2,
+        3,
+        5,
+        7,
+        8,
+        10
+      ],
+      "melody_pitches": [
+        62,
+        65,
+        69,
+        68,
+        65,
+        64,
+        62
+      ],
+      "interval_vector": [
+        0,
+        3,
+        7,
+        6,
+        3,
+        2,
+        0
+      ],
+      "rhythm_ratios": [
+        1.5,
+        1.0,
+        2.0,
+        1.0,
+        1.0,
+        1.0
+      ],
+      "contrary_motion_ratio": 0.78,
+      "half_pedal_profile": {
+        "mean_cc64": 60,
+        "min_cc64": 18,
+        "max_cc64": 66
+      },
+      "voicing_spread": 31,
+      "voice_leading_pattern": "Chromatic Descending Bass + Expressive Cello Suspension",
+      "source_file": "curated_seed_pool",
+      "tags": [
+        "cello",
+        "minor",
+        "chromatic_bass",
+        "counterpoint"
+      ]
+    },
+    {
+      "motif_id": "motif_impressionist_lydian_ab",
+      "title": "A-flat Lydian Impressionist Nocturne",
+      "composer": "Seed Impressionist Pool",
+      "key": "A-flat Lydian",
+      "tonic_midi": 56,
+      "scale_intervals": [
+        0,
+        2,
+        4,
+        6,
+        7,
+        9,
+        11
+      ],
+      "melody_pitches": [
+        68,
+        72,
+        74,
+        79,
+        75,
+        74,
+        72
+      ],
+      "interval_vector": [
+        0,
+        4,
+        6,
+        11,
+        7,
+        6,
+        4
+      ],
+      "rhythm_ratios": [
+        1.0,
+        1.5,
+        2.0,
+        1.0,
+        1.0,
+        1.5
+      ],
+      "contrary_motion_ratio": 0.72,
+      "half_pedal_profile": {
+        "mean_cc64": 70,
+        "min_cc64": 22,
+        "max_cc64": 76
+      },
+      "voicing_spread": 36,
+      "voice_leading_pattern": "Lydian #11 Planing + Half-Pedal Shimmer",
+      "source_file": "curated_seed_pool",
+      "tags": [
+        "lydian",
+        "impressionist",
+        "half_pedal"
+      ]
+    }
+  ]
+}

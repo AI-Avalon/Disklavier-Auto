@@ -140,11 +140,13 @@ class DisklavierSafetyGuard:
         on_telemetry_Callback: Optional[Callable[[dict], None]] = None,
         on_log_Callback: Optional[Callable[[str], None]] = None,
         on_human_midi_Callback: Optional[Callable[[dict], None]] = None,
+        virtual_twin: Optional[Any] = None,
     ) -> None:
         self.port_name = port_name
         self.on_telemetry = on_telemetry_Callback
         self.on_log = on_log_Callback
         self.on_human_midi = on_human_midi_Callback
+        self.virtual_twin = virtual_twin
         self._lock = threading.RLock()
         self._seq_counter = 0
 
@@ -224,6 +226,14 @@ class DisklavierSafetyGuard:
         )
         self._worker_thread.start()
         atexit.register(self.emergency_panic)
+
+    def attach_virtual_twin(self, virtual_twin: Any) -> None:
+        with self._lock:
+            self.virtual_twin = virtual_twin
+            if virtual_twin is not None:
+                virtual_twin.hardware_connected = self.outport is not None
+                if virtual_twin.output_mode == "auto":
+                    virtual_twin.hardware_output_enabled = self.outport is not None
 
     def _log(self, msg: str) -> None:
         if self.on_log:
@@ -699,6 +709,7 @@ class DisklavierSafetyGuard:
         target_duration_s: float = 0.5,
         gen_id: int = 0,
         source_tag: str = "live",
+        target_sound_time: float = 0.0,
     ) -> bool:
         if not (self.PIANO_MIN_NOTE <= note <= self.PIANO_MAX_NOTE):
             return False
@@ -733,6 +744,7 @@ class DisklavierSafetyGuard:
                     sympathetic_halo=sympathetic_halo,
                     min_duration_ms=min_duration_ms,
                     target_duration_s=target_duration_s,
+                    target_sound_time=target_sound_time,
                     gen_id=gen_id,
                     source_tag=source_tag + ":staggered",
                 )
@@ -764,13 +776,26 @@ class DisklavierSafetyGuard:
         while len(self.active_notes) >= self.MAX_ACTIVE_VOICES:
             self._steal_oldest_inner_voice(now)
 
-        if self.outport:
+        if self.outport and (self.virtual_twin is None or self.virtual_twin.hardware_output_enabled):
             try:
                 msg = mido.Message("note_on", note=note, velocity=clean_vel, channel=0)
                 self.outport.send(msg)
                 self.last_system_send_time = now
             except Exception as exc:
                 self._log(f"[SAFETY GUARD] MIDI send error: {exc}")
+
+        if self.virtual_twin is not None:
+            try:
+                self.virtual_twin.handle_note_on(
+                    note=note,
+                    velocity=clean_vel,
+                    send_time=now,
+                    target_sound_time=target_sound_time,
+                    sympathetic_halo=sympathetic_halo,
+                    source_tag=source_tag,
+                )
+            except Exception:
+                pass
 
         min_dur_s = max(self.MIN_NOTE_DURATION_S, min_duration_ms / 1000.0)
         vdl_s = self.vdl_model.predict_latency_ms(note, clean_vel) / 1000.0
@@ -810,7 +835,7 @@ class DisklavierSafetyGuard:
                 return False
 
         clean_rel_vel = self.sanitize_release_velocity(release_velocity)
-        if self.outport:
+        if self.outport and (self.virtual_twin is None or self.virtual_twin.hardware_output_enabled):
             try:
                 msg = mido.Message(
                     "note_off", note=note, velocity=clean_rel_vel, channel=0
@@ -819,6 +844,12 @@ class DisklavierSafetyGuard:
                 self.last_system_send_time = now
             except Exception as exc:
                 self._log(f"[SAFETY GUARD] MIDI Note-Off error: {exc}")
+
+        if self.virtual_twin is not None:
+            try:
+                self.virtual_twin.handle_note_off(note, clean_rel_vel, now=now)
+            except Exception:
+                pass
 
         info = self.active_notes.pop(note, None)
         if info and not info.get("sympathetic", False):
@@ -873,7 +904,7 @@ class DisklavierSafetyGuard:
             return False
 
         clean_val = max(0, min(127, int(value)))
-        if self.outport:
+        if self.outport and (self.virtual_twin is None or self.virtual_twin.hardware_output_enabled):
             try:
                 msg = mido.Message(
                     "control_change", control=64, value=clean_val, channel=0
@@ -882,6 +913,12 @@ class DisklavierSafetyGuard:
                 self.last_system_send_time = now
             except Exception as exc:
                 self._log(f"[SAFETY GUARD] MIDI CC#64 error: {exc}")
+
+        if self.virtual_twin is not None:
+            try:
+                self.virtual_twin.handle_pedal_cc64(clean_val, now=now)
+            except Exception:
+                pass
 
         self.current_pedal_val = clean_val
         if clean_val > 30:
@@ -911,6 +948,7 @@ class DisklavierSafetyGuard:
                             target_duration_s=ev.target_duration_s,
                             gen_id=ev.gen_id,
                             source_tag=ev.source_tag,
+                            target_sound_time=ev.target_sound_time,
                         )
                     elif ev.msg_type == "note_off":
                         if ev.note in self.active_notes:
@@ -1009,6 +1047,11 @@ class DisklavierSafetyGuard:
             self.recent_note_ons_1s.clear()
             self.current_pedal_val = 0
             self.pedal_engaged_since = None
+            if self.virtual_twin is not None:
+                try:
+                    self.virtual_twin.panic()
+                except Exception:
+                    pass
             self.stats["panic_count"] += 1
             self.stats["vdl_buffer_events"] = 0
             self._log(
@@ -1025,6 +1068,7 @@ class DisklavierSafetyGuard:
                     "velocity": v["velocity"],
                     "sympathetic": v["sympathetic"],
                     "held_ms": round((now - v["on_time"]) * 1000.0, 1),
+                    "vdl_ms": round(self.vdl_model.predict_latency_ms(k, v["velocity"]), 1),
                     "source_tag": v.get("source_tag", "live"),
                 }
                 for k, v in self.active_notes.items()
@@ -1041,8 +1085,9 @@ class DisklavierSafetyGuard:
             )
             return {
                 "connected": self.outport is not None,
-                "port_name": self.connected_port_name or "Disconnected",
-                "inport_name": self.connected_inport_name or "Disconnected",
+                "virtual_twin_attached": self.virtual_twin is not None,
+                "port_name": self.connected_port_name or "Virtual Twin Mode",
+                "inport_name": self.connected_inport_name or "Virtual / UI Input",
                 "simultaneous_2ms_count": len(self.recent_note_ons_2ms),
                 "simultaneous_limit": self.HARD_SIMULTANEOUS_LIMIT,
                 "active_voices_count": len(self.active_notes),
