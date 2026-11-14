@@ -633,16 +633,17 @@ def save_piece_to_smf(piece: Dict[str, Any], out_path: Path) -> None:
     raw_timed = []
     for ev in piece["events"]:
         t_on = float(ev["time_offset_s"])
-        dur = max(0.050, float(ev.get("duration_s", 0.50)))
+        dur = max(0.035, float(ev.get("duration_s", 0.50)))
         vel = int(ev.get("velocity", 55))
+        rel_vel = int(ev.get("release_velocity", 22))
         note = int(ev.get("note", 0))
         if ev.get("pedal_cc64") is not None:
             raw_timed.append((max(0.0, t_on), "cc", 64, int(ev["pedal_cc64"])))
         if note > 0:
             if not ev.get("sympathetic_halo", False):
-                vel = max(28, min(105, vel))
+                vel = max(20, min(105, vel))
             raw_timed.append((t_on, "on", note, vel))
-            raw_timed.append((t_on + dur, "off", note, 22))
+            raw_timed.append((t_on + dur, "off", note, rel_vel))
 
     raw_timed.sort(key=lambda x: x[0])
     last_t = 0.0

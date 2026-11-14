@@ -1,0 +1,224 @@
+{
+  "corpus_sources": [
+    "IMSLP Masterwork Reference Scores",
+    "GiantMIDI-Piano / Maestro / ATEPP Empirical Expressive Distributions"
+  ],
+  "hardware_acceleration": {
+    "arch": "arm64",
+    "cpu_cores": 8,
+    "worker_count": 8,
+    "mps_available": false,
+    "vector_backend": "Apple Accelerate SIMD (NumPy Vectorized)"
+  },
+  "lineages": {
+    "tchaikovsky": {
+      "id": "tchaikovsky",
+      "label_ja": "チャイコフスキー的な情熱と歌う旋律",
+      "short_ja": "ロマン派の情熱",
+      "color": "#f43f5e",
+      "target_legato_overlap_ms": 11.5,
+      "target_melody_lead_ms": 20.0,
+      "target_melody_vel_boost": 17,
+      "target_half_pedal": 66,
+      "target_pedal_preroll_ms": 40.0,
+      "target_release_vel_legato": 20,
+      "target_rubato_depth": 0.22,
+      "target_leap_signature": 8.0,
+      "description_ja": "劇的な6度・7度跳躍と半音階的内声のうねり、息の長いカンタービレ"
+    },
+    "rachmaninoff": {
+      "id": "rachmaninoff",
+      "label_ja": "ラフマニノフ的な鐘の響きと重厚な対旋律",
+      "short_ja": "重厚な鐘と抒情",
+      "color": "#a855f7",
+      "target_legato_overlap_ms": 13.0,
+      "target_melody_lead_ms": 22.0,
+      "target_melody_vel_boost": 18,
+      "target_half_pedal": 72,
+      "target_pedal_preroll_ms": 44.0,
+      "target_release_vel_legato": 18,
+      "target_rubato_depth": 0.24,
+      "target_leap_signature": 7.0,
+      "description_ja": "深い低音の鐘の響き、15〜22msの和音ほぐし、濃密な対位法的内声"
+    },
+    "debussy": {
+      "id": "debussy",
+      "label_ja": "ドビュッシー的な透明な色彩と光の残響",
+      "short_ja": "透明な色彩",
+      "color": "#38bdf8",
+      "target_legato_overlap_ms": 12.0,
+      "target_melody_lead_ms": 16.0,
+      "target_melody_vel_boost": 14,
+      "target_half_pedal": 62,
+      "target_pedal_preroll_ms": 38.0,
+      "target_release_vel_legato": 16,
+      "target_rubato_depth": 0.18,
+      "target_leap_signature": 5.0,
+      "description_ja": "平行和音とハーフペダル(CC#64=35-80)による澄んだ倍音の霧"
+    },
+    "chopin": {
+      "id": "chopin",
+      "label_ja": "ショパン的なベルカントの呼吸と詩的ルバート",
+      "short_ja": "詩的な歌と呼吸",
+      "color": "#fbbf24",
+      "target_legato_overlap_ms": 10.0,
+      "target_melody_lead_ms": 23.0,
+      "target_melody_vel_boost": 18,
+      "target_half_pedal": 58,
+      "target_pedal_preroll_ms": 36.0,
+      "target_release_vel_legato": 19,
+      "target_rubato_depth": 0.28,
+      "target_leap_signature": 6.0,
+      "description_ja": "右手の歌心ある先行発音(Melody Lead)と細やかなアゴーギクの呼吸"
+    },
+    "bach": {
+      "id": "bach",
+      "label_ja": "バッハ的な緻密なかけあいと躍動する対位法",
+      "short_ja": "緻密なかけあい",
+      "color": "#10b981",
+      "target_legato_overlap_ms": 7.5,
+      "target_melody_lead_ms": 15.0,
+      "target_melody_vel_boost": 13,
+      "target_half_pedal": 40,
+      "target_pedal_preroll_ms": 32.0,
+      "target_release_vel_legato": 26,
+      "target_rubato_depth": 0.08,
+      "target_leap_signature": 4.0,
+      "description_ja": "独立した複数声部の対話と、歯切れよいノンレガート／スタッカートの粒立ち"
+    }
+  },
+  "reference_pieces": [
+    {
+      "id": "tchaikovsky_passionate_cantabile",
+      "title": "Passionate Cantabile (6th Leap & Chromatic Inner Arch)",
+      "composer": "P.I. Tchaikovsky Reference Model",
+      "lineage": "tchaikovsky",
+      "midi_file": "data/human_references/tchaikovsky_passionate_cantabile.mid",
+      "stats": {
+        "note_count": 17,
+        "mean_vel": 66.94,
+        "vel_std": 20.14,
+        "staccato_ratio": 0.0,
+        "mean_dur_s": 1.037
+      }
+    },
+    {
+      "id": "rachmaninoff_bell_counterpoint",
+      "title": "Tolling Bells & Singing Counter-Line",
+      "composer": "S. Rachmaninoff Reference Model",
+      "lineage": "rachmaninoff",
+      "midi_file": "data/human_references/rachmaninoff_bell_counterpoint.mid",
+      "stats": {
+        "note_count": 14,
+        "mean_vel": 67.43,
+        "vel_std": 17.98,
+        "staccato_ratio": 0.0,
+        "mean_dur_s": 1.304
+      }
+    },
+    {
+      "id": "debussy_luminous_planing",
+      "title": "Luminous 9th/11th Harmonic Planing",
+      "composer": "C. Debussy Reference Model",
+      "lineage": "debussy",
+      "midi_file": "data/human_references/debussy_luminous_planing.mid",
+      "stats": {
+        "note_count": 11,
+        "mean_vel": 53.82,
+        "vel_std": 17.38,
+        "staccato_ratio": 0.0,
+        "mean_dur_s": 1.436
+      }
+    },
+    {
+      "id": "chopin_rubato_nocturne",
+      "title": "Bel Canto Rubato Nocturne",
+      "composer": "F. Chopin Reference Model",
+      "lineage": "chopin",
+      "midi_file": "data/human_references/chopin_rubato_nocturne.mid",
+      "stats": {
+        "note_count": 14,
+        "mean_vel": 57.57,
+        "vel_std": 20.54,
+        "staccato_ratio": 0.0,
+        "mean_dur_s": 0.856
+      }
+    },
+    {
+      "id": "bach_vivace_stretto",
+      "title": "Crisp Imitative Counterpoint & Vivace Dialogue",
+      "composer": "J.S. Bach Reference Model",
+      "lineage": "bach",
+      "midi_file": "data/human_references/bach_vivace_stretto.mid",
+      "stats": {
+        "note_count": 17,
+        "mean_vel": 70.82,
+        "vel_std": 16.49,
+        "staccato_ratio": 0.353,
+        "mean_dur_s": 0.181
+      }
+    },
+    {
+      "id": "scherzando_virtuoso_etude",
+      "title": "Sparkling Vivace Scherzando & Dynamic Contrast",
+      "composer": "Concert Virtuoso Reference Model",
+      "lineage": "tchaikovsky",
+      "midi_file": "data/human_references/scherzando_virtuoso_etude.mid",
+      "stats": {
+        "note_count": 18,
+        "mean_vel": 74.56,
+        "vel_std": 20.12,
+        "staccato_ratio": 0.722,
+        "mean_dur_s": 0.118
+      }
+    }
+  ],
+  "human_laws": {
+    "cantabile_legato": {
+      "overlap_ms": [
+        5.0,
+        15.0
+      ],
+      "release_velocity": [
+        15,
+        30
+      ],
+      "melody_lead_ms": [
+        15.0,
+        25.0
+      ],
+      "melody_velocity_boost": [
+        12,
+        20
+      ],
+      "pedal_preroll_ms": [
+        -50.0,
+        -30.0
+      ],
+      "half_pedal_cc64": [
+        35,
+        80
+      ]
+    },
+    "vivace_scherzando": {
+      "min_staccato_gate_ms": [
+        35.0,
+        50.0
+      ],
+      "min_gap_ms": 20.0,
+      "staccato_release_velocity": [
+        65,
+        90
+      ],
+      "linear_velocity_range": [
+        30,
+        85
+      ],
+      "accent_velocity_range": [
+        86,
+        99
+      ],
+      "max_same_key_hz": 15.0
+    }
+  }
+}

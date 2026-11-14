@@ -130,6 +130,8 @@ class DisklavierSafetyGuard:
     VALID_VEL_MAX = 105
     RELEASE_VEL_MIN = 15
     RELEASE_VEL_MAX = 40
+    STACCATO_RELEASE_VEL_MIN = 65
+    STACCATO_RELEASE_VEL_MAX = 90
     DEFAULT_RELEASE_VEL = 22
     MAX_KEY_HOLD_S = 8.0
     MAX_PEDAL_HOLD_S = 240.0
@@ -411,9 +413,15 @@ class DisklavierSafetyGuard:
             return self.VALID_VEL_MAX
         return int(velocity)
 
-    def sanitize_release_velocity(self, off_velocity: int = 22) -> int:
+    def sanitize_release_velocity(self, off_velocity: int = 22, staccato: bool = False) -> int:
         if off_velocity <= 0:
             return self.DEFAULT_RELEASE_VEL
+        if staccato or off_velocity >= self.STACCATO_RELEASE_VEL_MIN:
+            if staccato:
+                return max(
+                    self.STACCATO_RELEASE_VEL_MIN,
+                    min(self.STACCATO_RELEASE_VEL_MAX, int(off_velocity)),
+                )
         return max(self.RELEASE_VEL_MIN, min(self.RELEASE_VEL_MAX, int(off_velocity)))
 
     # -------------------------------------------------------------------------
@@ -429,6 +437,7 @@ class DisklavierSafetyGuard:
         sympathetic_halo: bool = False,
         legato_overlap_s: Optional[float] = None,
         source_tag: str = "engine",
+        release_velocity: Optional[int] = None,
     ) -> List[dict]:
         """
         Schedules notes `[(note, velocity, duration_s), ...]` to sound at `target_sound_time`.
@@ -562,6 +571,11 @@ class DisklavierSafetyGuard:
                         source_tag=source_tag,
                     )
                 )
+                clean_rel_v = (
+                    int(release_velocity)
+                    if release_velocity is not None
+                    else self.DEFAULT_RELEASE_VEL
+                )
                 self._push_event(
                     ScheduledMidiEvent(
                         send_time=off_t,
@@ -569,7 +583,7 @@ class DisklavierSafetyGuard:
                         seq_id=self._next_seq(),
                         msg_type="note_off",
                         note=note,
-                        velocity=self.DEFAULT_RELEASE_VEL,
+                        velocity=clean_rel_v,
                         gen_id=gen_id,
                         source_tag=source_tag,
                     )
@@ -834,7 +848,10 @@ class DisklavierSafetyGuard:
                 self.stats["stale_note_offs_blocked"] += 1
                 return False
 
-        clean_rel_vel = self.sanitize_release_velocity(release_velocity)
+        is_staccato_release = ("staccato" in source_tag) or (release_velocity >= 65)
+        clean_rel_vel = self.sanitize_release_velocity(
+            release_velocity, staccato=is_staccato_release
+        )
         if self.outport and (self.virtual_twin is None or self.virtual_twin.hardware_output_enabled):
             try:
                 msg = mido.Message(
