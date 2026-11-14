@@ -1,10 +1,11 @@
-# 🎹 Disklavier-Auto 全100実装機能マトリクス (`FEATURES_100.md`)
+# 🎹 Disklavier-Auto 全100機能カタログ＆実装ステータス (`FEATURES_100.md`)
 
-- **総実装機能数**: **100 / 100 機能**（全10カテゴリ・各10機能）＋ **IMSLP深層DNA・Meta-AI Director・Living Score・イン・アプリ知識グラフ統合**
-- **アーキテクチャ方針**: IMSLP 11大名曲（チャイコフスキー／ラフマニノフ／リスト／ショパン／ドビュッシー／バッハ／サン＝サーンス／フォーレ／ブラームス／メンデルスゾーン）の深層音楽DNA解析に基づく1からの本格作曲・Meta-AI Director（詩的日本語＆欧文タイトル＋5楽式構想）・6軸100点満点レーダー自己進化・Disklavier超人間的ヴィルトゥオーゾ表現4技・双方向パッセージ対話3モード・`sakurai-virtuoso-direction` 演出統合・イン・アプリ知識グラフ＆進化ノート・`validate_system_integrity.py` ローカル全数安全監査
+- **総カタログ機能数**: **100 機能**（全10カテゴリ・各10機能）
+- **誠実ステータス内訳**: **実装済み `implemented`: 90 機能** ／ **準備中 `preparing`: 10 機能**（`B9`, `F3`, `F4`, `F5`, `F7`, `F8`, `F10`, `H1`, `H3`, `H9`）＋ **Phase 4/5 拡張分析・制御群**
+- **アーキテクチャ方針**: IMSLP 11大名曲（チャイコフスキー／ラフマニノフ／リスト／ショパン／ドビュッシー／バッハ／サン＝サーンス／フォーレ／ブラームス／メンデルスゾーン）の深層音楽DNA解析に基づく1からの本格作曲・Meta-AI Director（詩的日本語＆欧文タイトル＋5楽式構想）・6軸100点満点レーダー自己進化・Disklavier超人間的ヴィルトゥオーゾ表現4技・`sakurai-virtuoso-direction` 演出統合・イン・アプリ知識グラフ＆進化ノート・`validate_system_integrity.py` & `scripts/run_ci_local.sh` ローカル完全検証
 
 > [!NOTE]
-> 上位スタジオ統合機能（IMSLP Deep DNA `/api/imslp/dna`、双方向パッセージ返奏 `/api/dialogue/passage_reply`、4手立体交差・88鍵カスケード・Vel 1倍音共鳴・オクターブ連打 `/api/studio/virtuoso_expression`、3幕舞台進行 `/api/studio/stage_act`、イン・アプリ知識グラフ `/api/obsidian/explorer`）は、本100機能カタログの各カテゴリと密結合して動作します。
+> `feature_matrix_100.py` 上でエンドポイント・データ結合または実機専用プロキシ経路が次期拡張対象である 10 機能は、`preparing`（UIバッジ：`準備中`）として誠実に分類しています。その他の 90 機能および Phase 4/5 で追加された 9タブ分析UI・実機安全プロファイル・6軸重み調整・ブラインドA/B・SQLiteログ検索機能は `/api/*` と連動して稼働します。
 
 | カテゴリ | 内容 | 機能番号 |
 |---|---|---|
@@ -50,7 +51,7 @@
 | 16 | `B6` | **裏での超高速まとめて進化（50世代ブースター）** | 数秒の裏計算で50世代分の進化を一気に進めて頭脳を鍛え上げます。 | `continuous_virtuoso.py` | `/api/virtuoso/hyper_evolve` |
 | 17 | `B7` | **途切れない先読みノンストップストリーミング** | 次の4〜8小節をバックグラウンドで先読み生成し無音空白をゼロにします。 | `continuous_virtuoso.py` | `/api/virtuoso/toggle_stream` |
 | 18 | `B8` | **「👍 今のフレーズいいね！」即時報酬フィードバック** | 人間の好感を即座にAIの嗜好ベクトルと進化スコアへ反映します。 | `continuous_virtuoso.py` | `/api/virtuoso/like` |
-| 19 | `B9` | **対話型モチーフ傾聴＆自然消化互換API** | 生演奏から聴き取った音高・リズムを既存語法へ自然に溶け込ませます。 | `continuous_virtuoso.py` | `/api/virtuoso/absorb_motif` |
+| 19 | `B9` | **🚧 [準備中] 対話型モチーフ傾聴＆自然消化互換API** | 生演奏から聴き取った音高・リズムを既存語法へ自然に溶け込ませる互換経路（`preparing` / 次期拡張予定）。 | `continuous_virtuoso.py` | `/api/virtuoso/absorb_motif` |
 | 20 | `B10` | **世代系統樹リアルタイム成長記録** | 第1世代から現在までどの枝が勝者として残ったかを可視化します。 | `actor_critic.py` | `/api/virtuoso/status` |
 
 ## カテゴリ C: 演奏表現コントロール＆ライブ演出 (10機能)
@@ -112,14 +113,14 @@
 |---|---|---|---|---|---|
 | 51 | `F1` | **🎻 チェロ開放弦(C-G-D-A)共鳴＆88鍵ウェーブ起動儀式** | チェロのC2/G2/D3/A3共鳴和音と全88鍵盤をなぞる美しい起動テスト演奏を行います。 | `feature_matrix_100.py` | `/api/cello/warmup_wave` |
 | 52 | `F2` | **リアルタイム・マイク音声ピッチ検出 (YIN)** | 生のチェロ演奏音をマイクで聴き取り瞬時に音程を推定します。 | `audio_monitor.py` | `/api/audio/toggle` |
-| 53 | `F3` | **チェロ音域対応 動的伴奏ジェネレーター** | チェロの現在音高に合わせて衝突しないピアノボイシングを生成します。 | `accompaniment_engine.py` | `/api/session/proxy_cello` |
-| 54 | `F4` | **双方向ヴィルトゥオーゾ・パッセージ対話（3モード返奏）** | ピアノ/チェロ演奏に対し「対位法応答 / リスト変奏 / 第1主題から大曲進化」で返奏します。 | `ai_classical_composer.py` / `continuous_virtuoso.py` | `/api/dialogue/passage_reply` |
-| 55 | `F5` | **代理チェロテスト演奏（マイク不要リハ）** | 実チェロが手元になくても仮想チェロ音源で共演テストができます。 | `accompaniment_engine.py` | `/api/session/proxy_cello` |
+| 53 | `F3` | **🚧 [準備中] チェロ音域対応 動的伴奏ジェネレーター** | チェロの現在音高に合わせて衝突しないピアノボイシングを生成する拡張経路（`preparing`）。 | `accompaniment_engine.py` | `/api/session/proxy_cello` |
+| 54 | `F4` | **🚧 [準備中] 双方向ヴィルトゥオーゾ・パッセージ対話（3モード返奏）** | ピアノ/チェロ演奏に対し「対位法応答 / リスト変奏 / 第1主題から大曲進化」で返奏（パッセージ応答比較グラフとは別ルート・`preparing`表示）。 | `ai_classical_composer.py` / `continuous_virtuoso.py` | `/api/dialogue/passage_reply` |
+| 55 | `F5` | **🚧 [準備中] 代理チェロテスト演奏（マイク不要リハ）** | 実チェロが手元になくても仮想チェロ音源で共演テストする拡張経路（`preparing`）。 | `accompaniment_engine.py` | `/api/session/proxy_cello` |
 | 56 | `F6` | **IMSLP巨匠レパートリー5段階最適化プレイリスト** | バッハ・ショパン・ドビュッシーの名曲分析データを実機安全版で試聴できます。 | `imslp_library.py` | `/api/imslp/list` |
-| 57 | `F7` | **チェロ音域との声部干渉回避フィルター** | チェロのメロディと同じ音域でピアノ内声が濁らないよう自動調整します。 | `accompaniment_engine.py` | `/api/session/toggle` |
-| 58 | `F8` | **A=442Hz / 440Hz オーケストラ調律チューニング情報** | チェロとの共演を想定した基準ピッチ表示と共鳴設計を提供します。 | `audio_monitor.py` | `/api/status` |
+| 57 | `F7` | **🚧 [準備中] チェロ音域との声部干渉回避フィルター** | チェロのメロディと同じ音域でピアノ内声が濁らないよう自動調整する拡張経路（`preparing`）。 | `accompaniment_engine.py` | `/api/session/toggle` |
+| 58 | `F8` | **🚧 [準備中] A=442Hz / 440Hz オーケストラ調律チューニング情報** | チェロとの共演を想定した基準ピッチ表示と共鳴設計の拡張経路（`preparing`）。 | `audio_monitor.py` | `/api/status` |
 | 59 | `F9` | **倍音共鳴サイレント打鍵（Silent Harmonic Halo）** | 発音しない極弱ベロシティ1打鍵でダンパーを浮かせチェロの倍音を響かせます。 | `disklavier_safety_guard.py` | `/api/safety/harmonic_halo` |
-| 60 | `F10` | **対話セクションMIDI直接保存機能** | チェロとの掛け合いで生まれたフレーズを個別のMIDIファイルとして保存します。 | `ai_classical_composer.py` | `/api/dialogue/export` |
+| 60 | `F10` | **🚧 [準備中] 対話セクションMIDI直接保存機能** | チェロとの掛け合いで生まれたフレーズを個別のMIDIファイルとして保存する拡張経路（`preparing`）。 | `ai_classical_composer.py` | `/api/dialogue/export` |
 
 ## カテゴリ G: 実機Disklavier安全保護（ハードウェア防衛） (10機能)
 
@@ -144,15 +145,15 @@
 
 | # | ID | 機能名 | 内容 | 主な実装モジュール | API / 操作入口 |
 |---|---|---|---|---|---|
-| 71 | `H1` | **バーチャル・ディスクラビア物理シミュレーションエンジン** | ハンマー運動、VDL遅延、弦振動、ダンパー位置をリアルタイム模擬します。 | `virtual_disklavier.py` | `/api/virtual_twin/config` |
+| 71 | `H1` | **🚧 [準備中] バーチャル・ディスクラビア物理シミュレーション設定API** | ハンマー運動・VDL遅延設定APIの次期拡張対象（シミュレーション本体とCoreAudio再生はH2/H8等で稼働中、`preparing`）。 | `virtual_disklavier.py` | `/api/virtual_twin/config` |
 | 72 | `H2` | **Mac CoreAudio内蔵ピアノシンセサイザー** | 実機ピアノが手元になくてもMacから豊かなピアノ音を直接再生します。 | `virtual_disklavier.py` | `/api/sound/enable` |
-| 73 | `H3` | **発音前5秒カウントダウン安全確認フロー** | 起動時に突然大音が鳴るのを防ぎ、優しいカウントダウン後に鳴らし始めます。 | `mission_control_server.py` | `/api/sound/countdown` |
+| 73 | `H3` | **🚧 [準備中] 発音前5秒カウントダウン安全確認フロー** | 起動時カウントダウン確認専用ルートの拡張対象（`preparing`）。 | `mission_control_server.py` | `/api/sound/countdown` |
 | 74 | `H4` | **88鍵盤リアルタイム打鍵＆キーカラー可視化** | 黒鍵・白鍵の押下状態と強弱・声部の違いを美しい鍵盤UIで表示します。 | `ui/index.html` | `/` |
 | 75 | `H5` | **和音の波紋（ポリフォニック・リップル）演出** | 弾かれた音の響きを空間的な光の輪としてステージ上に可視化します。 | `ui/index.html` | `/` |
 | 76 | `H6` | **右ペダル（CC#64）踏み込み量ゲージ** | 現在のダンパー開度とハーフペダル状態を滑らかなバーでリアルタイム監視します。 | `ui/index.html` | `/` |
 | 77 | `H7` | **同時保持ボイス数・電流負荷リアルタイム監視** | 安全上限20音に対する現在の保持数とソレノイド負荷率を常時表示します。 | `disklavier_safety_guard.py` | `/api/status` |
 | 78 | `H8` | **仮想VDL着弾タイムラグ可視化メーター** | 入力から実際の打弦までのミリ秒遅延と先読み補正効果を監視します。 | `virtual_disklavier.py` | `/api/status` |
-| 79 | `H9` | **サウンドON/OFF・音量トリム瞬間切替** | ライブや深夜の練習に合わせてボタン1つでVirtual Soundを消音できます。 | `virtual_disklavier.py` | `/api/virtual_twin/config` |
+| 79 | `H9` | **🚧 [準備中] サウンドON/OFF・音量トリム詳細設定ルート** | 専用詳細設定APIルートの次期拡張対象（基本ON/OFFは `/api/sound/enable` で稼働中、`preparing`）。 | `virtual_disklavier.py` | `/api/virtual_twin/config` |
 | 80 | `H10` | **Mac環境自動フォールバック（オーディオデバイス保護）** | オーディオ出力先が未接続でもUIが停止せず安全にシミュレーション継続します。 | `virtual_disklavier.py` | `/api/status` |
 
 ## カテゴリ I: 記憶ノート（Obsidian）＆ローカル自動チェック (10機能)
@@ -188,3 +189,15 @@
 | 98 | `J8` | **全100機能インタラクティブ機能エクスプローラー** | この100機能の全一覧を検索・フィルタ・ワンクリックお試し実行できます。 | `feature_matrix_100.py` | `/api/features/catalog` |
 | 99 | `J9` | **🩺 システム健康診断（日本語ヘルスチェック）** | CPU・SIMD・MIDIポート・音量・安全ガード・ローカル監査を日本語で診断します。 | `feature_matrix_100.py` | `/api/features/invoke` |
 | 100 | `J10` | **キーボードショートカット＆アクセシビリティ対応UI** | 単一行WAI-ARIAタブ、フォーカス管理、色覚コントラスト配慮で快適に操作できます。 | `ui/index.html` | `/` |
+
+---
+
+## 🔧 Phase 4 & 5 拡張機能群（セキュリティ・並列高速化・分析可視化）
+
+| カテゴリ | 機能概要 | 主なモジュール | API / 操作入口 |
+|---|---|---|---|
+| **セキュリティ防衛** | ループバック規定起動（`127.0.0.1`）・明示的 `--lan` 切替・セッション認証トークン（`X-Studio-Token` / `?token=` / QR Version 6）・パストラバーサル防止 | `mission_control_server.py` / `obsidian_brain.py` / `run_studio.sh` | `/ws` / `/api/*` |
+| **実機安全プロファイル** | Disklavier 機種別安全制限（`envious_mark_iv` / `dkv_e3_conservative` / `dcx_enspire_pro`）動的切替 | `disklavier_safety_guard.py` | `/api/safety/profile` |
+| **進化分析・重みチューナ** | 6軸スモールマルチプルズ・ピアノロール+CC#64連動描画・6軸評価重みスライダー＆プリセット・ブラインドA/B比較・人間 vs AI対話比較 | `actor_critic.py` / `continuous_virtuoso.py` / `ui/index.html` | `/api/virtuoso/weights` / `/api/timemachine/blind_ab` / `/api/dialogue/comparison` |
+| **性能・例外・実験分析** | Hybrid Condition スケジューラ監視・30Hz WS 差分圧縮監視・Obsidian mtime キャッシュ監視・捕捉例外テレメトリ・Exp1 VDLパラメータ手動調整 | `disklavier_safety_guard.py` / `mission_control_server.py` / `telemetry_store.py` | `/api/analytics/overview` / `/api/performance` |
+| **SQLiteログ管理** | WAL モード全テーブル横断検索（キーワード・最低スコアフィルタ）＆ CSV / JSON エクスポート | `telemetry_store.py` / `mission_control_server.py` | `/api/logs/search` / `/api/logs/export` |

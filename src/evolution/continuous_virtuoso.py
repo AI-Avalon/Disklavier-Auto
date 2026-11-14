@@ -28,7 +28,7 @@ from src.evolution.seed_ingestor import SeedMemoryPool
 from src.evolution.song_workspace import MultiSongWorkspaceManager, SongTabState
 from src.safety.disklavier_safety_guard import DisklavierSafetyGuard
 from src.safety.preflight_checker import LocalPreflightChecker
-from src.telemetry.telemetry_store import TelemetryStore
+from src.telemetry.telemetry_store import TelemetryStore, record_caught_exception
 
 
 CHARACTER_PRESETS: Dict[str, Dict[str, Any]] = {
@@ -179,7 +179,8 @@ class ContinuousVirtuosoEngine:
             from src.midi.imslp_library import IMSLPMasterworkLibrary
 
             self.imslp_dna: Dict[str, Any] = IMSLPMasterworkLibrary().extract_deep_musical_dna(persist=False)
-        except Exception:
+        except Exception as exc:
+            record_caught_exception("continuous_virtuoso.load_imslp_dna", exc)
             self.imslp_dna = {"total_masterworks": 11, "global_laws": {}, "masterwork_dna_profiles": []}
         self.latest_inspiration: Dict[str, Any] = HumanReferenceTeacher.compute_emergent_inspiration(
             self.generator.elite_genome.to_dict(),
@@ -200,6 +201,23 @@ class ContinuousVirtuosoEngine:
             "progress_pct": 0,
             "speed_multiplier": 30,
             "last_run_summary": "待機中（50世代高速トレーニング可能）",
+        }
+        self._blind_ab_state: Dict[str, Any] = {
+            "active": False,
+            "map_xy": {"X": "gen1_before", "Y": "latest_after"},
+            "revealed": False,
+            "last_vote": None,
+            "wins_evolved": 0,
+            "wins_before": 0,
+            "total_votes": 0,
+        }
+        self._last_dialogue_comparison: Dict[str, Any] = {
+            "has_dialogue": False,
+            "reply_mode": "liszt_rachmaninoff_virtuoso",
+            "source": "piano_midi",
+            "explanation_ja": "まだ対話フレーズが実行されていません。",
+            "human_events": [],
+            "ai_events": [],
         }
 
         self._sync_engine_from_active_tab()
@@ -424,6 +442,172 @@ class ContinuousVirtuosoEngine:
                 "b_gen": state_b["generation"],
                 "b_score": state_b["latest_score"],
             }
+
+    def get_critic_weights(self) -> Dict[str, Any]:
+        with self._lock:
+            return self.generator.critic.get_weights_snapshot()
+
+    def set_critic_weights(
+        self,
+        weights: Optional[Dict[str, float]] = None,
+        preset: Optional[str] = None,
+    ) -> Dict[str, Any]:
+        with self._lock:
+            snap = self.generator.critic.set_axis_weights(weights=weights, preset=preset)
+            self._ring_buffer.clear()
+            if self.streaming_active:
+                self._prepopulate_buffer_locked()
+        if self.telemetry_store:
+            self.telemetry_store.log_event(
+                f"🎛️ [CRITIC WEIGHTS] preset={snap['preset']} | {snap['axis_weights']}"
+            )
+        return {
+            "ok": True,
+            **snap,
+            "critic_weights": snap,
+            "message_ja": f"⚖️ 6軸評価重みを更新しました ({snap['preset']})",
+            "virtuoso": self.get_telemetry_snapshot(),
+        }
+
+    def blind_ab_action(self, action: str = "start", choice: Optional[str] = None) -> Dict[str, Any]:
+        """Blind A/B comparison randomizing X/Y between Gen 1 (before) and latest generation (after)."""
+        act = str(action or "start").lower().strip()
+        with self._lock:
+            tab = self.workspace.get_active_tab()
+            state_a = tab.ab_state_a
+            state_b = tab.ab_state_b
+            if not state_a or not state_b:
+                return {"ok": False, "message_ja": "比較用の履歴（第1世代と進化後）がまだ十分ではありません"}
+
+            def _events_for(tag: str) -> List[Dict[str, Any]]:
+                st = state_a if tag == "gen1_before" else state_b
+                return [dict(e) for e in st.get("events", [])]
+
+            if act == "start":
+                if self._rng.random() < 0.5:
+                    mapping = {"X": "gen1_before", "Y": "latest_after"}
+                else:
+                    mapping = {"X": "latest_after", "Y": "gen1_before"}
+                self._blind_ab_state.update(
+                    {"active": True, "map_xy": mapping, "revealed": False, "last_vote": None}
+                )
+                evs_x = _events_for(mapping["X"])
+                evs_y = _events_for(mapping["Y"])
+                combined = list(evs_x)
+                dur_x = max((float(e.get("time_offset_s", 0.0)) + float(e.get("duration_s", 0.4)) for e in evs_x), default=3.2)
+                for ev in evs_y:
+                    e2 = dict(ev)
+                    e2["time_offset_s"] = round(float(e2.get("time_offset_s", 0.0)) + dur_x + 0.55, 4)
+                    combined.append(e2)
+                if combined:
+                    self.play_events_now(combined, source_tag="blind_ab_both")
+                return {
+                    "ok": True,
+                    "action": "start",
+                    "revealed": False,
+                    "message_ja": "🎧 ブラインド再生開始（先に X、0.55秒後に Y を再生します。どちらがより音楽的か選んでください）",
+                    "blind_ab": self._blind_ab_public_view(revealed=False),
+                }
+
+            mapping = self._blind_ab_state["map_xy"]
+            if act in ("play_x", "play_y"):
+                slot = "X" if act == "play_x" else "Y"
+                evs = _events_for(mapping[slot])
+                if evs:
+                    self.play_events_now(evs, source_tag=f"blind_ab_{slot.lower()}")
+                return {
+                    "ok": True,
+                    "action": act,
+                    "revealed": bool(self._blind_ab_state["revealed"]),
+                    "message_ja": f"🔊 サンプル {slot} を再生中です。",
+                    "blind_ab": self._blind_ab_public_view(revealed=bool(self._blind_ab_state["revealed"])),
+                }
+
+            if act == "vote":
+                pick = str(choice or "X").upper().strip()
+                if pick not in ("X", "Y"):
+                    pick = "X"
+                picked_tag = mapping[pick]
+                evolved_won = picked_tag == "latest_after"
+                self._blind_ab_state["revealed"] = True
+                self._blind_ab_state["last_vote"] = pick
+                self._blind_ab_state["total_votes"] += 1
+                if evolved_won:
+                    self._blind_ab_state["wins_evolved"] += 1
+                else:
+                    self._blind_ab_state["wins_before"] += 1
+                # unlock briefly / reuse existing vote logic if evolved won
+                a_info = f"第{state_a['generation']}世代 ({state_a['latest_score']:.1f}点)"
+                b_info = f"第{state_b['generation']}世代 ({state_b['latest_score']:.1f}点)"
+                msg = (
+                    f"🏆 あなたの選択 {pick} は「進化後 {b_info}」でした！"
+                    if evolved_won
+                    else f"💡 あなたの選択 {pick} は「原石 {a_info}」でした！（進化後={b_info}）"
+                )
+                self.critic_logs.append(f"🎧 ブラインドA/B結果: {msg}")
+                return {
+                    "ok": True,
+                    "action": "vote",
+                    "revealed": True,
+                    "choice": pick,
+                    "evolved_won": evolved_won,
+                    "message_ja": msg,
+                    "blind_ab": {
+                        **self._blind_ab_public_view(revealed=True),
+                        "mapping": dict(mapping),
+                        "a_label": a_info,
+                        "b_label": b_info,
+                    },
+                }
+            return {"ok": False, "message_ja": f"未対応の操作: {act}"}
+
+    def _blind_ab_public_view(self, revealed: bool = False) -> Dict[str, Any]:
+        out = {
+            "active": bool(self._blind_ab_state["active"]),
+            "revealed": revealed,
+            "last_vote": self._blind_ab_state["last_vote"],
+            "wins_evolved": self._blind_ab_state["wins_evolved"],
+            "wins_before": self._blind_ab_state["wins_before"],
+            "total_votes": self._blind_ab_state["total_votes"],
+        }
+        if revealed:
+            out["mapping"] = dict(self._blind_ab_state["map_xy"])
+        return out
+
+    def get_dialogue_comparison(self) -> Dict[str, Any]:
+        with self._lock:
+            d = copy.deepcopy(self._last_dialogue_comparison)
+            human_notes = list(self.safety_guard.human_recorded_notes[-24:]) if self.safety_guard else []
+            if not d.get("human_events") and human_notes:
+                t0 = float(human_notes[0].get("time", 0.0))
+                d["human_events"] = [
+                    {
+                        "note": int(n.get("note", 60)),
+                        "velocity": int(n.get("velocity", 72)),
+                        "time_offset_s": round(max(0.0, float(n.get("time", t0)) - t0), 3),
+                        "duration_s": round(float(n.get("duration_s", 0.35)), 3),
+                        "source": n.get("source", "midi_in"),
+                    }
+                    for n in human_notes
+                ]
+            if not d.get("ai_events") and self.latest_events:
+                d["ai_events"] = list(self.latest_events[:48])
+
+            def _stats(evs: List[Dict[str, Any]]) -> Dict[str, Any]:
+                notes = [int(e.get("note", 0)) for e in evs if int(e.get("note", 0)) > 0]
+                vels = [int(e.get("velocity", 64)) for e in evs if int(e.get("note", 0)) > 0]
+                if not notes:
+                    return {"count": 0, "pitch_min": None, "pitch_max": None, "mean_vel": 0.0}
+                return {
+                    "count": len(notes),
+                    "pitch_min": min(notes),
+                    "pitch_max": max(notes),
+                    "mean_vel": round(sum(vels) / len(vels), 1),
+                }
+
+            d["human_stats"] = _stats(d.get("human_events", []))
+            d["ai_stats"] = _stats(d.get("ai_events", []))
+            return d
 
     def rescue_last_30s_to_tab(self, seconds: float = 35.0) -> Dict[str, Any]:
         """Extracts the last 30-60 seconds of live performed events into a pinned Song Tab."""
@@ -734,6 +918,18 @@ class ContinuousVirtuosoEngine:
         self._save_active_tab_from_engine()
         self.workspace.record_generation_state(self.workspace.get_active_tab(), res)
 
+        if self.telemetry_store is not None:
+            self.telemetry_store.record_generation_point(
+                tab_id=self.workspace.active_tab_id,
+                generation=int(gen_num),
+                best_score=float(res["best_score"]),
+                mean_score=float(res["mean_candidate_score"]),
+                radar_6axis=self.latest_radar_6axis,
+                is_hof=float(res["best_score"]) >= 86.0,
+                story_stage=str(stage[0]),
+                commentary_ja=str(eval_res.get("commentary_ja", "")),
+            )
+
         if record_to_obsidian and self.obsidian_brain is not None:
             try:
                 self.obsidian_brain.record_generation_result(
@@ -742,8 +938,8 @@ class ContinuousVirtuosoEngine:
                     arc_stage=stage,
                     evolution_history=self.evolution_history,
                 )
-            except Exception:
-                pass
+            except Exception as exc:
+                record_caught_exception("continuous_virtuoso.obsidian_record", exc)
 
         return {
             "generation": gen_num,
@@ -775,8 +971,8 @@ class ContinuousVirtuosoEngine:
                             self._active_slot = (
                                 "Buffer B" if self._active_slot == "Buffer A" else "Buffer A"
                             )
-            except Exception:
-                pass
+            except Exception as exc:
+                record_caught_exception("continuous_virtuoso.composer_loop", exc)
             time.sleep(0.12)
 
     def _playback_loop(self) -> None:
@@ -803,8 +999,8 @@ class ContinuousVirtuosoEngine:
 
                 if chunk_to_schedule is not None:
                     self._schedule_chunk_to_guard(chunk_to_schedule, start_t)
-            except Exception:
-                pass
+            except Exception as exc:
+                record_caught_exception("continuous_virtuoso.playback_loop", exc)
             time.sleep(0.04)
 
     def _dispatch_events_to_guard(
@@ -1060,6 +1256,29 @@ class ContinuousVirtuosoEngine:
             self.active_motif["melody_pitches"] = list(res["captured_pitches"][:8])
             if res["captured_pitches"]:
                 self.active_motif["tonic_midi"] = int(res["captured_pitches"][0])
+            normalized_human = []
+            t_cur = 0.0
+            for item in user_notes[:32]:
+                if isinstance(item, dict):
+                    n_val = int(item.get("note", 60))
+                    v_val = int(item.get("velocity", 72))
+                    dur = float(item.get("duration_s", 0.42))
+                    t_off = float(item.get("time_offset_s", t_cur))
+                else:
+                    n_val, v_val, dur, t_off = int(item), 72, 0.42, t_cur
+                normalized_human.append(
+                    {"note": n_val, "velocity": v_val, "time_offset_s": round(t_off, 3), "duration_s": round(dur, 3)}
+                )
+                t_cur = max(t_cur + dur * 0.9, t_off + dur * 0.9)
+            self._last_dialogue_comparison = {
+                "has_dialogue": True,
+                "timestamp": time.time(),
+                "reply_mode": reply_mode,
+                "source": source,
+                "explanation_ja": res["reply_explanation_ja"],
+                "human_events": normalized_human,
+                "ai_events": copy.deepcopy(res["events"][:64]),
+            }
             committed = self._commit_evolved_expression_locked(
                 events=res["events"],
                 mode_label_ja=f"双方向パッセージ対話 ({reply_mode})",
@@ -1189,6 +1408,8 @@ class ContinuousVirtuosoEngine:
                 "latest_events": list(self.latest_events)[:96],
                 "prev_events": list(active_tab.prev_generation_events)[:96],
                 "rescued_count": self._rescued_count,
+                "critic_weights": self.generator.critic.get_weights_snapshot(),
+                "blind_ab": self._blind_ab_public_view(revealed=bool(self._blind_ab_state["revealed"])),
             }
 
     def close(self) -> None:

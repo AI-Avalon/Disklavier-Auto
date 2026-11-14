@@ -20,7 +20,6 @@ from src.features.feature_matrix_100 import (
     export_events_to_wav,
     get_feature_catalog,
     get_lan_remote_info,
-    run_japanese_system_doctor,
 )
 from src.obsidian.obsidian_brain import ObsidianMusicalBrain
 from src.safety.disklavier_safety_guard import DisklavierSafetyGuard
@@ -33,12 +32,16 @@ async def _asgi_request(
     method: str,
     path: str,
     json_body: Dict[str, Any] | None = None,
+    include_token: bool = True,
 ) -> Tuple[int, bytes, Dict[str, str]]:
     """Invoke a FastAPI ASGI app directly without external HTTP client dependencies."""
     raw_body = json.dumps(json_body).encode("utf-8") if json_body is not None else b""
     headers = []
     if json_body is not None:
         headers.append((b"content-type", b"application/json"))
+    if include_token:
+        import src.server.mission_control_server as srv
+        headers.append((b"x-studio-token", srv.STUDIO_AUTH_TOKEN.encode("ascii")))
     scope = {
         "type": "http",
         "asgi": {"version": "3.0"},

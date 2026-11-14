@@ -11,9 +11,7 @@ Streams all progress, 3-second sound countdowns, live telemetry logs, and plots 
 from __future__ import annotations
 
 import json
-import math
 import time
-from pathlib import Path
 from typing import Dict, List
 
 import matplotlib
@@ -23,7 +21,7 @@ import numpy as np
 import requests
 from scipy.optimize import curve_fit
 
-from src.telemetry.telemetry_store import SUMMARY_JSON_PATH, TELEMETRY_DIR
+from src.telemetry.telemetry_store import SUMMARY_JSON_PATH, TELEMETRY_DIR, record_caught_exception
 
 
 API_BASE = "http://127.0.0.1:8765"
@@ -155,7 +153,8 @@ def run_experiment_1_vdl() -> Dict:
             maxfev=5000,
         )
         base_min, amp, decay = float(popt[0]), float(popt[1]), float(popt[2])
-    except Exception:
+    except Exception as exc:
+        record_caught_exception("exp1_vdl.curve_fit", exc)
         base_min, amp, decay = 22.4, 149.8, 0.0358
 
     pred_all = vdl_exp_func(vels, base_min, amp, decay) + (60.0 - notes) * abs(bass_slope)
@@ -331,7 +330,7 @@ def run_experiment_2_pedal() -> Dict:
         post_banner(
             code="HANDS_OFF",
             message=f"🦶 [Exp 2 実測中 ({idx+1}/{len(cc_values)})] 右ダンパーペダル CC#64={cc} のRT60残響時間と倍音濁りを計測中...",
-            sub_message=f"チェロ中低音域 (C3-G4) 和音打鍵 -> C519ML 減衰包絡線＆Sethares Roughness解析",
+            sub_message="チェロ中低音域 (C3-G4) 和音打鍵 -> C519ML 減衰包絡線＆Sethares Roughness解析",
             task_name=f"Exp 2 Half-Pedal Sweep: CC#64={cc}",
             progress_pct=pct,
         )
@@ -389,7 +388,7 @@ def run_experiment_2_pedal() -> Dict:
     ax2.tick_params(colors="#f43f5e", labelsize=9)
 
     lines = l1 + l2
-    labels = [l.get_label() for l in lines]
+    labels = [line.get_label() for line in lines]
     ax1.legend(lines, labels, loc="upper left", facecolor="#0f172a", edgecolor="#334155", labelcolor="#e2e8f0", fontsize=8.5)
     ax1.set_title(
         f"Exp 2: Half-Pedal (CC#64) RT60 vs Acoustic Roughness (Optimal CC#64={optimal_cc64})",
@@ -419,7 +418,8 @@ def main() -> None:
     if SUMMARY_JSON_PATH.exists():
         try:
             summary = json.loads(SUMMARY_JSON_PATH.read_text(encoding="utf-8"))
-        except Exception:
+        except Exception as exc:
+            record_caught_exception("exp1_exp2.load_summary", exc)
             summary = {}
 
     summary["exp1_vdl"] = exp1_res

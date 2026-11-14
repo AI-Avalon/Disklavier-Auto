@@ -14,9 +14,9 @@ from __future__ import annotations
 
 import asyncio
 import time
-from typing import Any, Callable, Dict, List, Tuple
+from typing import Any, Callable, Dict, List
 
-from src.audio.c519ml_monitor import C519MLAudioMonitor, midi_to_name
+from src.audio.c519ml_monitor import C519MLAudioMonitor
 from src.safety.disklavier_safety_guard import DisklavierSafetyGuard
 from src.telemetry.telemetry_store import TelemetryStore
 

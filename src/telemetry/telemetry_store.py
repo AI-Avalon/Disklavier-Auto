@@ -7,14 +7,45 @@ and manages the real-time User Action Banner, Countdown Protocol, Agent Brain St
 from __future__ import annotations
 
 import json
-import os
+import logging
 import sqlite3
 import subprocess
 import threading
 import time
-from collections import deque
+from collections import Counter, deque
 from pathlib import Path
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Optional, Tuple
+
+
+logger = logging.getLogger("disklavier_auto")
+
+_EXC_LOCK = threading.Lock()
+_EXC_COUNTS: Counter[str] = Counter()
+_EXC_RECENT: deque = deque(maxlen=30)
+
+
+def record_caught_exception(context: str, exc: BaseException) -> None:
+    """Log a caught non-fatal exception and track its occurrence count for diagnostics."""
+    msg = f"[{context}] {type(exc).__name__}: {exc}"
+    logger.warning(msg)
+    with _EXC_LOCK:
+        _EXC_COUNTS[context] += 1
+        _EXC_RECENT.append(
+            {
+                "ts": round(time.time(), 3),
+                "context": context,
+                "error": f"{type(exc).__name__}: {exc}",
+            }
+        )
+
+
+def get_exception_metrics() -> Dict[str, Any]:
+    with _EXC_LOCK:
+        return {
+            "total_count": int(sum(_EXC_COUNTS.values())),
+            "by_context": dict(_EXC_COUNTS),
+            "recent_errors": list(_EXC_RECENT)[-10:],
+        }
 
 
 BASE_DIR = Path(__file__).resolve().parents[2]
@@ -24,9 +55,41 @@ DB_PATH = TELEMETRY_DIR / "rd_studio.sqlite"
 SUMMARY_JSON_PATH = TELEMETRY_DIR / "experiments_summary.json"
 
 
+def resolve_safe_path(
+    base_dir: Path,
+    rel_path: str,
+    allowed_suffixes: Tuple[str, ...] = (),
+) -> Optional[Path]:
+    """
+    Resolve a user-supplied relative path safely inside `base_dir`.
+    Rejects null bytes, empty strings, absolute paths, `..` traversal, symlink escapes,
+    and extensions outside `allowed_suffixes`.
+    """
+    if not rel_path or not isinstance(rel_path, str):
+        return None
+    if "\x00" in rel_path or rel_path.startswith(("/", "\\")):
+        return None
+    raw_p = Path(rel_path)
+    if raw_p.is_absolute():
+        return None
+    try:
+        base_real = base_dir.resolve()
+        cand_real = (base_real / raw_p).resolve()
+    except Exception as exc:
+        record_caught_exception("telemetry_store.resolve_safe_path", exc)
+        return None
+    if not cand_real.is_relative_to(base_real):
+        return None
+    if allowed_suffixes and cand_real.suffix.lower() not in tuple(s.lower() for s in allowed_suffixes):
+        return None
+    return cand_real
+
+
 class TelemetryStore:
     def __init__(self) -> None:
         self._lock = threading.RLock()
+        self._git_commits_cache: List[Dict[str, str]] = []
+        self._git_commits_ts: float = 0.0
         self._init_db()
 
         # Global Top Banner State
@@ -97,6 +160,7 @@ class TelemetryStore:
 
     def _init_db(self) -> None:
         with sqlite3.connect(DB_PATH) as conn:
+            conn.execute("PRAGMA journal_mode=WAL;")
             conn.execute(
                 """
                 CREATE TABLE IF NOT EXISTS vdl_measurements (
@@ -140,14 +204,45 @@ class TelemetryStore:
                 )
                 """
             )
+            conn.execute(
+                """
+                CREATE TABLE IF NOT EXISTS generation_history (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    timestamp REAL,
+                    tab_id TEXT,
+                    generation INTEGER,
+                    best_score REAL,
+                    mean_score REAL,
+                    melody_beauty REAL,
+                    harmonic_drama REAL,
+                    counterpoint REAL,
+                    human_realism REAL,
+                    virtuoso_brilliance REAL,
+                    disklavier_safety REAL,
+                    is_hof INTEGER DEFAULT 0,
+                    story_stage TEXT,
+                    commentary_ja TEXT
+                )
+                """
+            )
+            conn.execute(
+                """
+                CREATE TABLE IF NOT EXISTS event_logs (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    timestamp REAL,
+                    level TEXT,
+                    message TEXT
+                )
+                """
+            )
             conn.commit()
 
     def _load_summary_json(self) -> Dict[str, Any]:
         if SUMMARY_JSON_PATH.exists():
             try:
                 return json.loads(SUMMARY_JSON_PATH.read_text(encoding="utf-8"))
-            except Exception:
-                pass
+            except Exception as exc:
+                record_caught_exception("telemetry_store._load_summary_json", exc)
         return {
             "exp1_vdl": {"status": "waiting", "points": [], "chord_sync_test": []},
             "exp2_pedal": {"status": "waiting", "points": [], "optimal_curve": {}},
@@ -164,11 +259,20 @@ class TelemetryStore:
                 encoding="utf-8",
             )
 
-    def log_event(self, message: str) -> None:
+    def log_event(self, message: str, level: str = "INFO") -> None:
         ts = time.strftime("%H:%M:%S")
         line = f"[{ts}] {message}"
         with self._lock:
             self.terminal_logs.append(line)
+        try:
+            with sqlite3.connect(DB_PATH, timeout=1.0) as conn:
+                conn.execute(
+                    "INSERT INTO event_logs (timestamp, level, message) VALUES (?, ?, ?)",
+                    (time.time(), level, message),
+                )
+                conn.commit()
+        except Exception as exc:
+            record_caught_exception("telemetry_store.log_event_db", exc)
 
     def update_banner(
         self,
@@ -305,7 +409,335 @@ class TelemetryStore:
             )
             conn.commit()
 
+    def record_generation_point(
+        self,
+        tab_id: str,
+        generation: int,
+        best_score: float,
+        mean_score: float,
+        radar_6axis: Dict[str, Any],
+        is_hof: bool = False,
+        story_stage: str = "",
+        commentary_ja: str = "",
+    ) -> None:
+        try:
+            with sqlite3.connect(DB_PATH, timeout=1.0) as conn:
+                conn.execute(
+                    """
+                    INSERT INTO generation_history (
+                        timestamp, tab_id, generation, best_score, mean_score,
+                        melody_beauty, harmonic_drama, counterpoint, human_realism,
+                        virtuoso_brilliance, disklavier_safety, is_hof, story_stage, commentary_ja
+                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    """,
+                    (
+                        time.time(),
+                        str(tab_id),
+                        int(generation),
+                        float(best_score),
+                        float(mean_score),
+                        float(radar_6axis.get("melody_beauty", 70.0)),
+                        float(radar_6axis.get("harmonic_drama", 70.0)),
+                        float(radar_6axis.get("counterpoint", 70.0)),
+                        float(radar_6axis.get("human_realism", 70.0)),
+                        float(radar_6axis.get("virtuoso_brilliance", 70.0)),
+                        float(radar_6axis.get("disklavier_safety", 98.0)),
+                        1 if is_hof else 0,
+                        str(story_stage),
+                        str(commentary_ja)[:300],
+                    ),
+                )
+                conn.commit()
+        except Exception as exc:
+            record_caught_exception("telemetry_store.record_generation_point", exc)
+
+    def get_generation_history_db(
+        self, tab_id: Optional[str] = None, limit: int = 120
+    ) -> List[Dict[str, Any]]:
+        try:
+            with sqlite3.connect(DB_PATH, timeout=1.0) as conn:
+                conn.row_factory = sqlite3.Row
+                if tab_id:
+                    rows = conn.execute(
+                        "SELECT * FROM generation_history WHERE tab_id = ? ORDER BY id DESC LIMIT ?",
+                        (tab_id, int(limit)),
+                    ).fetchall()
+                else:
+                    rows = conn.execute(
+                        "SELECT * FROM generation_history ORDER BY id DESC LIMIT ?",
+                        (int(limit),),
+                    ).fetchall()
+                return [dict(r) for r in reversed(rows)]
+        except Exception as exc:
+            record_caught_exception("telemetry_store.get_generation_history_db", exc)
+            return []
+
+    def seed_generation_history_if_empty(
+        self,
+        evolution_history: Optional[List[Dict[str, Any]]] = None,
+        tab_id: str = "tab_main",
+    ) -> int:
+        """Populate generation_history table on boot if empty so SQLite charts & search work immediately."""
+        try:
+            with sqlite3.connect(DB_PATH, timeout=1.0) as conn:
+                cnt = conn.execute("SELECT COUNT(*) FROM generation_history").fetchone()[0]
+                if int(cnt) > 0:
+                    return int(cnt)
+            points = list(evolution_history or [])
+            if not points:
+                points = [
+                    {
+                        "generation": 1,
+                        "best_score": 72.0,
+                        "mean_score": 69.5,
+                        "arc_stage": "Exposition",
+                        "chord_label": "初期動機スケッチ",
+                    }
+                ]
+            for idx, p in enumerate(points):
+                self.record_generation_point(
+                    tab_id=tab_id,
+                    generation=int(p.get("generation", idx + 1)),
+                    best_score=float(p.get("best_score", 72.0)),
+                    mean_score=float(p.get("mean_score", 69.5)),
+                    radar_6axis=p.get("radar_6axis")
+                    or {
+                        "melody_beauty": 74.0 + idx * 1.2,
+                        "harmonic_drama": 71.0 + idx * 1.4,
+                        "counterpoint": 70.0 + idx * 1.5,
+                        "human_realism": 73.0 + idx * 1.3,
+                        "virtuoso_brilliance": 69.0 + idx * 1.5,
+                        "disklavier_safety": 98.0,
+                    },
+                    is_hof=float(p.get("best_score", 0.0)) >= 85.0,
+                    story_stage=str(p.get("arc_stage", "Exposition")),
+                    commentary_ja=str(p.get("chord_label", "初期進化チェックポイント")),
+                )
+            self.log_event_db("INFO", f"SQLite generation_history seeded ({len(points)} rows).")
+            return len(points)
+        except Exception as exc:
+            record_caught_exception("telemetry_store.seed_generation_history_if_empty", exc)
+            return 0
+
+    def get_vdl_measurements_db(self, limit: int = 120) -> List[Dict[str, Any]]:
+        try:
+            with sqlite3.connect(DB_PATH, timeout=1.0) as conn:
+                conn.row_factory = sqlite3.Row
+                rows = conn.execute(
+                    "SELECT * FROM vdl_measurements ORDER BY id DESC LIMIT ?",
+                    (int(limit),),
+                ).fetchall()
+                return [dict(r) for r in reversed(rows)]
+        except Exception as exc:
+            record_caught_exception("telemetry_store.get_vdl_measurements_db", exc)
+            return []
+
+    def get_pedal_measurements_db(self, limit: int = 80) -> List[Dict[str, Any]]:
+        try:
+            with sqlite3.connect(DB_PATH, timeout=1.0) as conn:
+                conn.row_factory = sqlite3.Row
+                rows = conn.execute(
+                    "SELECT * FROM pedal_measurements ORDER BY id DESC LIMIT ?",
+                    (int(limit),),
+                ).fetchall()
+                return [dict(r) for r in reversed(rows)]
+        except Exception as exc:
+            record_caught_exception("telemetry_store.get_pedal_measurements_db", exc)
+            return []
+
+    def search_sqlite_logs(
+        self,
+        query: str = "",
+        category: str = "all",
+        limit: int = 100,
+        min_score: Optional[float] = None,
+    ) -> List[Dict[str, Any]]:
+        q_like = f"%{query.strip()}%"
+        results: List[Dict[str, Any]] = []
+        lim = max(1, min(500, int(limit)))
+        cat = category
+        if cat == "generations":
+            cat = "generation_history"
+        elif cat == "events":
+            cat = "event_logs"
+        elif cat == "vdl":
+            cat = "vdl_measurements"
+        elif cat == "experiments":
+            cat = "experiment_runs"
+        try:
+            with sqlite3.connect(DB_PATH, timeout=1.0) as conn:
+                conn.row_factory = sqlite3.Row
+                if cat in ("all", "event_logs"):
+                    rows = conn.execute(
+                        "SELECT id, timestamp, level, message FROM event_logs "
+                        "WHERE message LIKE ? OR level LIKE ? ORDER BY id DESC LIMIT ?",
+                        (q_like, q_like, lim),
+                    ).fetchall()
+                    for r in rows:
+                        results.append(
+                            {
+                                "id": r["id"],
+                                "source": "event_logs",
+                                "timestamp": r["timestamp"],
+                                "category": r["level"],
+                                "summary": r["message"],
+                                "detail": "",
+                            }
+                        )
+                if cat in ("all", "generation_history"):
+                    if min_score is not None:
+                        rows = conn.execute(
+                            "SELECT id, timestamp, tab_id, generation, best_score, is_hof, story_stage, commentary_ja "
+                            "FROM generation_history "
+                            "WHERE best_score >= ? AND (commentary_ja LIKE ? OR story_stage LIKE ? OR tab_id LIKE ?) "
+                            "ORDER BY id DESC LIMIT ?",
+                            (float(min_score), q_like, q_like, q_like, lim),
+                        ).fetchall()
+                    else:
+                        rows = conn.execute(
+                            "SELECT id, timestamp, tab_id, generation, best_score, is_hof, story_stage, commentary_ja "
+                            "FROM generation_history "
+                            "WHERE commentary_ja LIKE ? OR story_stage LIKE ? OR tab_id LIKE ? "
+                            "ORDER BY id DESC LIMIT ?",
+                            (q_like, q_like, q_like, lim),
+                        ).fetchall()
+                    for r in rows:
+                        hof_tag = " 🏆HoF" if r["is_hof"] else ""
+                        results.append(
+                            {
+                                "id": r["id"],
+                                "source": "generation_history",
+                                "timestamp": r["timestamp"],
+                                "category": f"Gen {r['generation']}{hof_tag}",
+                                "summary": f"[{r['tab_id']}] {r['best_score']:.1f}点 ({r['story_stage']})",
+                                "detail": r["commentary_ja"],
+                                "best_score": r["best_score"],
+                            }
+                        )
+                if cat in ("all", "vdl_measurements"):
+                    rows = conn.execute(
+                        "SELECT id, timestamp, midi_note, note_name, velocity, measured_latency_ms, predicted_latency_ms, mode "
+                        "FROM vdl_measurements "
+                        "WHERE note_name LIKE ? OR mode LIKE ? ORDER BY id DESC LIMIT ?",
+                        (q_like, q_like, lim),
+                    ).fetchall()
+                    for r in rows:
+                        results.append(
+                            {
+                                "id": r["id"],
+                                "source": "vdl_measurements",
+                                "timestamp": r["timestamp"],
+                                "category": f"VDL ({r['mode']})",
+                                "summary": f"{r['note_name']} (MIDI {r['midi_note']}, Vel {r['velocity']}): {r['measured_latency_ms']:.1f}ms",
+                                "detail": f"pred={r['predicted_latency_ms']:.1f}ms",
+                            }
+                        )
+                if cat in ("all", "pedal_measurements"):
+                    rows = conn.execute(
+                        "SELECT id, timestamp, cc64_value, register_name, rt60_s, acoustic_roughness, clarity_score "
+                        "FROM pedal_measurements "
+                        "WHERE register_name LIKE ? ORDER BY id DESC LIMIT ?",
+                        (q_like, lim),
+                    ).fetchall()
+                    for r in rows:
+                        results.append(
+                            {
+                                "id": r["id"],
+                                "source": "pedal_measurements",
+                                "timestamp": r["timestamp"],
+                                "category": f"CC#64={r['cc64_value']}",
+                                "summary": f"{r['register_name']}: RT60={r['rt60_s']:.2f}s / Rough={r['acoustic_roughness']:.3f}",
+                                "detail": f"Clarity={r['clarity_score']:.2f}",
+                            }
+                        )
+                if cat in ("all", "experiment_runs"):
+                    rows = conn.execute(
+                        "SELECT id, timestamp, experiment_id, title, notes FROM experiment_runs "
+                        "WHERE title LIKE ? OR notes LIKE ? OR experiment_id LIKE ? ORDER BY id DESC LIMIT ?",
+                        (q_like, q_like, q_like, lim),
+                    ).fetchall()
+                    for r in rows:
+                        results.append(
+                            {
+                                "id": r["id"],
+                                "source": "experiment_runs",
+                                "timestamp": r["timestamp"],
+                                "category": r["experiment_id"],
+                                "summary": r["title"],
+                                "detail": r["notes"],
+                            }
+                        )
+            results.sort(key=lambda x: float(x.get("timestamp") or 0.0), reverse=True)
+            return results[:lim]
+        except Exception as exc:
+            record_caught_exception("telemetry_store.search_sqlite_logs", exc)
+            return []
+
+    def export_sqlite_rows(
+        self,
+        table: str = "generation_history",
+        query: str = "",
+        min_score: Optional[float] = None,
+        limit: int = 200,
+    ) -> List[Dict[str, Any]]:
+        lim = max(1, min(1000, int(limit)))
+        q_like = f"%{query.strip()}%"
+        valid_tables = (
+            "generation_history",
+            "vdl_measurements",
+            "pedal_measurements",
+            "experiment_runs",
+            "event_logs",
+        )
+        if table not in valid_tables:
+            return self.search_sqlite_logs(query=query, category="all", limit=lim, min_score=min_score)
+        try:
+            with sqlite3.connect(DB_PATH, timeout=1.0) as conn:
+                conn.row_factory = sqlite3.Row
+                if table == "generation_history":
+                    if min_score is not None:
+                        rows = conn.execute(
+                            "SELECT * FROM generation_history "
+                            "WHERE best_score >= ? AND (commentary_ja LIKE ? OR story_stage LIKE ? OR tab_id LIKE ?) "
+                            "ORDER BY id DESC LIMIT ?",
+                            (float(min_score), q_like, q_like, q_like, lim),
+                        ).fetchall()
+                    else:
+                        rows = conn.execute(
+                            "SELECT * FROM generation_history "
+                            "WHERE commentary_ja LIKE ? OR story_stage LIKE ? OR tab_id LIKE ? "
+                            "ORDER BY id DESC LIMIT ?",
+                            (q_like, q_like, q_like, lim),
+                        ).fetchall()
+                elif table == "vdl_measurements":
+                    rows = conn.execute(
+                        "SELECT * FROM vdl_measurements WHERE note_name LIKE ? OR mode LIKE ? ORDER BY id DESC LIMIT ?",
+                        (q_like, q_like, lim),
+                    ).fetchall()
+                elif table == "pedal_measurements":
+                    rows = conn.execute(
+                        "SELECT * FROM pedal_measurements WHERE register_name LIKE ? ORDER BY id DESC LIMIT ?",
+                        (q_like, lim),
+                    ).fetchall()
+                elif table == "experiment_runs":
+                    rows = conn.execute(
+                        "SELECT * FROM experiment_runs WHERE title LIKE ? OR notes LIKE ? OR experiment_id LIKE ? ORDER BY id DESC LIMIT ?",
+                        (q_like, q_like, q_like, lim),
+                    ).fetchall()
+                else:
+                    rows = conn.execute(
+                        "SELECT * FROM event_logs WHERE message LIKE ? OR level LIKE ? ORDER BY id DESC LIMIT ?",
+                        (q_like, q_like, lim),
+                    ).fetchall()
+                return [dict(r) for r in rows]
+        except Exception as exc:
+            record_caught_exception("telemetry_store.export_sqlite_rows", exc)
+            return []
+
     def get_git_commits(self, limit: int = 8) -> List[Dict[str, str]]:
+        now = time.monotonic()
+        if self._git_commits_cache and (now - self._git_commits_ts) < 30.0:
+            return list(self._git_commits_cache[:limit])
         try:
             out = subprocess.check_output(
                 [
@@ -326,9 +758,12 @@ class TelemetryStore:
                     commits.append(
                         {"hash": parts[0], "time": parts[1], "message": parts[2]}
                     )
+            self._git_commits_cache = commits
+            self._git_commits_ts = now
             return commits
-        except Exception:
-            return []
+        except Exception as exc:
+            record_caught_exception("telemetry_store.get_git_commits", exc)
+            return list(self._git_commits_cache[:limit])
 
     def get_snapshot(self) -> Dict[str, Any]:
         with self._lock:
@@ -339,4 +774,5 @@ class TelemetryStore:
                 "latest_code_diff": self.latest_code_diff,
                 "git_commits": self.get_git_commits(8),
                 "experiments": self.experiments_data,
+                "exception_metrics": get_exception_metrics(),
             }

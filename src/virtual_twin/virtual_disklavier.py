@@ -23,11 +23,18 @@ import math
 import threading
 import time
 from collections import deque
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from typing import Any, Dict, List, Optional, Tuple
 
 import numpy as np
-import sounddevice as sd
+
+from src.telemetry.telemetry_store import record_caught_exception
+
+try:
+    import sounddevice as sd
+except Exception as exc:  # pragma: no cover - optional audio dependency
+    sd = None  # type: ignore[assignment]
+    record_caught_exception("virtual_disklavier.import_sounddevice", exc)
 
 
 @dataclass
@@ -412,12 +419,22 @@ class VirtualDisklavierTwin:
         self.audio_device_name: str = "Initializing..."
         self.audio_stream_active: bool = False
 
-        self._stream: Optional[sd.OutputStream] = None
+        self._stream: Optional[Any] = None
         self._fallback_thread: Optional[threading.Thread] = None
         self._running = True
         self._start_audio_engine()
 
     def _start_audio_engine(self) -> None:
+        if sd is None:
+            self.audio_device_name = "Software Twin Buffer (sounddevice unavailable)"
+            self.audio_stream_active = False
+            self._fallback_thread = threading.Thread(
+                target=self._software_audio_loop,
+                name="VirtualTwinSoftAudio",
+                daemon=True,
+            )
+            self._fallback_thread.start()
+            return
         try:
             devices = sd.query_devices()
             out_idx = sd.default.device[1]
@@ -688,5 +705,5 @@ class VirtualDisklavierTwin:
             try:
                 self._stream.stop()
                 self._stream.close()
-            except Exception:
-                pass
+            except Exception as exc:
+                record_caught_exception("virtual_disklavier.close", exc)

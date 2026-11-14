@@ -9,10 +9,17 @@ import math
 import threading
 import time
 from collections import deque
-from typing import Callable, Dict, List, Optional, Tuple
+from typing import Any, Callable, Dict, List, Optional, Tuple
 
 import numpy as np
-import sounddevice as sd
+
+from src.telemetry.telemetry_store import record_caught_exception
+
+try:
+    import sounddevice as sd
+except Exception as exc:  # pragma: no cover - optional audio dependency
+    sd = None  # type: ignore[assignment]
+    record_caught_exception("c519ml_monitor.import_sounddevice", exc)
 
 
 NOTE_NAMES = ["C", "C#", "D", "D#", "E", "F", "F#", "G", "G#", "A", "A#", "B"]
@@ -113,11 +120,13 @@ class C519MLAudioMonitor:
         self.recorded_motif_events: List[dict] = []
         self._motif_start_time: float = 0.0
 
-        self.stream: Optional[sd.InputStream] = None
+        self.stream: Optional[Any] = None
         self._running = False
         self.start()
 
     def _find_device(self) -> Optional[int]:
+        if sd is None:
+            return None
         try:
             devices = sd.query_devices()
             for idx, dev in enumerate(devices):
@@ -132,13 +141,17 @@ class C519MLAudioMonitor:
             if default_in is not None and default_in >= 0:
                 self.device_name = devices[default_in]["name"]
                 return default_in
-        except Exception:
-            pass
+        except Exception as exc:
+            record_caught_exception("c519ml_monitor.find_device", exc)
         return None
 
     def start(self) -> bool:
         self.device_index = self._find_device()
         self._running = True
+        if sd is None:
+            self.device_name = "Simulated Audio (sounddevice unavailable)"
+            threading.Thread(target=self._fallback_loop, daemon=True).start()
+            return False
         try:
             self.stream = sd.InputStream(
                 samplerate=self.SAMPLE_RATE,

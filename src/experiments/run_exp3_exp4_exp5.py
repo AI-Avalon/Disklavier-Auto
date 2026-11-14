@@ -12,7 +12,7 @@ from __future__ import annotations
 
 import json
 import time
-from typing import Dict, List
+from typing import Dict
 
 import matplotlib
 matplotlib.use("Agg")
@@ -22,7 +22,7 @@ import requests
 
 from src.composer.ai_classical_composer import compose_4voice_classical_piece, save_piece_to_smf, COMPOSED_MIDI_PATH
 from src.session.accompaniment_engine import get_proxy_cello_test_passage
-from src.telemetry.telemetry_store import SUMMARY_JSON_PATH, TELEMETRY_DIR
+from src.telemetry.telemetry_store import SUMMARY_JSON_PATH, TELEMETRY_DIR, record_caught_exception
 
 
 API_BASE = "http://127.0.0.1:8765"
@@ -352,7 +352,6 @@ def run_experiment_4_accompaniment_ab() -> Dict:
 
     labels = [r["label"] for r in ab_results]
     scores = [r["clarity_score"] for r in ab_results]
-    roughs = [r["measured_roughness"] * 100.0 for r in ab_results]
     x = np.arange(len(labels))
     w = 0.36
 
@@ -521,7 +520,8 @@ def main() -> None:
     if SUMMARY_JSON_PATH.exists():
         try:
             summary = json.loads(SUMMARY_JSON_PATH.read_text(encoding="utf-8"))
-        except Exception:
+        except Exception as exc:
+            record_caught_exception("exp3_4_5.load_summary", exc)
             summary = {}
 
     summary["exp3_proxy_bleed"] = exp3

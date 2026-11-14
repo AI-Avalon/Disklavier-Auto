@@ -9,14 +9,13 @@ into `data/telemetry/seed_genome_pool.json`.
 from __future__ import annotations
 
 import json
-import math
 from pathlib import Path
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Optional, Tuple
 
 import mido
 
 from src.midi.imslp_library import IMSLP_DIR, KB_JSON_PATH, _build_masterwork_definitions
-from src.telemetry.telemetry_store import BASE_DIR, TELEMETRY_DIR
+from src.telemetry.telemetry_store import BASE_DIR, TELEMETRY_DIR, record_caught_exception
 
 
 SEED_POOL_PATH = TELEMETRY_DIR / "seed_genome_pool.json"
@@ -154,7 +153,8 @@ class SeedMemoryPool:
         if KB_JSON_PATH.exists():
             try:
                 self.kb_metadata = json.loads(KB_JSON_PATH.read_text(encoding="utf-8"))
-            except Exception:
+            except Exception as exc:
+                record_caught_exception("seed_ingestor.load_kb_metadata", exc)
                 self.kb_metadata = {}
 
         masterworks = {p["id"]: p for p in _build_masterwork_definitions()}

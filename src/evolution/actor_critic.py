@@ -12,20 +12,19 @@ from __future__ import annotations
 import atexit
 import copy
 import math
-import os
+import multiprocessing
 import random
 import uuid
 from concurrent.futures import ProcessPoolExecutor, ThreadPoolExecutor
 from dataclasses import asdict, dataclass, field
 from typing import Any, Dict, List, Optional, Tuple
 
-import numpy as np
-
 from src.evolution.human_reference_teacher import (
     HumanReferenceTeacher,
     compute_hardware_acceleration_info,
 )
 from src.safety.preflight_checker import LocalPreflightChecker
+from src.telemetry.telemetry_store import record_caught_exception
 from src.virtual_twin.virtual_disklavier import DisklavierPhysicsSimulator
 
 
@@ -581,6 +580,92 @@ class MultiObjectiveCritic:
       5. ピアノ実機への優しさ・物理適性 (0..20)
     """
 
+    AXIS_KEYS = (
+        "melody_beauty",
+        "harmonic_drama",
+        "counterpoint",
+        "human_realism",
+        "virtuoso_brilliance",
+        "disklavier_safety",
+    )
+
+    WEIGHT_PRESETS: Dict[str, Dict[str, float]] = {
+        "balanced": {
+            "melody_beauty": 1.0,
+            "harmonic_drama": 1.0,
+            "counterpoint": 1.0,
+            "human_realism": 1.0,
+            "virtuoso_brilliance": 1.0,
+            "disklavier_safety": 1.0,
+        },
+        "cantabile": {
+            "melody_beauty": 1.6,
+            "harmonic_drama": 1.2,
+            "counterpoint": 1.0,
+            "human_realism": 1.5,
+            "virtuoso_brilliance": 0.6,
+            "disklavier_safety": 1.1,
+        },
+        "virtuoso": {
+            "melody_beauty": 1.1,
+            "harmonic_drama": 1.3,
+            "counterpoint": 1.1,
+            "human_realism": 0.9,
+            "virtuoso_brilliance": 1.7,
+            "disklavier_safety": 1.0,
+        },
+        "safe_concert": {
+            "melody_beauty": 1.1,
+            "harmonic_drama": 0.9,
+            "counterpoint": 1.0,
+            "human_realism": 1.2,
+            "virtuoso_brilliance": 0.7,
+            "disklavier_safety": 1.8,
+        },
+        "contrapuntal": {
+            "melody_beauty": 1.1,
+            "harmonic_drama": 1.1,
+            "counterpoint": 1.8,
+            "human_realism": 1.0,
+            "virtuoso_brilliance": 0.9,
+            "disklavier_safety": 1.0,
+        },
+    }
+
+    def __init__(self) -> None:
+        self.active_weight_preset: str = "balanced"
+        self.axis_weights: Dict[str, float] = dict(self.WEIGHT_PRESETS["balanced"])
+
+    def set_axis_weights(
+        self,
+        weights: Optional[Dict[str, float]] = None,
+        preset: Optional[str] = None,
+    ) -> Dict[str, Any]:
+        if preset and preset in self.WEIGHT_PRESETS:
+            self.active_weight_preset = preset
+            base = dict(self.WEIGHT_PRESETS[preset])
+            if weights:
+                for k, v in weights.items():
+                    if k in self.AXIS_KEYS:
+                        base[k] = max(0.2, min(2.5, float(v)))
+            self.axis_weights = base
+        elif weights:
+            self.active_weight_preset = "custom"
+            for k, v in weights.items():
+                if k in self.AXIS_KEYS:
+                    self.axis_weights[k] = max(0.2, min(2.5, float(v)))
+        return self.get_weights_snapshot()
+
+    def get_weights_snapshot(self) -> Dict[str, Any]:
+        w_sum = max(0.01, sum(self.axis_weights.values()))
+        norm = {k: round(v / w_sum, 4) for k, v in self.axis_weights.items()}
+        return {
+            "preset": self.active_weight_preset,
+            "axis_weights": {k: round(v, 3) for k, v in self.axis_weights.items()},
+            "normalized_weights": norm,
+            "presets": self.WEIGHT_PRESETS,
+        }
+
     def score_candidate(
         self,
         candidate: Dict[str, Any],
@@ -699,12 +784,6 @@ class MultiObjectiveCritic:
         playability_score = round(max(0.0, min(20.0, float(phys["physics_score_20"]))), 2)
 
         raw_total = vl_score + motivic_score + harm_score + artic_score + playability_score
-        # Ensure Gen 1 feels like a raw unpolished gem (~70..75) so visible evolution shines
-        if gen_num == 1:
-            raw_total = min(74.8, raw_total)
-        elif gen_num == 2:
-            raw_total = min(80.5, raw_total)
-        total_score = round(max(55.0, min(99.6, raw_total)), 1)
 
         inspiration = HumanReferenceTeacher.compute_emergent_inspiration(
             genome_dict=genome_dict,
@@ -718,6 +797,19 @@ class MultiObjectiveCritic:
             human_scores=human_scores,
             physics_report=phys,
         )
+
+        w_sum = max(0.01, sum(self.axis_weights[k] for k in self.AXIS_KEYS))
+        weighted_6axis = (
+            sum(float(radar_6axis.get(k, 75.0)) * self.axis_weights[k] for k in self.AXIS_KEYS)
+            / w_sum
+        )
+        blended_total = 0.78 * raw_total + 0.22 * weighted_6axis
+        # Ensure Gen 1 feels like a raw unpolished gem (~70..75) so visible evolution shines
+        if gen_num == 1:
+            blended_total = min(74.8, blended_total)
+        elif gen_num == 2:
+            blended_total = min(80.5, blended_total)
+        total_score = round(max(55.0, min(99.6, blended_total)), 1)
 
         commentary_ja, subtitle_ja, thought_ja = self._build_japanese_narratives(
             total_score=total_score,
@@ -850,9 +942,11 @@ class ParallelCandidateGenerator:
         if self._proc_pool is None:
             try:
                 self._proc_pool = ProcessPoolExecutor(
-                    max_workers=min(4, max(2, self.accel_info["worker_count"] // 2))
+                    max_workers=min(4, max(2, self.accel_info["worker_count"] // 2)),
+                    mp_context=multiprocessing.get_context("spawn"),
                 )
-            except Exception:
+            except Exception as exc:
+                record_caught_exception("actor_critic.init_process_pool", exc)
                 self._proc_pool = None
         return self._proc_pool
 
@@ -860,14 +954,14 @@ class ParallelCandidateGenerator:
         if self._proc_pool is not None:
             try:
                 self._proc_pool.shutdown(wait=False, cancel_futures=True)
-            except Exception:
-                pass
+            except Exception as exc:
+                record_caught_exception("actor_critic.shutdown_proc_pool", exc)
             self._proc_pool = None
         if self._thread_pool is not None:
             try:
                 self._thread_pool.shutdown(wait=False)
-            except Exception:
-                pass
+            except Exception as exc:
+                record_caught_exception("actor_critic.shutdown_thread_pool", exc)
             self._thread_pool = None
 
     def set_expression(self, x: float, y: float) -> None:
@@ -955,13 +1049,15 @@ class ParallelCandidateGenerator:
         if pool is not None:
             try:
                 evaluated = list(pool.map(_evaluate_candidate_worker, tasks))
-            except Exception:
+            except Exception as exc:
+                record_caught_exception("actor_critic.process_pool_map", exc)
                 evaluated = []
         if not evaluated:
             try:
                 tpool = self._get_thread_pool()
                 evaluated = list(tpool.map(_evaluate_candidate_worker, tasks))
-            except Exception:
+            except Exception as exc:
+                record_caught_exception("actor_critic.thread_pool_map", exc)
                 evaluated = [_evaluate_candidate_worker(t) for t in tasks]
 
         for idx, cand in enumerate(evaluated):

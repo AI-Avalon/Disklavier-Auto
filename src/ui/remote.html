@@ -292,6 +292,15 @@
   <div id="toast" class="toast"></div>
 
   <script>
+    const STUDIO_TOKEN = new URLSearchParams(location.search).get('token')
+      || (document.querySelector('meta[name="studio-token"]') && document.querySelector('meta[name="studio-token"]').content)
+      || '';
+    function apiHeaders(extra = {}) {
+      const h = { ...extra };
+      if (STUDIO_TOKEN) h['X-Studio-Token'] = STUDIO_TOKEN;
+      return h;
+    }
+
     const toastEl = document.getElementById('toast');
     let toastTimer = null;
     function showToast(msg) {
@@ -305,7 +314,7 @@
       try {
         const res = await fetch(path, {
           method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
+          headers: apiHeaders({ 'Content-Type': 'application/json' }),
           body: JSON.stringify(body || {})
         });
         const data = await res.json();

@@ -19,7 +19,7 @@ from typing import Any, Dict, List, Optional
 
 from src.evolution.actor_critic import MusicalGenome
 from src.evolution.human_reference_teacher import HumanReferenceTeacher
-from src.telemetry.telemetry_store import TELEMETRY_DIR
+from src.telemetry.telemetry_store import TELEMETRY_DIR, record_caught_exception
 
 
 WORKSPACE_SNAPSHOT_PATH = TELEMETRY_DIR / "workspace_snapshot.json"
@@ -411,7 +411,8 @@ class MultiSongWorkspaceManager:
                 self.tab_order = [tid for tid in raw.get("tab_order", []) if tid in loaded_tabs]
                 self.active_tab_id = raw.get("active_tab_id", self.tab_order[0])
                 return True
-        except Exception:
+        except Exception as exc:
+            record_caught_exception("song_workspace.load_from_disk", exc)
             return False
         return False
 

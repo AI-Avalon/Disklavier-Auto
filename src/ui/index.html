@@ -256,9 +256,9 @@
       border: 1px solid transparent;
       background: transparent;
       color: var(--text-dim);
-      padding: 9px 15px;
+      padding: 8px 12px;
       border-radius: 10px 10px 0 0;
-      font-size: 0.92rem;
+      font-size: 0.85rem;
       font-weight: 800;
       cursor: pointer;
       white-space: nowrap;
@@ -322,6 +322,7 @@
     }
     .badge-ok { background: var(--green-soft); border-color: rgba(16, 185, 129, 0.5); color: #a7f3d0; }
     .badge-gold { background: var(--accent-soft); border-color: rgba(245, 158, 11, 0.5); color: #fde68a; }
+    .badge-warn { background: rgba(245, 158, 11, 0.14); border-color: rgba(245, 158, 11, 0.55); color: #fcd34d; }
 
     /* Live Story Subtitle & Thought Bubble */
     .story-hero {
@@ -572,6 +573,78 @@
     }
     .toast.show { opacity: 1; }
 
+    /* Analytical & Configuration Panels (Phase 4 & 5) */
+    .analytics-kpi-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(210px, 1fr));
+      gap: 10px;
+      margin-bottom: 12px;
+    }
+    .preset-row {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 6px;
+      margin-bottom: 10px;
+    }
+    .preset-chip {
+      padding: 5px 10px;
+      border-radius: 999px;
+      border: 1px solid var(--border-strong);
+      background: var(--surface);
+      color: var(--text-dim);
+      font-size: 0.78rem;
+      font-weight: 700;
+      cursor: pointer;
+    }
+    .preset-chip.active {
+      background: var(--accent-soft);
+      border-color: var(--accent);
+      color: #fef3c7;
+    }
+    .weight-slider-row {
+      display: grid;
+      grid-template-columns: 150px 1fr 48px;
+      align-items: center;
+      gap: 8px;
+      font-size: 0.81rem;
+      margin-bottom: 6px;
+    }
+    select.studio-select, input[type="number"].studio-num {
+      background: #0c111b;
+      color: var(--text);
+      border: 1px solid var(--border-strong);
+      border-radius: 9px;
+      padding: 7px 10px;
+      font-family: inherit;
+      font-size: 0.84rem;
+    }
+    .log-table-wrap {
+      max-height: 390px;
+      overflow: auto;
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      background: #0b0f18;
+    }
+    .log-table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 0.8rem;
+    }
+    .log-table th, .log-table td {
+      padding: 8px 10px;
+      border-bottom: 1px solid rgba(40, 52, 77, 0.55);
+      text-align: left;
+      vertical-align: top;
+    }
+    .log-table th {
+      position: sticky;
+      top: 0;
+      background: #121928;
+      color: var(--accent-bright);
+      font-weight: 800;
+      z-index: 1;
+    }
+
     @media (prefers-reduced-motion: reduce) {
       *, *::before, *::after { transition: none !important; animation: none !important; }
     }
@@ -634,6 +707,10 @@
       <button id="vtab-cello" class="main-tab" role="tab" aria-selected="false">🎻 チェロ共演＆IMSLP深層解析</button>
       <button id="vtab-notes" class="main-tab" role="tab" aria-selected="false">📓 イン・アプリ進化ノート＆知識グラフ</button>
       <button id="vtab-features" class="main-tab" role="tab" aria-selected="false">✨ 全100機能＆健康診断</button>
+      <button id="vtab-safety" class="main-tab" role="tab" aria-selected="false">🛡️ 安全監視＆実機プロファイル</button>
+      <button id="vtab-experiments" class="main-tab" role="tab" aria-selected="false">🧪 VDL校正＆ペダル実験</button>
+      <button id="vtab-perf" class="main-tab" role="tab" aria-selected="false">⚡ 高速化・ジッター＆通信診断</button>
+      <button id="vtab-logs" class="main-tab" role="tab" aria-selected="false">🗄️ SQLiteログ検索＆書き出し</button>
     </nav>
 
     <!-- ================================================================ -->
@@ -824,6 +901,66 @@
           <div id="critic-logs" style="font-size:0.83rem; color:var(--text); max-height:220px; overflow:auto; background:#0b0f18; padding:10px; border-radius:10px; display:flex; flex-direction:column; gap:6px;"></div>
         </div>
       </div>
+
+      <div class="panel-grid-2" style="margin-top:12px;">
+        <div class="card">
+          <div class="card-hd">
+            <span class="card-title">📊 6軸 世代別推移（スモールマルチプルズ）</span>
+            <button class="btn" onclick="saveCanvasPng('canvas-evo-6small', '6axis_trends.png')">🖼️ PNG保存</button>
+          </div>
+          <canvas id="canvas-evo-6small" class="stage-canvas" width="600" height="250"></canvas>
+        </div>
+
+        <div class="card">
+          <div class="card-hd">
+            <span class="card-title">🎹 ピアノロール ＆ 右ペダル(CC#64) 連動解析</span>
+            <button class="btn" onclick="saveCanvasPng('canvas-pianoroll', 'piano_roll_pedal.png')">🖼️ PNG保存</button>
+          </div>
+          <canvas id="canvas-pianoroll" class="stage-canvas" width="600" height="250"></canvas>
+        </div>
+      </div>
+
+      <div class="panel-grid-2" style="margin-top:12px;">
+        <div class="card">
+          <div class="card-hd">
+            <span class="card-title">⚖️ 表現・安全バランス 6軸評価重みチューナー</span>
+            <button class="btn btn-gold" onclick="applyCriticSliderWeights()">✅ 重みを適用</button>
+          </div>
+          <div id="weight-presets-row" class="preset-row">
+            <button class="preset-chip active" data-preset="balanced" onclick="setCriticPreset('balanced')">バランス標準</button>
+            <button class="preset-chip" data-preset="cantabile" onclick="setCriticPreset('cantabile')">歌うレガート重視</button>
+            <button class="preset-chip" data-preset="virtuoso" onclick="setCriticPreset('virtuoso')">華麗な超絶技巧</button>
+            <button class="preset-chip" data-preset="safe_concert" onclick="setCriticPreset('safe_concert')">実機保護最優先</button>
+            <button class="preset-chip" data-preset="contrapuntal" onclick="setCriticPreset('contrapuntal')">対位法アンサンブル</button>
+          </div>
+          <div id="weight-sliders-box">
+            <div class="weight-slider-row"><span>旋律の美しさ</span><input id="w-melody_beauty" type="range" class="studio-slider" min="0.2" max="2.5" step="0.05" value="1.0" oninput="document.getElementById('wv-melody_beauty').textContent=this.value"><strong id="wv-melody_beauty">1.0</strong></div>
+            <div class="weight-slider-row"><span>和声のドラマ</span><input id="w-harmonic_drama" type="range" class="studio-slider" min="0.2" max="2.5" step="0.05" value="1.0" oninput="document.getElementById('wv-harmonic_drama').textContent=this.value"><strong id="wv-harmonic_drama">1.0</strong></div>
+            <div class="weight-slider-row"><span>対位法</span><input id="w-counterpoint" type="range" class="studio-slider" min="0.2" max="2.5" step="0.05" value="1.0" oninput="document.getElementById('wv-counterpoint').textContent=this.value"><strong id="wv-counterpoint">1.0</strong></div>
+            <div class="weight-slider-row"><span>人間らしい自然さ</span><input id="w-human_realism" type="range" class="studio-slider" min="0.2" max="2.5" step="0.05" value="1.0" oninput="document.getElementById('wv-human_realism').textContent=this.value"><strong id="wv-human_realism">1.0</strong></div>
+            <div class="weight-slider-row"><span>派手さ・超絶技巧</span><input id="w-virtuoso_brilliance" type="range" class="studio-slider" min="0.2" max="2.5" step="0.05" value="1.0" oninput="document.getElementById('wv-virtuoso_brilliance').textContent=this.value"><strong id="wv-virtuoso_brilliance">1.0</strong></div>
+            <div class="weight-slider-row"><span>Disklavier適性</span><input id="w-disklavier_safety" type="range" class="studio-slider" min="0.2" max="2.5" step="0.05" value="1.0" oninput="document.getElementById('wv-disklavier_safety').textContent=this.value"><strong id="wv-disklavier_safety">1.0</strong></div>
+          </div>
+        </div>
+
+        <div class="card">
+          <div class="card-hd">
+            <span class="card-title">🎭 ブラインド A/B 進化比較テスト（X vs Y）</span>
+            <span id="blind-ab-score-badge" class="badge badge-gold">投票 0勝 / 0勝</span>
+          </div>
+          <p style="font-size:0.82rem; color:var(--text-dim); margin-top:0;">
+            第1世代（進化前）と最新世代（進化後）を順番を伏せて再生し、耳だけで優れている方を選びます。
+          </p>
+          <div style="display:flex; flex-wrap:wrap; gap:6px; margin-bottom:10px;">
+            <button class="btn btn-gold" onclick="triggerBlindAb('start')">🎲 ランダム再生開始 (X→Y)</button>
+            <button class="btn" onclick="triggerBlindAb('play_x')">🔊 Xを聴く</button>
+            <button class="btn" onclick="triggerBlindAb('play_y')">🔊 Yを聴く</button>
+            <button class="btn btn-primary" onclick="triggerBlindAb('vote', 'X')">🏆 Xが良い</button>
+            <button class="btn btn-primary" onclick="triggerBlindAb('vote', 'Y')">🏆 Yが良い</button>
+          </div>
+          <div id="blind-ab-box" class="mutation-caption">「ランダム再生開始」を押すと、X と Y のブラインド比較が始まります。</div>
+        </div>
+      </div>
     </section>
 
     <!-- ================================================================ -->
@@ -859,6 +996,18 @@
           </div>
           <div id="imslp-list" style="display:flex; flex-direction:column; gap:8px; max-height:460px; overflow:auto;"></div>
         </div>
+      </div>
+
+      <div class="card" style="margin-top:12px;">
+        <div class="card-hd">
+          <span class="card-title">🤝 人間演奏（チェロ / MIDI入力） vs AIピアニスト応答 比較グラフ</span>
+          <div style="display:flex; gap:6px;">
+            <button class="btn" onclick="refreshDialogueComparison()">🔄 比較を更新</button>
+            <button class="btn" onclick="saveCanvasPng('canvas-dialogue-compare', 'dialogue_comparison.png')">🖼️ PNG保存</button>
+          </div>
+        </div>
+        <div id="dialogue-compare-summary" style="font-size:0.83rem; color:var(--text-dim); margin-bottom:8px;">パッセージ応答や対話演奏を行うと、人間のフレーズ輪郭とAIの対話応答を比較表示します。</div>
+        <canvas id="canvas-dialogue-compare" class="stage-canvas" width="980" height="230"></canvas>
       </div>
     </section>
 
@@ -921,6 +1070,169 @@
         <div id="feature-grid" class="feature-grid"></div>
       </div>
     </section>
+
+    <!-- ================================================================ -->
+    <!-- PANEL 6: SAFETY TELEMETRY & DISKLAVIER HARDWARE PROFILE          -->
+    <!-- ================================================================ -->
+    <section id="vpanel-safety" role="tabpanel" aria-labelledby="vtab-safety" hidden>
+      <div class="card" style="margin-bottom:12px;">
+        <div class="card-hd">
+          <span class="card-title">🎹 Yamaha Disklavier 実機安全プロファイル切り替え</span>
+          <span id="safety-profile-badge" class="badge badge-ok">Enspire / Mark IV</span>
+        </div>
+        <div id="safety-profile-row" class="preset-row">
+          <button class="preset-chip active" data-profile="envious_mark_iv" onclick="setSafetyProfile('envious_mark_iv')">ENSPIRE Pro / Mark IV (標準)</button>
+          <button class="preset-chip" data-profile="dkv_e3_conservative" onclick="setSafetyProfile('dkv_e3_conservative')">Disklavier E3 / 古典機 (慎重保護)</button>
+          <button class="preset-chip" data-profile="dcx_enspire_pro" onclick="setSafetyProfile('dcx_enspire_pro')">DCFX / Concert Pro (高速応答)</button>
+        </div>
+        <div id="safety-profile-summary" style="font-size:0.82rem; color:var(--text-dim);">同時保持上限・連打防止間隔・ソレノイド保護しきい値を実機モデルに合わせて調整します。</div>
+      </div>
+
+      <div class="panel-grid-2" style="margin-bottom:12px;">
+        <div class="card">
+          <div class="card-hd">
+            <span class="card-title">📈 リアルタイム同時発音数 ＆ 打鍵速度（音/秒）</span>
+            <button class="btn" onclick="saveCanvasPng('canvas-safety-rates', 'safety_rates.png')">🖼️ PNG保存</button>
+          </div>
+          <canvas id="canvas-safety-rates" class="stage-canvas" width="600" height="240"></canvas>
+        </div>
+
+        <div class="card">
+          <div class="card-hd">
+            <span class="card-title">📊 同音連打間隔(ms) ＆ ベロシティ分布ヒストグラム</span>
+            <button class="btn" onclick="saveCanvasPng('canvas-retrigger-hist', 'retrigger_velocity_hist.png')">🖼️ PNG保存</button>
+          </div>
+          <canvas id="canvas-retrigger-hist" class="stage-canvas" width="600" height="240"></canvas>
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="card-hd">
+          <span class="card-title">🛡️ ソレノイド保護ガード 累積介入統計</span>
+          <button class="btn" onclick="saveCanvasPng('canvas-guard-stats', 'safety_guard_interventions.png')">🖼️ PNG保存</button>
+        </div>
+        <canvas id="canvas-guard-stats" class="stage-canvas" width="980" height="210"></canvas>
+      </div>
+    </section>
+
+    <!-- ================================================================ -->
+    <!-- PANEL 7: VDL CALIBRATION & HALF-PEDAL ACOUSTIC EXPERIMENTS       -->
+    <!-- ================================================================ -->
+    <section id="vpanel-experiments" role="tabpanel" aria-labelledby="vtab-experiments" hidden>
+      <div class="panel-grid-2" style="margin-bottom:12px;">
+        <div class="card">
+          <div class="card-hd">
+            <span class="card-title">⏱️ Exp1: VDL(機械発音遅延) 実測値 vs 理論フィット曲線</span>
+            <button class="btn" onclick="saveCanvasPng('canvas-vdl-curve', 'exp1_vdl_curve.png')">🖼️ PNG保存</button>
+          </div>
+          <canvas id="canvas-vdl-curve" class="stage-canvas" width="600" height="250" style="margin-bottom:10px;"></canvas>
+          <div style="display:flex; flex-wrap:wrap; gap:8px; align-items:center; font-size:0.8rem;">
+            <label>基礎遅延(ms): <input id="vdl-base-min" type="number" class="studio-num" step="1" value="35" style="width:74px;"></label>
+            <label>弱打振幅(ms): <input id="vdl-amp" type="number" class="studio-num" step="5" value="180" style="width:74px;"></label>
+            <label>減衰係数: <input id="vdl-decay" type="number" class="studio-num" step="0.002" value="0.032" style="width:78px;"></label>
+            <label>低音補正: <input id="vdl-bass" type="number" class="studio-num" step="0.05" value="0.35" style="width:74px;"></label>
+            <button class="btn btn-gold" onclick="applyVdlCalibration()">💾 パラメータ適用</button>
+          </div>
+        </div>
+
+        <div class="card">
+          <div class="card-hd">
+            <span class="card-title">🫧 Exp2: 右ペダル(CC#64)深度別 残響時間(RT60) ＆ 濁り係数</span>
+            <button class="btn" onclick="saveCanvasPng('canvas-pedal-rt60', 'exp2_pedal_rt60.png')">🖼️ PNG保存</button>
+          </div>
+          <canvas id="canvas-pedal-rt60" class="stage-canvas" width="600" height="250"></canvas>
+          <div id="pedal-opt-note" style="font-size:0.8rem; color:var(--text-dim); margin-top:8px;">チェロ中低音との調和点（推奨上限 CC#64 ≈ 58）をリアルタイム参照できます。</div>
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="card-hd">
+          <span class="card-title">🔬 Exp3・Exp4・Exp5 音響／対話／作曲評価サマリー</span>
+          <button class="btn" onclick="refreshAnalyticsDashboard()">🔄 最新実験データを再読込</button>
+        </div>
+        <div id="exp345-summary" class="analytics-kpi-grid"></div>
+      </div>
+    </section>
+
+    <!-- ================================================================ -->
+    <!-- PANEL 8: PERFORMANCE, CONDITION SCHEDULER JITTER & DIAGNOSTICS   -->
+    <!-- ================================================================ -->
+    <section id="vpanel-perf" role="tabpanel" aria-labelledby="vtab-perf" hidden>
+      <div class="panel-grid-2" style="margin-bottom:12px;">
+        <div class="card">
+          <div class="card-hd">
+            <span class="card-title">📡 30Hz WebSocket 差分圧縮トラフィック (KB/s)</span>
+            <button class="btn" onclick="saveCanvasPng('canvas-perf-bw', 'ws_bandwidth.png')">🖼️ PNG保存</button>
+          </div>
+          <canvas id="canvas-perf-bw" class="stage-canvas" width="600" height="235"></canvas>
+        </div>
+
+        <div class="card">
+          <div class="card-hd">
+            <span class="card-title">⌚ Condition起床ジッター ＆ Preflight監査レイテンシ</span>
+            <button class="btn" onclick="saveCanvasPng('canvas-perf-jitter', 'scheduler_jitter.png')">🖼️ PNG保存</button>
+          </div>
+          <canvas id="canvas-perf-jitter" class="stage-canvas" width="600" height="235"></canvas>
+        </div>
+      </div>
+
+      <div class="panel-grid-2">
+        <div class="card">
+          <div class="card-hd">
+            <span class="card-title">⚙️ Apple Silicon 並列計算・Obsidian mtime キャッシュ状態</span>
+            <button class="btn" onclick="refreshAnalyticsDashboard()">🔄 再計測</button>
+          </div>
+          <div id="perf-cache-summary" class="md-viewer-box" style="max-height:200px;"></div>
+        </div>
+
+        <div class="card">
+          <div class="card-hd">
+            <span class="card-title">🩺 捕捉済み例外・フォールバック記録（サイレント握り潰しゼロ）</span>
+          </div>
+          <div id="perf-exceptions-box" class="md-viewer-box" style="max-height:200px;">例外は記録されていません。</div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ================================================================ -->
+    <!-- PANEL 9: SQLITE TELEMETRY SEARCH & CSV/JSON EXPORT               -->
+    <!-- ================================================================ -->
+    <section id="vpanel-logs" role="tabpanel" aria-labelledby="vtab-logs" hidden>
+      <div class="card">
+        <div class="card-hd">
+          <span class="card-title">🗄️ SQLite WAL 実験・進化・イベントログ検索 ＆ エクスポート</span>
+          <span id="sql-logs-badge" class="badge badge-gold">0件</span>
+        </div>
+        <div style="display:flex; flex-wrap:wrap; gap:8px; align-items:center; margin-bottom:10px;">
+          <select id="log-table-select" class="studio-select">
+            <option value="all">すべて統合検索</option>
+            <option value="generation_history">generation_history (世代進化)</option>
+            <option value="event_logs">event_logs (システムイベント)</option>
+            <option value="vdl_measurements">vdl_measurements (VDL計測)</option>
+            <option value="pedal_measurements">pedal_measurements (ペダル計測)</option>
+            <option value="experiment_runs">experiment_runs (自動実験)</option>
+          </select>
+          <input id="log-search-q" type="text" placeholder="キーワード検索 (例: legato, FAURE, C4)" style="max-width:250px;" />
+          <label style="font-size:0.8rem;">最低スコア: <input id="log-min-score" type="number" class="studio-num" placeholder="例: 75" step="1" style="width:82px;"></label>
+          <button class="btn btn-primary" onclick="loadSqlLogs()">🔍 検索</button>
+          <button class="btn" onclick="exportSqlLogs('csv')">⬇️ CSV保存</button>
+          <button class="btn" onclick="exportSqlLogs('json')">⬇️ JSON保存</button>
+        </div>
+        <div class="log-table-wrap">
+          <table class="log-table">
+            <thead>
+              <tr>
+                <th>種別</th>
+                <th>日時</th>
+                <th>概要</th>
+                <th>詳細</th>
+              </tr>
+            </thead>
+            <tbody id="sql-logs-tbody"></tbody>
+          </table>
+        </div>
+      </div>
+    </section>
   </div>
 
   <!-- IN-APP MUSICAL KNOWLEDGE GRAPH & EVOLUTION NOTE VIEWER MODAL -->
@@ -973,6 +1285,17 @@
         if (panel) panel.hidden = !selected;
       });
       tabBtn.scrollIntoView({ block: 'nearest', inline: 'nearest' });
+      const tid = tabBtn.id;
+      if (tid === 'vtab-evolve' || tid === 'vtab-safety' || tid === 'vtab-experiments' || tid === 'vtab-perf') {
+        if (typeof refreshAnalyticsDashboard === 'function') refreshAnalyticsDashboard();
+        if (tid === 'vtab-evolve' && typeof loadCriticWeights === 'function') loadCriticWeights();
+      } else if (tid === 'vtab-cello') {
+        if (typeof refreshDialogueComparison === 'function') refreshDialogueComparison();
+      } else if (tid === 'vtab-logs') {
+        if (typeof loadSqlLogs === 'function') loadSqlLogs();
+      } else if (tid === 'vtab-notes') {
+        if (typeof loadObsidianGraph === 'function') loadObsidianGraph();
+      }
     }
     viewTabs.forEach((btn, idx) => {
       btn.addEventListener('click', () => activateViewTab(btn));
@@ -981,6 +1304,15 @@
         if (e.key === 'ArrowLeft') { const prv = viewTabs[(idx - 1 + viewTabs.length) % viewTabs.length]; prv.focus(); activateViewTab(prv); }
       });
     });
+
+    const STUDIO_TOKEN = new URLSearchParams(location.search).get('token')
+      || (document.querySelector('meta[name="studio-token"]') && document.querySelector('meta[name="studio-token"]').content)
+      || '';
+    function apiHeaders(extra = {}) {
+      const h = { ...extra };
+      if (STUDIO_TOKEN) h['X-Studio-Token'] = STUDIO_TOKEN;
+      return h;
+    }
 
     const toastEl = document.getElementById('toast');
     let toastTimer = null;
@@ -996,7 +1328,7 @@
       try {
         const res = await fetch(path, {
           method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
+          headers: apiHeaders({ 'Content-Type': 'application/json' }),
           body: JSON.stringify(body)
         });
         const data = await res.json();
@@ -1004,7 +1336,7 @@
         if (notice) showToast(notice);
         if (data.virtuoso) renderVirtuoso(data.virtuoso);
         else {
-          fetch('/api/virtuoso/status').then(r => r.json()).then(d => renderVirtuoso(d.virtuoso)).catch(() => {});
+          fetch('/api/virtuoso/status', { headers: apiHeaders() }).then(r => r.json()).then(d => renderVirtuoso(d.virtuoso)).catch(() => {});
         }
         return data;
       } catch (e) {
@@ -1184,14 +1516,17 @@
     }
 
     let lastScoreEventsKey = '';
+    let latestScoreData = null;
     async function refreshSheetMusic(force = false) {
       try {
         const res = await fetch('/api/score/current');
         const score = await res.json();
+        latestScoreData = score;
         const sig = `${score.notes.length}:${score.mutated_count}:${score.notes[0]?.pitch}:${score.notes[score.notes.length - 1]?.pitch}`;
         if (!force && sig === lastScoreEventsKey) return;
         lastScoreEventsKey = sig;
         drawGrandStaff(score);
+        if (typeof drawPianoRollWithPedal === 'function') drawPianoRollWithPedal();
       } catch (_) {}
     }
 
@@ -1537,8 +1872,18 @@
         pill.className = 'status-banner ' + (b.code === 'SOUND_COUNTDOWN' ? 'countdown' : (b.code === 'ACTION_NEEDED' ? 'action' : 'ready'));
       }
       if (frame.safety) {
-        document.getElementById('badge-voices').textContent = `保持 ${frame.safety.active_voices_count || 0}/20音`;
-        document.getElementById('badge-nps').textContent = `速度 ${frame.safety.notes_per_sec || 0}音/秒 (上限28)`;
+        const vLim = latestSafetyLimits.voices || 20;
+        const npsLim = latestSafetyLimits.nps || 28;
+        const curV = frame.safety.active_voices_count || 0;
+        const curNps = frame.safety.notes_per_sec || 0;
+        document.getElementById('badge-voices').textContent = `保持 ${curV}/${vLim}音`;
+        document.getElementById('badge-nps').textContent = `速度 ${curNps}音/秒 (上限${npsLim})`;
+        safetyRateHistory.push({ voices: curV, nps: curNps, pedal: Number(frame.safety.pedal_cc64 || 0) });
+        if (safetyRateHistory.length > 90) safetyRateHistory.shift();
+        const safetyPanel = document.getElementById('vpanel-safety');
+        if (safetyPanel && !safetyPanel.hidden && (safetyRateHistory.length % 6 === 0)) {
+          if (typeof drawSafetyRatesChart === 'function') drawSafetyRatesChart();
+        }
         const rawKeys = frame.safety.active_keys || {};
         const keyVelMap = {};
         Object.entries(rawKeys).forEach(([k, info]) => {
@@ -1562,13 +1907,596 @@
         document.getElementById('cello-live-readout').textContent =
           notes ? `検出中のチェロ音高: ${notes} (BPM ${Math.round(a.estimated_bpm || 72)})` : '検出中の音高: 待機中';
       }
-      if (frame.virtuoso) renderVirtuoso(frame.virtuoso);
+      if (frame.virtuoso) {
+        cachedVirtuoso = frame.virtuoso_delta
+          ? Object.assign({}, cachedVirtuoso, frame.virtuoso)
+          : frame.virtuoso;
+        renderVirtuoso(cachedVirtuoso);
+      }
+      if (frame.obsidian_meta && frame.obsidian_meta.stats) {
+        const metaKey = JSON.stringify(frame.obsidian_meta.stats);
+        if (lastObsidianMetaKey && metaKey !== lastObsidianMetaKey) {
+          if (typeof loadObsidianGraph === 'function') loadObsidianGraph();
+        }
+        lastObsidianMetaKey = metaKey;
+      }
     }
 
     // WebSocket Live Stream with Auto-Reconnect
+    let cachedVirtuoso = {};
+    let lastObsidianMetaKey = '';
+    const safetyRateHistory = [];
+    const latestSafetyLimits = { voices: 20, nps: 28 };
+    let latestAnalyticsData = null;
+
+    function escHtml(s) {
+      return String(s ?? '')
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;');
+    }
+
+    function saveCanvasPng(canvasId, filename) {
+      const cv = document.getElementById(canvasId);
+      if (!cv) return;
+      const a = document.createElement('a');
+      a.href = cv.toDataURL('image/png');
+      a.download = filename || `${canvasId}.png`;
+      a.click();
+      showToast(`🖼️ ${a.download} を保存しました`);
+    }
+
+    // -----------------------------------------------------------------------
+    // Phase 4 & 5 Analytical Charts & Interactive Controls
+    // -----------------------------------------------------------------------
+    function renderSmallMultiples6Axes(genHistory, fallbackRadar) {
+      const cv = document.getElementById('canvas-evo-6small');
+      if (!cv) return;
+      const ctx = cv.getContext('2d');
+      const W = cv.width, H = cv.height;
+      ctx.fillStyle = '#0b0f18';
+      ctx.fillRect(0, 0, W, H);
+      const axes = [
+        { key: 'melody_beauty', label: '旋律の美しさ', col: '#fbbf24' },
+        { key: 'harmonic_drama', label: '和声のドラマ', col: '#f472b6' },
+        { key: 'counterpoint', label: '対位法', col: '#34d399' },
+        { key: 'human_realism', label: '人間らしさ', col: '#38bdf8' },
+        { key: 'virtuoso_brilliance', label: '超絶技巧', col: '#a78bfa' },
+        { key: 'disklavier_safety', label: '実機保護適性', col: '#22c55e' },
+      ];
+      const rows = (genHistory && genHistory.length)
+        ? genHistory
+        : (fallbackRadar ? [fallbackRadar] : []);
+      const cols = 3, cellW = (W - 24) / cols, cellH = (H - 20) / 2;
+      axes.forEach((ax, idx) => {
+        const c = idx % cols, r = Math.floor(idx / cols);
+        const x0 = 12 + c * cellW, y0 = 10 + r * cellH;
+        const cw = cellW - 10, ch = cellH - 10;
+        ctx.fillStyle = '#111827';
+        ctx.strokeStyle = 'rgba(148,163,184,0.22)';
+        ctx.lineWidth = 1;
+        ctx.fillRect(x0, y0, cw, ch);
+        ctx.strokeRect(x0, y0, cw, ch);
+        const vals = rows.map(row => Number(row[ax.key] ?? 75));
+        const curV = vals.length ? Math.round(vals[vals.length - 1]) : '--';
+        ctx.fillStyle = '#e2e8f0';
+        ctx.font = 'bold 11px sans-serif';
+        ctx.fillText(`${ax.label}: ${curV}`, x0 + 8, y0 + 17);
+        if (vals.length >= 1) {
+          ctx.strokeStyle = ax.col;
+          ctx.lineWidth = 2;
+          ctx.beginPath();
+          vals.forEach((v, vi) => {
+            const px = x0 + 8 + (vi / Math.max(1, vals.length - 1)) * (cw - 16);
+            const py = y0 + ch - 10 - ((Math.max(40, Math.min(100, v)) - 40) / 60) * (ch - 34);
+            if (vi === 0) ctx.moveTo(px, py); else ctx.lineTo(px, py);
+          });
+          ctx.stroke();
+        }
+      });
+    }
+
+    function drawPianoRollWithPedal() {
+      const cv = document.getElementById('canvas-pianoroll');
+      if (!cv) return;
+      const ctx = cv.getContext('2d');
+      const W = cv.width, H = cv.height;
+      ctx.fillStyle = '#0b0f18';
+      ctx.fillRect(0, 0, W, H);
+      const rollH = H - 56;
+      const pedalY = rollH + 10;
+      const pedalH = 38;
+
+      ctx.strokeStyle = 'rgba(148,163,184,0.2)';
+      ctx.beginPath(); ctx.moveTo(40, pedalY - 4); ctx.lineTo(W - 12, pedalY - 4); ctx.stroke();
+      ctx.fillStyle = '#94a3b8'; ctx.font = '11px sans-serif';
+      ctx.fillText('音高', 6, 18);
+      ctx.fillText('CC64', 4, pedalY + 22);
+
+      const rawEvents = (latestAnalyticsData && latestAnalyticsData.latest_events) || [];
+      const scoreNotes = (latestScoreData && latestScoreData.notes) || [];
+      const noteEvs = rawEvents.filter(e => Number(e.note || 0) > 0);
+      const pedalEvs = rawEvents.filter(e => e.pedal_cc64 !== undefined && e.pedal_cc64 !== null);
+
+      const usableW = W - 56;
+      if (noteEvs.length) {
+        const minT = Math.min(...noteEvs.map(e => Number(e.time_offset_s || 0)));
+        const maxT = Math.max(...noteEvs.map(e => Number(e.time_offset_s || 0) + Number(e.duration_s || 0.3)));
+        const span = Math.max(2.0, maxT - minT);
+        noteEvs.forEach(e => {
+          const n = Number(e.note || 60);
+          const x = 44 + ((Number(e.time_offset_s || 0) - minT) / span) * usableW;
+          const bw = Math.max(4, (Number(e.duration_s || 0.25) / span) * usableW);
+          const y = rollH - 8 - ((n - 21) / 87) * (rollH - 20);
+          const v = String(e.voice || '');
+          const isHalo = Boolean(e.sympathetic_halo) || Number(e.velocity || 64) <= 1;
+          ctx.fillStyle = isHalo ? '#c4b5fd' : (v.includes('cello') ? '#34d399' : (v === 'melody' ? '#fbbf24' : (n < 52 ? '#38bdf8' : '#94a3b8')));
+          ctx.fillRect(x, y - 3, bw, 5);
+        });
+        if (pedalEvs.length) {
+          ctx.strokeStyle = '#10b981';
+          ctx.fillStyle = 'rgba(16,185,129,0.22)';
+          ctx.lineWidth = 2;
+          ctx.beginPath();
+          let started = false;
+          pedalEvs.sort((a, b) => (a.time_offset_s || 0) - (b.time_offset_s || 0)).forEach(pe => {
+            const px = Math.max(44, Math.min(W - 12, 44 + ((Number(pe.time_offset_s || 0) - minT) / span) * usableW));
+            const py = pedalY + pedalH - (Math.min(127, Math.max(0, Number(pe.pedal_cc64 || 0))) / 127) * (pedalH - 6);
+            if (!started) { ctx.moveTo(px, py); started = true; } else ctx.lineTo(px, py);
+          });
+          ctx.stroke();
+        }
+      } else if (scoreNotes.length) {
+        scoreNotes.forEach(n => {
+          const x = 44 + (Number(n.x_norm || 0) * usableW);
+          const bw = Math.max(5, Number(n.dur_norm || 0.04) * usableW);
+          const y = rollH - 8 - ((Number(n.pitch || 60) - 21) / 87) * (rollH - 20);
+          ctx.fillStyle = n.role === 'melody' ? '#fbbf24' : (n.staff_layer === 'cello_counter' ? '#34d399' : '#38bdf8');
+          ctx.fillRect(x, y - 3, bw, 5);
+        });
+      } else {
+        ctx.fillStyle = '#94a3b8';
+        ctx.fillText('演奏データ待機中...', 60, H * 0.5);
+      }
+    }
+
+    async function loadCriticWeights() {
+      try {
+        const res = await fetch('/api/virtuoso/weights');
+        const data = await res.json();
+        renderCriticWeightsUI(data);
+      } catch (_) {}
+    }
+
+    function renderCriticWeightsUI(data) {
+      if (!data) return;
+      const d = (data && data.critic_weights) || data;
+      const w = d.axis_weights || {};
+      ['melody_beauty', 'harmonic_drama', 'counterpoint', 'human_realism', 'virtuoso_brilliance', 'disklavier_safety'].forEach(k => {
+        const sl = document.getElementById(`w-${k}`);
+        const lbl = document.getElementById(`wv-${k}`);
+        if (sl && w[k] !== undefined) {
+          sl.value = Number(w[k]).toFixed(2);
+          if (lbl) lbl.textContent = sl.value;
+        }
+      });
+      document.querySelectorAll('#weight-presets-row .preset-chip').forEach(btn => {
+        btn.classList.toggle('active', btn.dataset.preset === d.preset);
+      });
+    }
+
+    async function setCriticPreset(preset) {
+      const res = await postAction('/api/virtuoso/weights', { preset });
+      if (res) renderCriticWeightsUI(res);
+    }
+
+    async function applyCriticSliderWeights() {
+      const weights = {};
+      ['melody_beauty', 'harmonic_drama', 'counterpoint', 'human_realism', 'virtuoso_brilliance', 'disklavier_safety'].forEach(k => {
+        const sl = document.getElementById(`w-${k}`);
+        if (sl) weights[k] = Number(sl.value || 1.0);
+      });
+      const res = await postAction('/api/virtuoso/weights', { axis_weights: weights });
+      if (res) renderCriticWeightsUI(res);
+    }
+
+    async function triggerBlindAb(action, choice = null) {
+      const res = await postAction('/api/timemachine/blind_ab', { action, choice });
+      if (!res) return;
+      const box = document.getElementById('blind-ab-box');
+      const badge = document.getElementById('blind-ab-score-badge');
+      if (box && res.message_ja) box.textContent = res.message_ja;
+      if (badge && res.blind_ab) {
+        badge.textContent = `投票 進化後 ${res.blind_ab.wins_evolved || 0}勝 / 原石 ${res.blind_ab.wins_before || 0}勝`;
+      }
+    }
+
+    async function refreshDialogueComparison() {
+      try {
+        const res = await fetch('/api/dialogue/comparison');
+        const data = await res.json();
+        const sumEl = document.getElementById('dialogue-compare-summary');
+        if (sumEl) {
+          if (data.has_dialogue) {
+            const hs = data.human_stats || {}, as = data.ai_stats || {};
+            sumEl.textContent = `対話モード(${data.reply_mode || ''}): 人間 ${hs.count || 0}音 (平均音高 ${hs.mean_pitch || '-'}, 強弱 ${hs.mean_vel || '-'}) vs AI応答 ${as.count || 0}音 (平均音高 ${as.mean_pitch || '-'}, 強弱 ${as.mean_vel || '-'}) — ${data.explanation_ja || ''}`;
+          } else {
+            sumEl.textContent = 'まだ直近のチェロ／MIDI対話履歴がありません。「チェロへ呼応するフレーズ」ボタンを押すと比較グラフを描画します。';
+          }
+        }
+        const cv = document.getElementById('canvas-dialogue-compare');
+        if (!cv) return;
+        const ctx = cv.getContext('2d');
+        const W = cv.width, H = cv.height;
+        ctx.fillStyle = '#0b0f18';
+        ctx.fillRect(0, 0, W, H);
+        const hEvs = data.human_events || [];
+        const aEvs = data.ai_events || [];
+        if (!hEvs.length && !aEvs.length) {
+          ctx.fillStyle = '#94a3b8'; ctx.font = '13px sans-serif';
+          ctx.fillText('人間入力（緑）と AIピアニスト応答（金）の音高・ベロシティ比較待機中', 28, H * 0.5);
+          return;
+        }
+        const drawContour = (evs, col, xOff, boxW, label) => {
+          ctx.fillStyle = col; ctx.font = 'bold 12px sans-serif';
+          ctx.fillText(label, xOff + 8, 20);
+          if (!evs.length) return;
+          const maxT = Math.max(1.0, ...evs.map(e => Number(e.time_offset_s || 0)));
+          ctx.strokeStyle = col; ctx.lineWidth = 2.2; ctx.beginPath();
+          evs.forEach((e, idx) => {
+            const px = xOff + 12 + (Number(e.time_offset_s || 0) / maxT) * (boxW - 24);
+            const py = H - 24 - ((Number(e.note || 60) - 24) / 72) * (H - 54);
+            if (idx === 0) ctx.moveTo(px, py); else ctx.lineTo(px, py);
+          });
+          ctx.stroke();
+        };
+        drawContour(hEvs, '#34d399', 10, W * 0.48, '🎻 人間入力フレーズ');
+        drawContour(aEvs, '#fbbf24', W * 0.51, W * 0.48, '🎹 AIピアニスト応答');
+      } catch (_) {}
+    }
+
+    async function setSafetyProfile(profileId) {
+      const res = await postAction('/api/safety/profile', { profile_id: profileId });
+      if (res && res.ok) {
+        updateSafetyProfileUI(res.model_profile_id || profileId, res.safety || {});
+        refreshAnalyticsDashboard();
+      }
+    }
+
+    function updateSafetyProfileUI(profileId, safetySnap) {
+      if (safetySnap && safetySnap.active_voices_limit) latestSafetyLimits.voices = safetySnap.active_voices_limit;
+      if (safetySnap && safetySnap.notes_per_sec_limit) latestSafetyLimits.nps = safetySnap.notes_per_sec_limit;
+      const badge = document.getElementById('safety-profile-badge');
+      const sum = document.getElementById('safety-profile-summary');
+      const profMap = (safetySnap && safetySnap.model_profiles) || {};
+      const activeProf = profMap[profileId];
+      if (badge) badge.textContent = (activeProf && (activeProf.label_ja || activeProf.label)) || profileId;
+      if (sum && activeProf) {
+        const minMs = Math.round((activeProf.min_note_duration_s || 0.035) * 1000);
+        sum.textContent = `現在: ${activeProf.label_ja || profileId} ｜ 同時和音=${activeProf.soft_simultaneous_limit}/${activeProf.hard_simultaneous_limit}音 ｜ 同時保持上限=${activeProf.max_active_voices}音 ｜ 打鍵上限=${activeProf.max_notes_per_sec}音/秒 ｜ 最小音価=${minMs}ms ｜ 最長保持=${activeProf.max_key_hold_s}s`;
+      }
+      document.querySelectorAll('#safety-profile-row .preset-chip').forEach(btn => {
+        btn.classList.toggle('active', btn.dataset.profile === profileId);
+      });
+    }
+
+    function drawSafetyRatesChart() {
+      const cv = document.getElementById('canvas-safety-rates');
+      if (!cv) return;
+      const ctx = cv.getContext('2d');
+      const W = cv.width, H = cv.height;
+      ctx.fillStyle = '#0b0f18'; ctx.fillRect(0, 0, W, H);
+      ctx.fillStyle = '#cbd5e1'; ctx.font = 'bold 12px sans-serif';
+      ctx.fillText(`保持音数 (上限${latestSafetyLimits.voices}) [青] / 打鍵速度 (上限${latestSafetyLimits.nps}) [金]`, 14, 18);
+      if (safetyRateHistory.length < 2) {
+        ctx.fillStyle = '#94a3b8'; ctx.font = '12px sans-serif';
+        ctx.fillText('WebSocket ライブサンプル収集待機中...', 20, H * 0.52);
+        return;
+      }
+      const drawLine = (key, maxV, col) => {
+        ctx.strokeStyle = col; ctx.lineWidth = 2.2; ctx.beginPath();
+        safetyRateHistory.forEach((pt, idx) => {
+          const x = 18 + (idx / (safetyRateHistory.length - 1)) * (W - 36);
+          const y = H - 20 - (Math.min(maxV, pt[key] || 0) / maxV) * (H - 48);
+          if (idx === 0) ctx.moveTo(x, y); else ctx.lineTo(x, y);
+        });
+        ctx.stroke();
+      };
+      drawLine('voices', Math.max(24, latestSafetyLimits.voices + 4), '#38bdf8');
+      drawLine('nps', Math.max(32, latestSafetyLimits.nps + 4), '#fbbf24');
+    }
+
+    function drawRetriggerVelHist(retriggers, velocities) {
+      const cv = document.getElementById('canvas-retrigger-hist');
+      if (!cv) return;
+      const ctx = cv.getContext('2d');
+      const W = cv.width, H = cv.height;
+      ctx.fillStyle = '#0b0f18'; ctx.fillRect(0, 0, W, H);
+      const bins = [0, 0, 0, 0, 0];
+      (velocities || []).forEach(v => {
+        const bi = Math.min(4, Math.floor(Math.max(0, v - 1) / 26));
+        bins[bi] += 1;
+      });
+      const maxB = Math.max(1, ...bins);
+      const labels = ['pp(1-26)', 'p(27-52)', 'mf(53-78)', 'f(79-104)', 'ff(105+)'];
+      ctx.fillStyle = '#cbd5e1'; ctx.font = 'bold 12px sans-serif';
+      ctx.fillText(`ベロシティ分布 (全${(velocities || []).length}音) ＆ 連打最小間隔 ${(retriggers && retriggers.length) ? Math.min(...retriggers) + 'ms' : '--'}`, 14, 18);
+      const barW = (W - 80) / 5;
+      bins.forEach((b, idx) => {
+        const bh = (b / maxB) * (H - 72);
+        const x = 32 + idx * barW;
+        const y = H - 30 - bh;
+        ctx.fillStyle = '#38bdf8';
+        ctx.fillRect(x, y, barW - 14, bh);
+        ctx.fillStyle = '#e2e8f0'; ctx.font = '11px sans-serif';
+        ctx.fillText(`${labels[idx]}`, x, H - 12);
+        ctx.fillText(`${b}`, x + 10, Math.max(32, y - 4));
+      });
+    }
+
+    function drawGuardStatsChart(stats) {
+      const cv = document.getElementById('canvas-guard-stats');
+      if (!cv) return;
+      const ctx = cv.getContext('2d');
+      const W = cv.width, H = cv.height;
+      ctx.fillStyle = '#0b0f18'; ctx.fillRect(0, 0, W, H);
+      const items = [
+        { k: 'notes_scheduled', label: '安全発音数', col: '#10b981' },
+        { k: 'notes_velocity_clamped', label: '強弱安全制限', col: '#38bdf8' },
+        { k: 'retrigger_delayed', label: '連打間隔保護', col: '#fbbf24' },
+        { k: 'notes_chord_thinned', label: '和音間引き保護', col: '#a78bfa' },
+        { k: 'thermal_pedal_releases', label: '熱ダレ・ペダル保護', col: '#f43f5e' },
+      ];
+      const maxV = Math.max(1, ...items.map(it => Number((stats && stats[it.k]) || 0)));
+      const colW = (W - 60) / items.length;
+      items.forEach((it, idx) => {
+        const val = Number((stats && stats[it.k]) || 0);
+        const x = 30 + idx * colW;
+        const bh = (val / maxV) * (H - 74);
+        ctx.fillStyle = it.col;
+        ctx.fillRect(x + 18, H - 34 - bh, colW - 44, bh);
+        ctx.fillStyle = '#e2e8f0'; ctx.font = 'bold 12px sans-serif';
+        ctx.fillText(`${val}`, x + 22, H - 40 - bh);
+        ctx.font = '11px sans-serif';
+        ctx.fillText(it.label, x + 10, H - 14);
+      });
+    }
+
+    function drawVdlCurveChart(points, vdlParams) {
+      const cv = document.getElementById('canvas-vdl-curve');
+      if (!cv) return;
+      const ctx = cv.getContext('2d');
+      const W = cv.width, H = cv.height;
+      ctx.fillStyle = '#0b0f18'; ctx.fillRect(0, 0, W, H);
+      const pts = points || [];
+      const bMin = Number((vdlParams && vdlParams.base_min_ms) ?? 35);
+      const amp = Number((vdlParams && vdlParams.amplitude_ms) ?? 180);
+      const dec = Number((vdlParams && vdlParams.decay_rate) ?? 0.032);
+      const baseInput = document.getElementById('vdl-base-min');
+      if (baseInput && document.activeElement !== baseInput) {
+        baseInput.value = bMin;
+        document.getElementById('vdl-amp').value = amp;
+        document.getElementById('vdl-decay').value = dec;
+        document.getElementById('vdl-bass').value = Number((vdlParams && vdlParams.bass_mass_slope) ?? 0.35);
+      }
+      ctx.strokeStyle = 'rgba(148,163,184,0.18)';
+      [50, 100, 150, 200].forEach(ms => {
+        const y = H - 24 - (ms / 240) * (H - 52);
+        ctx.beginPath(); ctx.moveTo(42, y); ctx.lineTo(W - 14, y); ctx.stroke();
+        ctx.fillStyle = '#94a3b8'; ctx.font = '11px sans-serif'; ctx.fillText(`${ms}ms`, 4, y + 4);
+      });
+      // Theoretical curve
+      ctx.strokeStyle = '#fbbf24'; ctx.lineWidth = 2.4; ctx.beginPath();
+      for (let vel = 20; vel <= 110; vel += 2) {
+        const pred = bMin + amp * Math.exp(-dec * vel);
+        const px = 42 + ((vel - 20) / 90) * (W - 60);
+        const py = H - 24 - (Math.min(240, pred) / 240) * (H - 52);
+        if (vel === 20) ctx.moveTo(px, py); else ctx.lineTo(px, py);
+      }
+      ctx.stroke();
+      // Measured scatter
+      pts.forEach(p => {
+        const px = 42 + ((Number(p.velocity || 60) - 20) / 90) * (W - 60);
+        const py = H - 24 - (Math.min(240, Number(p.measured_latency_ms || 0)) / 240) * (H - 52);
+        ctx.fillStyle = '#38bdf8';
+        ctx.beginPath(); ctx.arc(px, py, 4, 0, Math.PI * 2); ctx.fill();
+      });
+      ctx.fillStyle = '#cbd5e1'; ctx.font = 'bold 12px sans-serif';
+      ctx.fillText(`理論曲線(金) vs 実測点(青: ${pts.length}件)`, 46, 18);
+    }
+
+    async function applyVdlCalibration() {
+      const payload = {
+        vdl_params: {
+          base_min_ms: Number(document.getElementById('vdl-base-min').value || 35),
+          amplitude_ms: Number(document.getElementById('vdl-amp').value || 180),
+          decay_rate: Number(document.getElementById('vdl-decay').value || 0.032),
+          bass_mass_slope: Number(document.getElementById('vdl-bass').value || 0.35),
+        }
+      };
+      await postAction('/api/studio_state', payload);
+      showToast('⏱️ VDL 遅延パラメータを更新しました');
+      refreshAnalyticsDashboard();
+    }
+
+    function drawPedalRt60Chart(pedalPoints) {
+      const cv = document.getElementById('canvas-pedal-rt60');
+      if (!cv) return;
+      const ctx = cv.getContext('2d');
+      const W = cv.width, H = cv.height;
+      ctx.fillStyle = '#0b0f18'; ctx.fillRect(0, 0, W, H);
+      const pts = (pedalPoints || []).slice().sort((a, b) => Number(a.cc64 ?? a.cc64_value ?? 0) - Number(b.cc64 ?? b.cc64_value ?? 0));
+      if (!pts.length) {
+        ctx.fillStyle = '#94a3b8'; ctx.font = '12px sans-serif';
+        ctx.fillText('ペダル実験データ待機中...', 24, H * 0.5);
+        return;
+      }
+      // Highlight CC58 safe zone
+      const optX = 36 + (58 / 127) * (W - 56);
+      ctx.fillStyle = 'rgba(16,185,129,0.14)';
+      ctx.fillRect(optX - 18, 26, 36, H - 54);
+      ctx.strokeStyle = '#10b981'; ctx.setLineDash([4, 3]);
+      ctx.beginPath(); ctx.moveTo(optX, 26); ctx.lineTo(optX, H - 28); ctx.stroke();
+      ctx.setLineDash([]);
+
+      ctx.strokeStyle = '#38bdf8'; ctx.lineWidth = 2.4; ctx.beginPath();
+      pts.forEach((p, i) => {
+        const cc = Number(p.cc64 ?? p.cc64_value ?? 0);
+        const rt = Number(p.rt60_s || 1.0);
+        const x = 36 + (cc / 127) * (W - 56);
+        const y = H - 28 - (Math.min(4.0, rt) / 4.0) * (H - 60);
+        if (i === 0) ctx.moveTo(x, y); else ctx.lineTo(x, y);
+      });
+      ctx.stroke();
+      ctx.strokeStyle = '#f43f5e'; ctx.lineWidth = 2; ctx.beginPath();
+      pts.forEach((p, i) => {
+        const cc = Number(p.cc64 ?? p.cc64_value ?? 0);
+        const rg = Number(p.acoustic_roughness || 0.05);
+        const x = 36 + (cc / 127) * (W - 56);
+        const y = H - 28 - (Math.min(0.6, rg) / 0.6) * (H - 60);
+        if (i === 0) ctx.moveTo(x, y); else ctx.lineTo(x, y);
+      });
+      ctx.stroke();
+      ctx.fillStyle = '#cbd5e1'; ctx.font = 'bold 12px sans-serif';
+      ctx.fillText('青: 残響RT60(s) / 赤: 濁り係数 / 緑帯: 推奨ハーフペダル(CC#58)', 36, 18);
+    }
+
+    function renderExp345Kpis(exps) {
+      const box = document.getElementById('exp345-summary');
+      if (!box || !exps) return;
+      const e3 = exps.exp3_proxy_bleed || {};
+      const e4 = exps.exp4_accompaniment_ab || {};
+      const e5 = exps.exp5_ai_composer || {};
+      const iters = e5.iterations || [];
+      const bestIt = iters.length ? iters[iters.length - 1] : {};
+      box.innerHTML = `
+        <div class="score-card"><div class="score-name">🎙️ Exp3: かぶり分離 SNR向上</div><div class="score-big">+${e3.avg_snr_gain_db ?? 0} dB</div><div class="score-desc">状態: ${escHtml(e3.status || 'completed')}</div></div>
+        <div class="score-card"><div class="score-name">🎼 Exp4: 濁り低減・主旋律強調</div><div class="score-big">-${e4.roughness_reduction_pct ?? 0}%</div><div class="score-desc">主旋律明瞭度 +${e4.melody_lead_improvement_pct ?? 0}%</div></div>
+        <div class="score-card"><div class="score-name">🧠 Exp5: 自律作曲 到達スコア</div><div class="score-big">${bestIt.total_score ?? '--'} 点</div><div class="score-desc">最新スタイル: ${escHtml(bestIt.style || 'Completed')}</div></div>
+      `;
+    }
+
+    function drawPerfCharts(perf) {
+      if (!perf) return;
+      const ws = perf.websocket || {};
+      const cvBw = document.getElementById('canvas-perf-bw');
+      if (cvBw) {
+        const ctx = cvBw.getContext('2d');
+        const W = cvBw.width, H = cvBw.height;
+        ctx.fillStyle = '#0b0f18'; ctx.fillRect(0, 0, W, H);
+        ctx.fillStyle = '#cbd5e1'; ctx.font = 'bold 12px sans-serif';
+        ctx.fillText(`WS帯域: ${ws.kb_per_sec_per_client ?? 0} KB/s (${ws.messages_per_sec_per_client ?? 0} fps) ｜ 差分削減累計: ${ws.delta_saved_kb ?? 0} KB`, 14, 18);
+        const hist = ws.history || [];
+        if (hist.length >= 2) {
+          const maxK = Math.max(50, ...hist.map(h => Number(h.kb_per_sec || 0)));
+          ctx.strokeStyle = '#38bdf8'; ctx.lineWidth = 2.2; ctx.beginPath();
+          hist.forEach((h, i) => {
+            const x = 18 + (i / (hist.length - 1)) * (W - 36);
+            const y = H - 22 - (Number(h.kb_per_sec || 0) / maxK) * (H - 52);
+            if (i === 0) ctx.moveTo(x, y); else ctx.lineTo(x, y);
+          });
+          ctx.stroke();
+        }
+      }
+      const jit = perf.scheduler_jitter || {};
+      const pre = perf.preflight || {};
+      const cvJ = document.getElementById('canvas-perf-jitter');
+      if (cvJ) {
+        const ctx = cvJ.getContext('2d');
+        const W = cvJ.width, H = cvJ.height;
+        ctx.fillStyle = '#0b0f18'; ctx.fillRect(0, 0, W, H);
+        const bars = [
+          { l: 'ジッター平均(ms)', v: Number(jit.mean_ms || 0), c: '#10b981' },
+          { l: 'ジッターp95(ms)', v: Number(jit.p95_ms || 0), c: '#fbbf24' },
+          { l: 'ジッター最大(ms)', v: Number(jit.max_ms || 0), c: '#f43f5e' },
+          { l: '安全監査(ms)', v: Number(pre.elapsed_ms || 0.01), c: '#38bdf8' },
+        ];
+        const maxMs = Math.max(2.5, ...bars.map(b => b.v));
+        const bw = (W - 60) / bars.length;
+        bars.forEach((b, i) => {
+          const x = 30 + i * bw;
+          const bh = (b.v / maxMs) * (H - 72);
+          ctx.fillStyle = b.c;
+          ctx.fillRect(x + 16, H - 32 - bh, bw - 36, Math.max(3, bh));
+          ctx.fillStyle = '#f8fafc'; ctx.font = 'bold 12px sans-serif';
+          ctx.fillText(`${b.v.toFixed(3)} ms`, x + 12, H - 38 - bh);
+          ctx.font = '11px sans-serif';
+          ctx.fillText(b.l, x + 8, H - 14);
+        });
+      }
+      const cacheEl = document.getElementById('perf-cache-summary');
+      if (cacheEl) {
+        const oc = perf.obsidian_cache || {};
+        const hw = perf.hardware_accel || {};
+        cacheEl.textContent = [
+          `CPU/並列バックエンド: ${hw.cpu_cores || '--'} コア / ${hw.backend_label || '--'}`,
+          `Obsidian知識グラフ キャッシュ版数: v${oc.version ?? 0} (ヒット率=${oc.hit_rate_pct ?? '--'}%, misses=${oc.misses ?? 0})`,
+          `Preflight安全監査: ${pre.elapsed_ms ?? 0.01} ms (${pre.passed ? '合格' : '自動補正'})`,
+          `Conditionスケジューラ サンプル数: ${jit.samples ?? 0}件 (mean=${jit.mean_ms ?? 0}ms, p95=${jit.p95_ms ?? 0}ms)`,
+        ].join('\n');
+      }
+      const exBox = document.getElementById('perf-exceptions-box');
+      if (exBox) {
+        const exc = perf.exceptions || {};
+        const items = exc.recent || [];
+        exBox.textContent = items.length
+          ? items.map(r => `[${r.source}] ${r.type}: ${r.message}`).join('\n')
+          : `捕捉例外ゼロ（合計 ${exc.total_caught ?? 0} 件）— サイレント握り潰し無しで稼働中`;
+      }
+    }
+
+    async function refreshAnalyticsDashboard() {
+      try {
+        const res = await fetch('/api/analytics/overview');
+        const d = await res.json();
+        latestAnalyticsData = d;
+        const s = d.safety || {};
+        if (s.model_profile_id) updateSafetyProfileUI(s.model_profile_id, s);
+        renderSmallMultiples6Axes(d.generation_history, cachedVirtuoso.radar_6axis);
+        drawPianoRollWithPedal();
+        drawSafetyRatesChart();
+        drawRetriggerVelHist(d.retrigger_intervals_ms, d.velocities);
+        drawGuardStatsChart(s.stats);
+        drawVdlCurveChart(d.vdl_measurements, s.vdl_params);
+        drawPedalRt60Chart(d.pedal_measurements);
+        renderExp345Kpis(d.experiments);
+        drawPerfCharts(d.performance);
+      } catch (_) {}
+    }
+
+    async function loadSqlLogs() {
+      try {
+        const tbl = document.getElementById('log-table-select').value;
+        const q = document.getElementById('log-search-q').value || '';
+        const ms = document.getElementById('log-min-score').value;
+        const params = new URLSearchParams({ table: tbl, q, limit: '100' });
+        if (ms !== '' && !Number.isNaN(Number(ms))) params.set('min_score', ms);
+        const res = await fetch(`/api/logs/search?${params.toString()}`);
+        const d = await res.json();
+        const rows = d.rows || [];
+        document.getElementById('sql-logs-badge').textContent = `${rows.length}件`;
+        const tbody = document.getElementById('sql-logs-tbody');
+        tbody.innerHTML = rows.length
+          ? rows.map(r => `<tr><td><span class="badge">${escHtml(r.source)}</span></td><td>${escHtml(r.timestamp)}</td><td><strong>${escHtml(r.summary)}</strong></td><td>${escHtml(r.detail)}</td></tr>`).join('')
+          : '<tr><td colspan="4" style="color:var(--text-dim);">一致するレコードがありません。</td></tr>';
+      } catch (_) {}
+    }
+
+    function exportSqlLogs(fmt) {
+      const tbl = document.getElementById('log-table-select').value;
+      const q = document.getElementById('log-search-q').value || '';
+      const ms = document.getElementById('log-min-score').value;
+      const params = new URLSearchParams({ table: tbl === 'all' ? 'generation_history' : tbl, fmt, q, limit: '300' });
+      if (ms !== '' && !Number.isNaN(Number(ms))) params.set('min_score', ms);
+      if (STUDIO_TOKEN) params.set('token', STUDIO_TOKEN);
+      window.open(`/api/logs/export?${params.toString()}`, '_blank');
+    }
+
     function connectWs() {
       const proto = location.protocol === 'https:' ? 'wss:' : 'ws:';
-      const ws = new WebSocket(`${proto}//${location.host}/ws`);
+      const qs = STUDIO_TOKEN ? `?token=${encodeURIComponent(STUDIO_TOKEN)}` : '';
+      const ws = new WebSocket(`${proto}//${location.host}/ws${qs}`);
       ws.onmessage = (ev) => { try { renderFrame(JSON.parse(ev.data)); } catch (_) {} };
       ws.onclose = () => setTimeout(connectWs, 1500);
     }
@@ -1610,15 +2538,19 @@
         if (q && !`${f.id} ${f.title_ja} ${f.desc_ja}`.toLowerCase().includes(q)) return false;
         return true;
       });
-      document.getElementById('feat-count-badge').textContent = `表示中 ${filtered.length} / ${allFeatures.length}機能`;
+      const implCount = allFeatures.filter(f => f.status === 'implemented').length;
+      const prepCount = allFeatures.length - implCount;
+      document.getElementById('feat-count-badge').textContent =
+        `実装済 ${implCount} / 準備中 ${prepCount}（表示 ${filtered.length}/${allFeatures.length}）`;
       filtered.forEach(f => {
+        const isImpl = f.status === 'implemented';
         const card = document.createElement('div');
         card.className = 'feat-card';
         card.innerHTML = `
           <div>
             <div class="feat-top">
               <span class="badge badge-gold">#${f.number} (${f.id})</span>
-              <span class="badge badge-ok">実装済</span>
+              <span class="badge ${isImpl ? 'badge-ok' : 'badge-warn'}">${isImpl ? '実装済' : '準備中'}</span>
             </div>
             <div class="feat-title" style="margin-top:6px;">${f.title_ja}</div>
             <div class="feat-desc" style="margin-top:3px;">${f.desc_ja}</div>
@@ -1653,10 +2585,12 @@
     }
 
     async function openQrModal() {
-      const res = await fetch('/api/remote/info');
+      const res = await fetch('/api/remote/info', { headers: apiHeaders() });
       const info = await res.json();
       document.getElementById('qr-svg-box').innerHTML = info.qr_svg;
       document.getElementById('qr-url-text').textContent = info.remote_url;
+      const openLink = document.getElementById('qr-open-link');
+      if (openLink) openLink.href = info.local_url || '/remote';
       document.getElementById('qr-dialog').showModal();
     }
 
@@ -1807,6 +2741,10 @@
     loadImslpDna();
     loadObsidianGraph();
     runSystemDoctor();
+    loadCriticWeights();
+    refreshAnalyticsDashboard();
+    refreshDialogueComparison();
+    loadSqlLogs();
     draw88Piano({});
     drawRipples(0);
   </script>

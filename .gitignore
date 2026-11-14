@@ -10,3 +10,7 @@ node_modules/
 dist/
 data/telemetry/exports/
 data/workspace_state.json
+data/telemetry/*.sqlite
+data/telemetry/*.sqlite-shm
+data/telemetry/*.sqlite-wal
+data/telemetry/*.png

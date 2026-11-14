@@ -122,20 +122,44 @@ sequenceDiagram
 
 ---
 
-## 🖥️ 図5：イン・アプリ完結スタジオ画面・知識グラフ＆マルチソングタブ構造
+## 🖥️ 図5：9タブ・統合スタジオUI、分析可視化、知識グラフ＆マルチソングタブ構造
 
 ```mermaid
 flowchart TD
-    Top["トップバー: Meta-AI詩的曲名 & 5部楽式バッジ / 第1〜3幕ボタン / 緊急停止Panic"] --> Tabs["マルチソングタブ (曲別Opus独立脳・新規・閉じたタブ復元)"]
-    Tabs --> Time["進化タイムマシン (戻す/進む・世代スライダー・A/B聴き比べ・30秒救出)"]
-    Time --> StageView{"メイン5タブビュー"}
-    StageView --> V1["🎹 ライブ演奏＆生きた五線譜: 大譜表 diffハイライト / 2D表現パッド / 超人間4技ボタン / 88鍵盤"]
-    StageView --> V2["🧬 AIの自己進化＆6軸レーダー: 100点6軸チャート / ダメ出し推敲ストリーム / 50世代ブースター"]
-    StageView --> V3["🎻 チェロ共演＆IMSLP深層解析: パッセージ対話3モード / 開放弦ウェーブ / 11名曲DNA分析表"]
-    StageView --> V4["📓 イン・アプリ進化ノート＆知識グラフ: 系統樹・思考テキスト・知識マップモーダル"]
-    StageView --> V5["✨ 全100機能＆健康診断: 100機能検索お試し / 日本語システム診断"]
-    V1 -. "QRコード接続" .-> Remote["スマホリモコン (/remote): 舞台手元リアルタイム操作"]
+    Top["トップバー: Meta-AI詩的曲名 & 5部楽式 / 第1〜3幕ボタン / 緊急停止Panic"] --> Tabs["マルチソングタブ (曲別Opus独立脳・新規・復元)"]
+    Tabs --> Time["進化タイムマシン (Undo/Redo・世代スライダー・ブラインドA/B・30秒救出)"]
+    Time --> StageView{"単一行 WAI-ARIA 9タブスタジオ"}
+    StageView --> V1["🎹 ライブ演奏＆生きた五線譜: 大譜表 diff / 2Dパッド / 超人間4技 / 88鍵盤"]
+    StageView --> V2["🧬 AIの自己進化＆6軸レーダー: 6軸スモールマルチプルズ / ピアノロール+CC64 / 重み調整 / ブラインドA/B"]
+    StageView --> V3["🎻 チェロ共演＆IMSLP深層解析: YIN検出 / パッセージ対話 / 人間vsAI比較グラフ / 11名曲DNA"]
+    StageView --> V4["📓 イン・アプリ進化ノート＆知識グラフ: mtimeキャッシュ系統樹 / 思考テキスト"]
+    StageView --> V5["✨ 全100機能＆健康診断: 実装済90 / 準備中10 誠実ステータス & ヘルスチェック"]
+    StageView --> V6["🛡️ 安全監視＆実機プロファイル: Mark IV/E3/DCX切替 / 発音速度時系列 / 連打分布"]
+    StageView --> V7["🧪 VDL校正＆ペダル実験: Exp1曲線調整 / Exp2 RT60・濁り解析 / Exp3-5 KPI"]
+    StageView --> V8["⚡ 高速化・ジッター＆通信診断: 30Hz WS差分圧縮 / Conditionジッター / 捕捉例外ゼロ監視"]
+    StageView --> V9["🗄️ SQLiteログ検索＆書き出し: WAL統合検索 / スコア絞り込み / CSV・JSON保存"]
+    V1 -. "Token付き QR Version 6 (--lan)" .-> Remote["スマホリモコン (/remote?token=...)"]
 ```
+
+---
+
+## 🔒 セキュリティ設計・並列高速化・分析基盤（Phase 1–5 強化点）
+
+1. **デフォルト・ローカル完結と明示的LAN公開（ゼロ・トラスト防衛）**
+   - `./run_studio.sh` は既定で **`127.0.0.1:8765`（ループバック限定）** にバインドします（`DISKLAVIER_LAN_MODE=0`）。舞台等で同一 Wi-Fi のスマホ/iPad を使う場合のみ `./run_studio.sh --lan`（`0.0.0.0:8765`）で起動します。
+   - **セッション認証トークン（`STUDIO_AUTH_TOKEN`）**: 状態変更を伴う `POST`/`PUT`/`DELETE`/`PATCH /api/*` および `/ws` WebSocket 接続では `X-Studio-Token` / Cookie / `?token=` による認証を要求し、Origin チェック（`_build_allowed_origins`）と `resolve_safe_path` によるディレクトリトラバーサル防止を実施しています。
+   - QR コード接続モーダル（`/api/remote/info`）は pure Python の **QR Version 6（2 RSブロック）** を生成し、許可済みクライアントへセッション `?token=` 付き LAN URL を案内します。
+
+2. **実測に基づく低遅延スケジューリング ＆ WebSocket 差分圧縮**
+   - 詳細は [docs/PERFORMANCE.md](docs/PERFORMANCE.md) を参照してください。
+   - **Hybrid Condition スケジューラ**: 従来の `time.sleep(0.0005)` ビジーループを `threading.Condition(self._lock)` + サブミリ秒高精度ウェイクへ置換し、ローカル実測 **平均ジッター `0.156–0.190 ms`・p95 `0.383–0.745 ms`**（30ノート検証）を達成。
+   - **30Hz WebSocket 差分配信**: 共有 `WebSocketBroadcaster` により `fast` (30Hz) / `virtuoso` (5Hz 全キーMD5差分) / `slow` (1Hz `obsidian_meta`) に階層化し、**1クライアントあたり `41.67 KB/s`（平均フレーム `1,422 B`）** に抑制しました。
+   - **Obsidian 知識グラフ mtime キャッシュ**: 224ノード / 1,046エッジをロック外でファイル変更検出キャッシュ化し、キャッシュヒット平均 **`1.70 ms`**（約7.2倍高速化）を実現。
+   - **サイレント例外握り潰しゼロ**: 全モジュールの `except` で `record_caught_exception` を通じてテレメトリへ記録し、任意依存（`sounddevice` 等）欠落時も安全に Virtual Twin モードへ縮退動作します。
+
+3. **Yamaha Disklavier 機種別安全プロファイル ＆ 手動実機テスト手順**
+   - 接続機種の経年・ソレノイド特性に合わせて **「🛡️ 安全監視＆実機プロファイル」** タブまたは `/api/safety/profile` から3段階（`envious_mark_iv` / `dkv_e3_conservative` / `dcx_enspire_pro`）を動的切替可能。
+   - 実機接続時の物理確認手順は [docs/HARDWARE_TEST_PROCEDURE.md](docs/HARDWARE_TEST_PROCEDURE.md) にまとめています（自動 CI では実機ソレノイド負荷テストを実行しません）。
 
 ---
 
@@ -181,20 +205,30 @@ flowchart TD
 
 ## 🚀 クイックスタート＆検証コマンド
 
-### 1. スタジオ起動（Macローカル）
+### 1. スタジオ起動（Macローカル既定 / `--lan` で遠隔スマホ有効化）
 ```bash
+# 推奨：自分の Mac からのみ接続できるループバックモード (127.0.0.1:8765)
 ./run_studio.sh
+
+# 舞台上で同一 Wi-Fi の iPhone / iPad スマホリモコン (/remote) を使う場合
+./run_studio.sh --lan
 ```
 または手動でサーバーを起動する場合:
 ```bash
-PYTHONPATH=. .venv/bin/uvicorn src.server.mission_control_server:app --host 0.0.0.0 --port 8765
+PYTHONPATH=. .venv/bin/uvicorn src.server.mission_control_server:app --host 127.0.0.1 --port 8765
 ```
-起動後、`http://127.0.0.1:8765` でスタジオを開きます。右上の **「📱 スマホリモコン」** から QR コードを読み取ると、同一 Wi-Fi の iPhone / iPad から `http://<MacのIP>:8765/remote` で遠隔操作できます。
+`--lan` モードで起動した場合、右上の **「📱 スマホリモコン」** から QR コード（セッショントークン埋め込み済み）を読み取ることで、同一 Wi-Fi の iPhone / iPad から `http://<MacのIP>:8765/remote?token=...` で安全に遠隔操作できます。
 
-### 2. ローカル完結型 統合整合性検証＆自動テスト実行
-クラウドCIを使わず、すべてのモジュール連携・100機能カタログ・11名曲IMSLP深層DNA・全生成経路のDisklavier物理安全性・UI整合性をローカルで即座に検証できます：
+### 2. ローカル完結型 CI ＆ 全統合検証スイート実行
+外部クラウド CI（GitHub Actions）を使用せず、`pyproject.toml` と `./scripts/run_ci_local.sh` によって lint（`ruff`）、セキュリティ検証、スケジューラジッター計測、Disklavier 物理安全境界、全7スイート整合性検証をローカル一括実行できます：
+```bash
+./scripts/run_ci_local.sh
+```
+個別実行する場合:
 ```bash
 PYTHONPATH=. .venv/bin/python validate_system_integrity.py
+PYTHONPATH=. .venv/bin/python tests/test_phase1_security.py
+PYTHONPATH=. .venv/bin/python tests/test_scheduler_jitter.py
 PYTHONPATH=. .venv/bin/python tests/test_studio_overhaul.py
 PYTHONPATH=. .venv/bin/python tests/test_safety_guard.py
 PYTHONPATH=. .venv/bin/python tests/test_autonomous_virtuoso.py
@@ -202,22 +236,27 @@ PYTHONPATH=. .venv/bin/python tests/test_autonomous_virtuoso.py
 
 ---
 
-## 📁 主なモジュール構成
+## 📁 主なモジュール＆ドキュメント構成
 
-- `validate_system_integrity.py` — 全7スイート統合整合性＆実機物理安全性自動検証スクリプト
+- [pyproject.toml](pyproject.toml) — コア依存・オプション依存（`audio`, `dev`）・`pytest` / `ruff` 設定
+- [scripts/run_ci_local.sh](scripts/run_ci_local.sh) — ローカル完結 CI パイプラインスクリプト
+- [validate_system_integrity.py](validate_system_integrity.py) — 全7スイート統合整合性＆実機物理安全性自動検証スクリプト
 - `.agent/skills/` — 統合Agent Skills（`sakurai-virtuoso-direction`, `human-virtuoso-expressive-midi`, `live-performance-japanese-ui`, `apple-silicon-parallel-evolution`）
 - `src/midi/imslp_library.py` — IMSLP 11大名曲ライブラリ＆ `IMSLPDeepAnalyzer`（旋律輪郭・和声力学・対位法・アルペジオ深層DNA抽出）
 - `src/evolution/`
   - `human_reference_teacher.py` — Meta-AI Director・6軸100点レーダー採点・4手交差／88鍵カスケード／オクターブ連打表現・人間法則適用
-  - `actor_critic.py` — Apple Silicon マルチコア並列進化・IMSLP準拠日本語推敲解説
-  - `continuous_virtuoso.py` — ライブ進化エンジン・4大超人間技巧／双方向パッセージ対話／3幕舞台API統合
+  - `actor_critic.py` — Apple Silicon `spawn` 並列進化・6軸評価重み＆プリセット・IMSLP準拠日本語推敲解説
+  - `continuous_virtuoso.py` — ライブ進化エンジン・ブラインドA/B比較・対話比較履歴・4大超人間技巧／3幕舞台API統合
   - `song_workspace.py` — マルチソングタブ（Opus別脳）・世代タイムマシン永続化
 - `src/composer/ai_classical_composer.py` — 対話的作曲＆ `reply_to_passage_virtuoso`（3モードヴィルトゥオーゾ返奏）
 - `src/safety/`
   - `preflight_checker.py` — `<0.1s` ローカル完結事前監査＆自動修復（保持20音以下・同時16音上限・最小35ms・Vel 20〜105／Sympathetic Vel 1・CC#64限定）
-  - `disklavier_safety_guard.py` — Yamaha Disklavier VDL逆算先読みスケジューラ＆ソレノイド熱保護
-- `src/obsidian/obsidian_brain.py` — `obsidian_vault/` 自動Markdown/MIDI保存 ＋ イン・アプリ知識グラフ＆進化系統樹エクスプローラ
-- `src/features/feature_matrix_100.py` — 全100機能カタログ・Living Score 差分座標生成・MIDI/MusicXML/WAV書き出し・健康診断
-- `src/server/mission_control_server.py` — FastAPI REST & WebSocket テレメトリサーバー
-- `src/ui/index.html` & `src/ui/remote.html` — Living Score／6軸レーダー／知識グラフ統合スタジオUI ＆ スマホ用リモコン
-- `FEATURES_100.md` — [実装済み全100機能の詳細リスト](file:///Users/avalon/Documents/GitHub/Disklavier-Auto/FEATURES_100.md)
+  - `disklavier_safety_guard.py` — Yamaha Disklavier 機種別安全プロファイル・VDL逆算先読み Hybrid Condition スケジューラ・ソレノイド熱保護
+- `src/telemetry/telemetry_store.py` — SQLite WAL 永続化・キーワード/スコア検索＆ CSV/JSON エクスポート・捕捉例外監視
+- `src/obsidian/obsidian_brain.py` — `obsidian_vault/` 自動Markdown/MIDI保存 ＋ mtimeキャッシュ付きイン・アプリ知識グラフ＆系統樹エクスプローラ
+- `src/features/feature_matrix_100.py` — 全100機能カタログ（実装済 90 / 準備中 10）・Living Score 差分座標生成・QR Version 6 生成・MIDI/MusicXML/WAV書き出し・健康診断
+- `src/server/mission_control_server.py` — FastAPI REST & 30Hz 差分 WebSocket テレメトリサーバー（`lifespan` 管理・認証ミドルウェア・分析API群）
+- `src/ui/index.html` & `src/ui/remote.html` — 9タブ構成 Living Score／分析チャート／SQLite検索スタジオUI ＆ スマホリモコン
+- [FEATURES_100.md](FEATURES_100.md) — 登録全100機能（実装済 90 / 準備中 10）＆ Phase 4/5 拡張機能一覧
+- [docs/PERFORMANCE.md](docs/PERFORMANCE.md) — Phase 1〜3 実測ベンチマーク比較レポート
+- [docs/HARDWARE_TEST_PROCEDURE.md](docs/HARDWARE_TEST_PROCEDURE.md) — Yamaha Disklavier 実機接続・手動安全性検証手順書

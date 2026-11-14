@@ -14,18 +14,18 @@ Impressionist Color (Debussy), Bel Canto Rubato (Chopin), and Crisp Vivace/Count
 
 from __future__ import annotations
 
+import importlib.util
 import json
 import math
 import os
 import platform
-from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple
 
 import numpy as np
 
 from src.midi.imslp_library import save_piece_to_smf
 from src.safety.preflight_checker import LocalPreflightChecker
-from src.telemetry.telemetry_store import BASE_DIR
+from src.telemetry.telemetry_store import BASE_DIR, record_caught_exception
 
 
 HUMAN_REF_DIR = BASE_DIR / "data" / "human_references"
@@ -118,12 +118,14 @@ def compute_hardware_acceleration_info() -> Dict[str, Any]:
     mps_available = False
     backend_name = "Apple Accelerate SIMD (NumPy Vectorized)"
     try:
-        import torch  # type: ignore
+        if importlib.util.find_spec("torch") is not None:
+            import torch  # type: ignore
 
-        if hasattr(torch.backends, "mps") and torch.backends.mps.is_available():
-            mps_available = True
-            backend_name = "Apple Metal GPU (PyTorch MPS) + Multi-Core CPU"
-    except Exception:
+            if hasattr(torch.backends, "mps") and torch.backends.mps.is_available():
+                mps_available = True
+                backend_name = "Apple Metal GPU (PyTorch MPS) + Multi-Core CPU"
+    except Exception as exc:
+        record_caught_exception("human_reference_teacher.mps_probe", exc)
         mps_available = False
 
     return {

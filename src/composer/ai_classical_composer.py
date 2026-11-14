@@ -25,11 +25,10 @@ Capabilities:
 
 from __future__ import annotations
 
-import asyncio
 import math
 import time
 from pathlib import Path
-from typing import Any, Callable, Dict, List, Optional, Tuple
+from typing import Any, Callable, Dict, List, Tuple
 
 import numpy as np
 
@@ -68,10 +67,8 @@ def compose_expanded_dialogue_piece(
     if not captured_notes:
         # Expressive default motif in D-flat / F minor if none recorded yet
         raw_pitches = [61, 65, 68, 73, 70, 68, 65, 61]
-        raw_vels = [62, 66, 70, 76, 72, 68, 64, 60]
     else:
         raw_pitches = [int(n.get("note", 60)) for n in captured_notes]
-        raw_vels = [max(44, min(92, int(n.get("velocity", 68)))) for n in captured_notes]
 
     tonic = raw_pitches[0]
     # Keep tonic in a comfortable middle-low reference (48..65)

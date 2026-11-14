@@ -11,7 +11,6 @@ from __future__ import annotations
 import time
 from pathlib import Path
 
-from src.evolution.actor_critic import MultiObjectiveCritic, ParallelCandidateGenerator
 from src.evolution.continuous_virtuoso import ContinuousVirtuosoEngine
 from src.evolution.seed_ingestor import SeedMemoryPool
 from src.obsidian import ObsidianMusicalBrain

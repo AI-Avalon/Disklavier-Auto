@@ -13,7 +13,7 @@ from pathlib import Path
 from typing import Any, Callable, Dict, List, Optional, Tuple
 
 from src.midi.imslp_library import save_piece_to_smf
-from src.telemetry.telemetry_store import BASE_DIR
+from src.telemetry.telemetry_store import BASE_DIR, record_caught_exception, resolve_safe_path
 
 
 VAULT_DIR = BASE_DIR / "obsidian_vault"
@@ -90,6 +90,9 @@ class ObsidianMusicalBrain:
         self._discovery_backlinks: Dict[str, List[str]] = {}
         self._motif_backlinks: Dict[str, List[str]] = {}
         self._last_dashboard_gen: int = -1
+        self._graph_cache: Optional[Dict[str, Any]] = None
+        self._graph_cache_sig: Optional[Tuple[Any, ...]] = None
+        self._graph_version: int = 0
 
         self._ensure_structure(seed_motifs or [])
         self._load_existing_hof_index()
@@ -357,6 +360,7 @@ class ObsidianMusicalBrain:
                     elite_genome=generation_result.get("elite_genome", {}),
                     directives={},
                 )
+            self._graph_version += 1
             return perf_id
 
     def _append_discovery_backlink(
@@ -453,6 +457,7 @@ class ObsidianMusicalBrain:
             (self.dashboard_dir / "Evolution_Overview.md").write_text(
                 overview_md, encoding="utf-8"
             )
+            self._graph_version += 1
 
     def read_human_directives(self) -> Dict[str, Any]:
         if not self.directives_path.exists():
@@ -467,6 +472,7 @@ class ObsidianMusicalBrain:
                 self.directives_path.read_bytes()
             ).hexdigest()
             parsed = _parse_directives_text(new_text)
+            self._graph_version += 1
         if self.on_directives_changed:
             self.on_directives_changed(parsed)
         return parsed
@@ -484,11 +490,13 @@ class ObsidianMusicalBrain:
                         )
                         if self.on_directives_changed:
                             self.on_directives_changed(parsed)
-            except Exception:
-                pass
+            except Exception as exc:
+                record_caught_exception("obsidian_brain.watch_directives", exc)
             time.sleep(0.5)
 
     def get_note_content(self, note_id: str) -> Optional[Dict[str, Any]]:
+        if not note_id or ".." in note_id or "/" in note_id or "\\" in note_id:
+            return None
         safe_id = _slugify(note_id)
         for folder in (
             self.dashboard_dir,
@@ -497,8 +505,9 @@ class ObsidianMusicalBrain:
             self.discovery_dir,
             self.vault_dir,
         ):
-            cand = folder / f"{safe_id}.md"
-            if cand.exists():
+            rel = str((folder / f"{safe_id}.md").relative_to(self.vault_dir))
+            cand = resolve_safe_path(self.vault_dir, rel, (".md",))
+            if cand is not None and cand.is_file():
                 txt = cand.read_text(encoding="utf-8", errors="ignore")
                 m_midi = re.search(r"midi_file:\s*\"([^\"]+)\"", txt)
                 return {
@@ -510,55 +519,79 @@ class ObsidianMusicalBrain:
         return None
 
     def get_knowledge_graph_snapshot(self) -> Dict[str, Any]:
+        cat_dirs = [
+            ("dashboard", self.dashboard_dir),
+            ("motif", self.motif_dir),
+            ("hall_of_fame", self.hof_dir),
+            ("discovery", self.discovery_dir),
+        ]
+        all_md: List[Tuple[str, Path, int, int]] = []
+        for cat, d in cat_dirs:
+            for p in sorted(d.glob("*.md")):
+                try:
+                    st = p.stat()
+                    all_md.append((cat, p, int(st.st_mtime_ns), int(st.st_size)))
+                except OSError:
+                    continue
+        if self.directives_path.exists():
+            try:
+                st = self.directives_path.stat()
+                all_md.append(("directives", self.directives_path, int(st.st_mtime_ns), int(st.st_size)))
+            except OSError:
+                pass
+
         with self._lock:
-            nodes: List[Dict[str, Any]] = []
-            edges: List[Dict[str, str]] = []
-            known_ids = set()
+            ver_start = self._graph_version
+            sig = (ver_start, tuple((str(p), mtime, sz) for _, p, mtime, sz in all_md))
+            if self._graph_cache is not None and self._graph_cache_sig == sig:
+                cached = dict(self._graph_cache)
+                cached["hof_leaderboard"] = list(self._hof_records[:10])
+                return cached
 
-            cat_dirs = [
-                ("dashboard", self.dashboard_dir),
-                ("motif", self.motif_dir),
-                ("hall_of_fame", self.hof_dir),
-                ("discovery", self.discovery_dir),
-            ]
-            all_md: List[Tuple[str, Path]] = []
-            for cat, d in cat_dirs:
-                for p in sorted(d.glob("*.md")):
-                    all_md.append((cat, p))
-            if self.directives_path.exists():
-                all_md.append(("directives", self.directives_path))
+        # Build nodes, edges, and markdown parses outside self._lock
+        nodes: List[Dict[str, Any]] = []
+        edges: List[Dict[str, str]] = []
+        known_ids = set()
 
-            for cat, md_path in all_md:
-                nid = md_path.stem
-                known_ids.add(nid)
-                txt = md_path.read_text(encoding="utf-8", errors="ignore")
-                links = re.findall(r"\[\[([^\]]+)\]\]", txt)
-                m_score = re.search(r"total_score:\s*([0-9.]+)", txt)
-                m_title = re.search(r"^#\s+(.+)$", txt, flags=re.MULTILINE)
-                m_midi = re.search(r"midi_file:\s*\"([^\"]+)\"", txt)
-                nodes.append(
-                    {
-                        "id": nid,
-                        "title": m_title.group(1).strip() if m_title else nid,
-                        "category": cat,
-                        "rel_path": str(md_path.relative_to(BASE_DIR)),
-                        "score": float(m_score.group(1)) if m_score else None,
-                        "midi_rel": m_midi.group(1) if m_midi else None,
-                        "links": sorted(set(links)),
-                    }
-                )
+        for cat, md_path, _, _ in all_md:
+            nid = md_path.stem
+            known_ids.add(nid)
+            txt = md_path.read_text(encoding="utf-8", errors="ignore")
+            links = re.findall(r"\[\[([^\]]+)\]\]", txt)
+            m_score = re.search(r"total_score:\s*([0-9.]+)", txt)
+            m_title = re.search(r"^#\s+(.+)$", txt, flags=re.MULTILINE)
+            m_midi = re.search(r"midi_file:\s*\"([^\"]+)\"", txt)
+            nodes.append(
+                {
+                    "id": nid,
+                    "title": m_title.group(1).strip() if m_title else nid,
+                    "category": cat,
+                    "rel_path": str(md_path.relative_to(BASE_DIR)),
+                    "score": float(m_score.group(1)) if m_score else None,
+                    "midi_rel": m_midi.group(1) if m_midi else None,
+                    "links": sorted(set(links)),
+                }
+            )
 
-            edge_seen = set()
-            for n in nodes:
-                for tgt in n["links"]:
-                    tgt_clean = tgt.split("|")[0].strip()
-                    if tgt_clean in known_ids and tgt_clean != n["id"]:
-                        key = (n["id"], tgt_clean)
-                        if key not in edge_seen:
-                            edge_seen.add(key)
-                            edges.append({"source": n["id"], "target": tgt_clean})
+        edge_seen = set()
+        for n in nodes:
+            for tgt in n["links"]:
+                tgt_clean = tgt.split("|")[0].strip()
+                if tgt_clean in known_ids and tgt_clean != n["id"]:
+                    key = (n["id"], tgt_clean)
+                    if key not in edge_seen:
+                        edge_seen.add(key)
+                        edges.append({"source": n["id"], "target": tgt_clean})
 
-            return {
+        directives_raw = (
+            self.directives_path.read_text(encoding="utf-8", errors="ignore")
+            if self.directives_path.exists()
+            else ""
+        )
+
+        with self._lock:
+            hof_list = list(self._hof_records[:10])
+            snapshot = {
                 "vault_path": str(self.vault_dir),
                 "nodes": nodes,
                 "edges": edges,
@@ -569,11 +602,13 @@ class ObsidianMusicalBrain:
                     "hof_count": sum(1 for n in nodes if n["category"] == "hall_of_fame"),
                     "discovery_count": sum(1 for n in nodes if n["category"] == "discovery"),
                 },
-                "hof_leaderboard": list(self._hof_records[:10]),
-                "directives_raw": self.directives_path.read_text(encoding="utf-8", errors="ignore")
-                if self.directives_path.exists()
-                else "",
+                "hof_leaderboard": hof_list,
+                "directives_raw": directives_raw,
             }
+            if self._graph_version == ver_start:
+                self._graph_cache = snapshot
+                self._graph_cache_sig = sig
+            return snapshot
 
     def get_in_app_knowledge_explorer(self) -> Dict[str, Any]:
         """

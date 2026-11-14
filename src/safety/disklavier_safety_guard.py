@@ -34,6 +34,8 @@ from typing import Any, Callable, Dict, List, Optional, Tuple
 
 import mido
 
+from src.telemetry.telemetry_store import record_caught_exception
+
 
 @dataclass(order=True)
 class ScheduledMidiEvent:
@@ -108,6 +110,40 @@ class VDLModel:
         }
         if raw_points:
             self.calibrated_points.update(raw_points)
+
+
+DISKLAVIER_MODEL_PROFILES: Dict[str, Dict[str, Any]] = {
+    "envious_mark_iv": {
+        "id": "envious_mark_iv",
+        "label_ja": "Mark IV / E3 標準保護 (最大12/16音・28音/秒)",
+        "soft_simultaneous_limit": 12,
+        "hard_simultaneous_limit": 16,
+        "max_active_voices": 20,
+        "max_notes_per_sec": 28,
+        "min_note_duration_s": 0.035,
+        "max_key_hold_s": 8.0,
+    },
+    "dkv_e3_conservative": {
+        "id": "dkv_e3_conservative",
+        "label_ja": "ヴィンテージ実機・省電力保護 (最大10/12音・22音/秒)",
+        "soft_simultaneous_limit": 10,
+        "hard_simultaneous_limit": 12,
+        "max_active_voices": 16,
+        "max_notes_per_sec": 22,
+        "min_note_duration_s": 0.040,
+        "max_key_hold_s": 6.0,
+    },
+    "dcx_enspire_pro": {
+        "id": "dcx_enspire_pro",
+        "label_ja": "DCX ENSPIRE PRO 高精度 (最大14/16音・30音/秒)",
+        "soft_simultaneous_limit": 14,
+        "hard_simultaneous_limit": 16,
+        "max_active_voices": 22,
+        "max_notes_per_sec": 30,
+        "min_note_duration_s": 0.030,
+        "max_key_hold_s": 10.0,
+    },
+}
 
 
 class DisklavierSafetyGuard:
@@ -194,8 +230,11 @@ class DisklavierSafetyGuard:
         self.midi_in_events_log: deque = deque(maxlen=60)
 
         self.vdl_model = VDLModel()
+        self.model_profile_id: str = "envious_mark_iv"
         self._event_heap: List[ScheduledMidiEvent] = []
         self._running = True
+        self._cv = threading.Condition(self._lock)
+        self._jitter_samples_ms: deque = deque(maxlen=400)
 
         self.stats = {
             "total_notes_sent": 0,
@@ -241,8 +280,8 @@ class DisklavierSafetyGuard:
         if self.on_log:
             try:
                 self.on_log(msg)
-            except Exception:
-                pass
+            except Exception as exc:
+                record_caught_exception("safety_guard.on_log", exc)
 
     def _connect_ports(self, preferred_name: Optional[str]) -> bool:
         if not preferred_name:
@@ -327,8 +366,8 @@ class DisklavierSafetyGuard:
                     if self.on_human_midi:
                         try:
                             self.on_human_midi(ev_info)
-                        except Exception:
-                            pass
+                        except Exception as exc:
+                            record_caught_exception("safety_guard.on_human_midi", exc)
 
             elif msg.type == "note_off" or (
                 msg.type == "note_on" and msg.velocity == 0
@@ -689,6 +728,7 @@ class DisklavierSafetyGuard:
     def _push_event(self, ev: ScheduledMidiEvent) -> None:
         heapq.heappush(self._event_heap, ev)
         self.stats["vdl_buffer_events"] = len(self._event_heap)
+        self._cv.notify_all()
 
     def _prune_windows(self, now: float) -> None:
         while (
@@ -808,8 +848,8 @@ class DisklavierSafetyGuard:
                     sympathetic_halo=sympathetic_halo,
                     source_tag=source_tag,
                 )
-            except Exception:
-                pass
+            except Exception as exc:
+                record_caught_exception("safety_guard.virtual_twin_note_on", exc)
 
         min_dur_s = max(self.MIN_NOTE_DURATION_S, min_duration_ms / 1000.0)
         vdl_s = self.vdl_model.predict_latency_ms(note, clean_vel) / 1000.0
@@ -865,8 +905,8 @@ class DisklavierSafetyGuard:
         if self.virtual_twin is not None:
             try:
                 self.virtual_twin.handle_note_off(note, clean_rel_vel, now=now)
-            except Exception:
-                pass
+            except Exception as exc:
+                record_caught_exception("safety_guard.virtual_twin_note_off", exc)
 
         info = self.active_notes.pop(note, None)
         if info and not info.get("sympathetic", False):
@@ -934,8 +974,8 @@ class DisklavierSafetyGuard:
         if self.virtual_twin is not None:
             try:
                 self.virtual_twin.handle_pedal_cc64(clean_val, now=now)
-            except Exception:
-                pass
+            except Exception as exc:
+                record_caught_exception("safety_guard.virtual_twin_cc64", exc)
 
         self.current_pedal_val = clean_val
         if clean_val > 30:
@@ -951,11 +991,14 @@ class DisklavierSafetyGuard:
     def _scheduler_and_watchdog_loop(self) -> None:
         last_watchdog_check = time.perf_counter()
         while self._running:
-            now = time.perf_counter()
-            with self._lock:
-                while self._event_heap and self._event_heap[0].send_time <= now:
+            micro_target: Optional[float] = None
+            with self._cv:
+                now = time.perf_counter()
+                while self._running and self._event_heap and self._event_heap[0].send_time <= now:
                     ev = heapq.heappop(self._event_heap)
+                    jitter_ms = max(0.0, (now - ev.send_time) * 1000.0)
                     if ev.msg_type == "note_on":
+                        self._jitter_samples_ms.append(jitter_ms)
                         self._execute_safe_note_on(
                             note=ev.note,
                             velocity=ev.velocity,
@@ -982,6 +1025,7 @@ class DisklavierSafetyGuard:
                                 ev.send_time = min_off
                                 heapq.heappush(self._event_heap, ev)
                                 continue
+                        self._jitter_samples_ms.append(jitter_ms)
                         self._execute_safe_note_off(
                             ev.note,
                             ev.velocity,
@@ -990,16 +1034,35 @@ class DisklavierSafetyGuard:
                             source_tag=ev.source_tag,
                         )
                     elif ev.msg_type == "control_change":
+                        self._jitter_samples_ms.append(jitter_ms)
                         self._execute_safe_cc(
                             ev.control, ev.value, now, source_tag=ev.source_tag
                         )
+                    now = time.perf_counter()
                 self.stats["vdl_buffer_events"] = len(self._event_heap)
 
                 if (now - last_watchdog_check) >= 0.100:
                     last_watchdog_check = now
                     self._run_thermal_watchdog(now)
 
-            time.sleep(0.0005)
+                if not self._running:
+                    break
+                if self._event_heap:
+                    next_due = self._event_heap[0].send_time
+                    rem = next_due - time.perf_counter()
+                    if rem <= 0.0:
+                        continue
+                    if rem > 0.014:
+                        self._cv.wait(timeout=min(0.050, rem - 0.012))
+                    elif rem > 0.0025:
+                        self._cv.wait(timeout=0.0004)
+                    else:
+                        micro_target = next_due
+                else:
+                    self._cv.wait(timeout=0.050)
+            if micro_target is not None:
+                while self._running and time.perf_counter() < micro_target:
+                    time.sleep(0.0001)
 
     def _run_thermal_watchdog(self, now: float) -> None:
         to_release = [
@@ -1040,6 +1103,7 @@ class DisklavierSafetyGuard:
         with self._lock:
             self._event_heap.clear()
             self.planned_key_off_time.clear()
+            self._cv.notify_all()
             if self.outport:
                 try:
                     self.outport.send(
@@ -1057,8 +1121,8 @@ class DisklavierSafetyGuard:
                     self.outport.send(
                         mido.Message("control_change", control=123, value=0, channel=0)
                     )
-                except Exception:
-                    pass
+                except Exception as exc:
+                    record_caught_exception("safety_guard.panic_midi_flush", exc)
             self.active_notes.clear()
             self.recent_note_ons_2ms.clear()
             self.recent_note_ons_1s.clear()
@@ -1067,14 +1131,55 @@ class DisklavierSafetyGuard:
             if self.virtual_twin is not None:
                 try:
                     self.virtual_twin.panic()
-                except Exception:
-                    pass
+                except Exception as exc:
+                    record_caught_exception("safety_guard.panic_virtual_twin", exc)
             self.stats["panic_count"] += 1
             self.stats["vdl_buffer_events"] = 0
             self._log(
                 "🔴 [EMERGENCY PANIC] Flushed queue, sent All-88-Keys Note-Off & CC#64=0."
             )
             return self.get_telemetry_snapshot()
+
+    def close(self) -> None:
+        """Stop scheduler loop cleanly and wake any sleeping Condition waiters."""
+        with self._lock:
+            self._running = False
+            self._cv.notify_all()
+            if self.outport is not None:
+                try:
+                    self.outport.close()
+                except Exception as exc:
+                    record_caught_exception("safety_guard.close_outport", exc)
+                self.outport = None
+            if self.inport is not None:
+                try:
+                    self.inport.close()
+                except Exception as exc:
+                    record_caught_exception("safety_guard.close_inport", exc)
+                self.inport = None
+
+    def apply_model_profile(self, profile_id: str) -> Dict[str, Any]:
+        """Switch Disklavier physical safety limits to match the target hardware model profile."""
+        pid = str(profile_id or "envious_mark_iv").strip()
+        if pid not in DISKLAVIER_MODEL_PROFILES:
+            pid = "envious_mark_iv"
+        prof = DISKLAVIER_MODEL_PROFILES[pid]
+        with self._lock:
+            self.model_profile_id = pid
+            self.SOFT_SIMULTANEOUS_LIMIT = int(prof["soft_simultaneous_limit"])
+            self.HARD_SIMULTANEOUS_LIMIT = int(prof["hard_simultaneous_limit"])
+            self.MAX_ACTIVE_VOICES = int(prof["max_active_voices"])
+            self.MAX_NOTES_PER_SEC = int(prof["max_notes_per_sec"])
+            self.MIN_NOTE_DURATION_S = float(prof["min_note_duration_s"])
+            self.MAX_KEY_HOLD_S = float(prof["max_key_hold_s"])
+        self._log(f"🛡️ [MODEL PROFILE] Switched safety limits -> {prof['label_ja']}")
+        return {
+            "ok": True,
+            "model_profile_id": pid,
+            "profile": dict(prof),
+            "message_ja": f"🛡️ 安全プロファイルを切り替えました: {prof['label_ja']}",
+            "safety": self.get_telemetry_snapshot(),
+        }
 
     def get_telemetry_snapshot(self) -> dict:
         with self._lock:
@@ -1100,6 +1205,13 @@ class DisklavierSafetyGuard:
                 if self.last_human_activity_time > 0
                 else 999.0
             )
+            j_sorted = sorted(self._jitter_samples_ms)
+            if j_sorted:
+                j_mean = round(sum(j_sorted) / len(j_sorted), 3)
+                j_p95 = round(j_sorted[min(len(j_sorted) - 1, int(0.95 * (len(j_sorted) - 1)))], 3)
+                j_max = round(j_sorted[-1], 3)
+            else:
+                j_mean = j_p95 = j_max = 0.0
             return {
                 "connected": self.outport is not None,
                 "virtual_twin_attached": self.virtual_twin is not None,
@@ -1110,7 +1222,11 @@ class DisklavierSafetyGuard:
                 "active_voices_count": len(self.active_notes),
                 "active_voices_limit": self.MAX_ACTIVE_VOICES,
                 "notes_per_sec": len(self.recent_note_ons_1s),
-                "notes_per_sec_limit": 30,
+                "notes_per_sec_limit": self.MAX_NOTES_PER_SEC,
+                "min_note_duration_ms": round(self.MIN_NOTE_DURATION_S * 1000.0, 1),
+                "max_key_hold_s": self.MAX_KEY_HOLD_S,
+                "model_profile_id": self.model_profile_id,
+                "model_profiles": DISKLAVIER_MODEL_PROFILES,
                 "vdl_buffer_count": len(self._event_heap),
                 "pedal_cc64": self.current_pedal_val,
                 "pedal_hold_s": pedal_hold_s,
@@ -1120,5 +1236,11 @@ class DisklavierSafetyGuard:
                 "recent_verifications": list(self.completed_note_verifications)[-12:],
                 "human_notes_count": len(self.human_recorded_notes),
                 "human_idle_s": human_idle_s,
+                "scheduler_jitter": {
+                    "mean_ms": j_mean,
+                    "p95_ms": j_p95,
+                    "max_ms": j_max,
+                    "samples": len(j_sorted),
+                },
                 "stats": dict(self.stats),
             }

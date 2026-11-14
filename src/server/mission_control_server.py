@@ -8,18 +8,26 @@ acoustic measurement APIs for both the GUI and autonomous R&D scripts.
 from __future__ import annotations
 
 import asyncio
+from collections import deque
+from contextlib import asynccontextmanager
+import csv
+import hashlib
+import hmac
+import io
 import json
 import math
+import os
+import secrets
 import time
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple
 
 import mido
 import numpy as np
-from fastapi import Body, FastAPI, WebSocket, WebSocketDisconnect
+from fastapi import Body, FastAPI, Request, WebSocket, WebSocketDisconnect
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse, HTMLResponse, JSONResponse, Response
-from pydantic import BaseModel
+from pydantic import BaseModel, Field, model_validator
 
 from src.audio.c519ml_monitor import C519MLAudioMonitor, midi_to_name
 from src.evolution.continuous_virtuoso import ContinuousVirtuosoEngine
@@ -35,20 +43,125 @@ from src.features.feature_matrix_100 import (
     invoke_feature,
     run_japanese_system_doctor,
 )
+import src.composer.ai_classical_composer as comp_mod
+import src.midi.imslp_library as midi_mod
+import src.session.accompaniment_engine as acc_mod
 from src.midi.imslp_library import build_and_persist_imslp_library
 from src.obsidian import ObsidianMusicalBrain
 from src.safety.disklavier_safety_guard import DisklavierSafetyGuard
-from src.telemetry.telemetry_store import BASE_DIR, TELEMETRY_DIR, TelemetryStore
+from src.telemetry.telemetry_store import (
+    BASE_DIR,
+    TELEMETRY_DIR,
+    TelemetryStore,
+    get_exception_metrics,
+    record_caught_exception,
+    resolve_safe_path,
+)
 from src.virtual_twin import VirtualDisklavierTwin
 
 
-app = FastAPI(title="Antigravity 2.0: Autonomous Self-Evolving Virtuoso & Virtual Disklavier Studio")
+STUDIO_AUTH_TOKEN: str = (
+    os.environ.get("DISKLAVIER_STUDIO_TOKEN") or secrets.token_urlsafe(16)
+)
+os.environ["DISKLAVIER_ACTIVE_TOKEN"] = STUDIO_AUTH_TOKEN
+
+
+def _build_allowed_origins(port: int = 8765) -> List[str]:
+    origins = [
+        f"http://127.0.0.1:{port}",
+        f"http://localhost:{port}",
+    ]
+    if os.environ.get("DISKLAVIER_LAN_MODE") == "1":
+        lan_ip = get_lan_remote_info(port=port, token="").get("lan_ip")
+        if lan_ip and lan_ip not in ("127.0.0.1", "localhost"):
+            origins.append(f"http://{lan_ip}:{port}")
+    return origins
+
+
+@asynccontextmanager
+async def lifespan(_app: FastAPI):
+    virtuoso_engine.start_stream()
+    telemetry_store.seed_generation_history_if_empty(virtuoso_engine.evolution_history)
+    ws_broadcaster.ensure_started()
+    mode_label = (
+        "実機Disklavier ＋ バーチャルスタジオ"
+        if safety_guard.outport is not None
+        else "Mac内蔵バーチャルピアノ (安全モード)"
+    )
+    telemetry_store.update_banner(
+        code="READY",
+        message=f"🟢 自動で作曲・進化中 ({mode_label})",
+        sub_message="人間のお手本から学んだ歌うレガート＆活発な躍動感でオリジナル曲を紡いでいます",
+        task_name="自動作曲・ライブ進化スタジオ",
+        progress_pct=100,
+        current_phase="🟢 自動演奏中",
+    )
+    try:
+        yield
+    finally:
+        await ws_broadcaster.stop()
+        virtuoso_engine.stop_stream()
+        virtual_twin.close()
+        if hasattr(safety_guard, "close"):
+            safety_guard.close()
+
+
+app = FastAPI(
+    title="Antigravity 2.0: Autonomous Self-Evolving Virtuoso & Virtual Disklavier Studio",
+    lifespan=lifespan,
+)
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
-    allow_methods=["*"],
-    allow_headers=["*"],
+    allow_origins=_build_allowed_origins(8765),
+    allow_credentials=True,
+    allow_methods=["GET", "POST", "OPTIONS"],
+    allow_headers=["Content-Type", "X-Studio-Token", "Authorization"],
 )
+
+
+def _extract_token(headers: Any, query_params: Any, cookies: Any) -> str:
+    tok = headers.get("x-studio-token") or ""
+    if not tok:
+        auth = headers.get("authorization") or ""
+        if auth.lower().startswith("bearer "):
+            tok = auth[7:].strip()
+    if not tok:
+        tok = query_params.get("token") or ""
+    if not tok:
+        tok = cookies.get("disklavier_token") or ""
+    return tok
+
+
+def _is_authorized_request(request: Request) -> bool:
+    provided = _extract_token(request.headers, request.query_params, request.cookies)
+    return bool(provided) and hmac.compare_digest(provided, STUDIO_AUTH_TOKEN)
+
+
+def _is_loopback_client(client: Any) -> bool:
+    if client is None:
+        return True
+    host = getattr(client, "host", None) or (client[0] if isinstance(client, tuple) and client else "")
+    return host in ("127.0.0.1", "::1", "localhost", "testclient", "")
+
+
+def _inject_token_html(html: str, include_token: bool) -> str:
+    if not include_token:
+        return html
+    meta = f'<meta name="studio-token" content="{STUDIO_AUTH_TOKEN}" />'
+    if "</head>" in html:
+        return html.replace("</head>", f"  {meta}\n</head>", 1)
+    return f"{meta}\n{html}"
+
+
+@app.middleware("http")
+async def studio_auth_middleware(request: Request, call_next):
+    if request.method in ("POST", "PUT", "DELETE", "PATCH") and request.url.path.startswith("/api/"):
+        if not _is_authorized_request(request):
+            return JSONResponse(
+                {"ok": False, "error": "Unauthorized: valid studio token required"},
+                status_code=401,
+            )
+    return await call_next(request)
 
 telemetry_store = TelemetryStore()
 safety_guard = DisklavierSafetyGuard(
@@ -96,24 +209,6 @@ studio_state: Dict[str, Any] = {
     "optimizer_comparison": None,
     "rehearsal_takes": [],
 }
-
-
-@app.on_event("startup")
-async def _startup_autonomous_stream() -> None:
-    virtuoso_engine.start_stream()
-    mode_label = (
-        "実機Disklavier ＋ バーチャルスタジオ"
-        if safety_guard.outport is not None
-        else "Mac内蔵バーチャルピアノ (安全モード)"
-    )
-    telemetry_store.update_banner(
-        code="READY",
-        message=f"🟢 自動で作曲・進化中 ({mode_label})",
-        sub_message="人間のお手本から学んだ歌うレガート＆活発な躍動感でオリジナル曲を紡いでいます",
-        task_name="自動作曲・ライブ進化スタジオ",
-        progress_pct=100,
-        current_phase="🟢 自動演奏中",
-    )
 
 
 # -------------------------------------------------------------------------
@@ -165,42 +260,71 @@ class BannerUpdateReq(BaseModel):
 
 
 class SingleNoteMeasureReq(BaseModel):
-    note: int
-    velocity: int
-    duration_s: float = 0.28
-    countdown_seconds: int = 0
-    description: str = ""
+    note: int = Field(..., ge=21, le=108)
+    velocity: int = Field(..., ge=1, le=127)
+    duration_s: float = Field(default=0.28, ge=0.035, le=8.0)
+    countdown_seconds: int = Field(default=0, ge=0, le=10)
+    description: str = Field(default="", max_length=200)
     sympathetic_halo: bool = False
+
+
+class ChordNoteItem(BaseModel):
+    note: int = Field(..., ge=21, le=108)
+    velocity: int = Field(..., ge=1, le=127)
+    duration_s: float = Field(default=0.45, ge=0.035, le=8.0)
 
 
 class ChordPlayReq(BaseModel):
-    notes: List[Dict[str, Any]]  # [{"note": 60, "velocity": 50, "duration_s": 0.5}, ...]
+    notes: List[ChordNoteItem] = Field(..., min_length=1, max_length=16)
     use_vdl: bool = True
-    pedal_cc64: Optional[int] = None
-    pedal_preroll_ms: float = 40.0
-    countdown_seconds: int = 3
-    description: str = "Chord Playback"
+    pedal_cc64: Optional[int] = Field(default=None, ge=0, le=127)
+    pedal_preroll_ms: float = Field(default=40.0, ge=0.0, le=200.0)
+    countdown_seconds: int = Field(default=3, ge=0, le=10)
+    description: str = Field(default="Chord Playback", max_length=200)
     sympathetic_halo: bool = False
-    source_tag: str = "engine"
+    source_tag: str = Field(default="engine", max_length=64)
+
+
+class SequenceEventItem(BaseModel):
+    time_offset_s: float = Field(default=0.0, ge=0.0, le=120.0)
+    note: int = Field(default=0, ge=0, le=108)
+    velocity: int = Field(default=55, ge=1, le=127)
+    duration_s: float = Field(default=0.35, ge=0.035, le=8.0)
+    pedal_cc64: Optional[int] = Field(default=None, ge=0, le=127)
+    sympathetic_halo: bool = False
+    source_tag: str = Field(default="sequence", max_length=64)
+
+    @model_validator(mode="after")
+    def _validate_note_or_pedal(self) -> "SequenceEventItem":
+        if self.note == 0:
+            if self.pedal_cc64 is None:
+                raise ValueError("note=0 requires pedal_cc64")
+        elif not (21 <= self.note <= 108):
+            raise ValueError("note must be between 21 and 108")
+        return self
 
 
 class SequencePlayReq(BaseModel):
-    events: List[
-        Dict[str, Any]
-    ]  # [{"time_offset_s": 0.0, "note": 60, "velocity": 55, "duration_s": 0.4, "pedal_cc64": 55, "sympathetic_halo": False, "source_tag": "accompaniment"}]
+    events: List[SequenceEventItem] = Field(..., min_length=1, max_length=512)
     use_vdl: bool = True
-    countdown_seconds: int = 3
-    description: str = "Sequence Playback"
+    countdown_seconds: int = Field(default=3, ge=0, le=10)
+    description: str = Field(default="Sequence Playback", max_length=200)
 
 
 class PedalMeasureReq(BaseModel):
-    cc64: int
-    notes: List[int] = [48, 55, 60, 64, 67]
-    velocity: int = 62
-    hold_s: float = 0.35
-    listen_s: float = 1.4
-    register_name: str = "C3-G4 Mid-Low Register"
-    countdown_seconds: int = 0
+    cc64: int = Field(..., ge=0, le=127)
+    notes: List[int] = Field(default=[48, 55, 60, 64, 67], min_length=1, max_length=16)
+    velocity: int = Field(default=62, ge=1, le=127)
+    hold_s: float = Field(default=0.35, ge=0.05, le=5.0)
+    listen_s: float = Field(default=1.4, ge=0.1, le=10.0)
+    register_name: str = Field(default="C3-G4 Mid-Low Register", max_length=120)
+    countdown_seconds: int = Field(default=0, ge=0, le=10)
+
+    @model_validator(mode="after")
+    def _validate_notes(self) -> "PedalMeasureReq":
+        if any(not (21 <= int(n) <= 108) for n in self.notes):
+            raise ValueError("All pedal test notes must be within 21..108")
+        return self
 
 
 class ModeSwitchReq(BaseModel):
@@ -213,17 +337,29 @@ class ModeSwitchReq(BaseModel):
 # REST API Endpoints
 # -------------------------------------------------------------------------
 @app.get("/", response_class=HTMLResponse)
-async def serve_index() -> HTMLResponse:
+async def serve_index(request: Request) -> HTMLResponse:
     ui_path = BASE_DIR / "src" / "ui" / "index.html"
     if ui_path.exists():
-        return HTMLResponse(ui_path.read_text(encoding="utf-8"))
+        allow_tok = _is_loopback_client(request.client) or _is_authorized_request(request)
+        resp = HTMLResponse(_inject_token_html(ui_path.read_text(encoding="utf-8"), allow_tok))
+        if allow_tok:
+            resp.set_cookie(
+                key="disklavier_token",
+                value=STUDIO_AUTH_TOKEN,
+                httponly=True,
+                samesite="strict",
+                path="/",
+            )
+        return resp
     return HTMLResponse("<h1>Loading Live Mission Control UI...</h1>")
 
 
 @app.get("/telemetry/charts/{filename}")
 async def serve_chart(filename: str):
-    file_path = TELEMETRY_DIR / filename
-    if file_path.exists():
+    file_path = resolve_safe_path(TELEMETRY_DIR, filename, (".png", ".svg", ".json"))
+    if file_path is None:
+        return JSONResponse({"error": "Invalid chart filename"}, status_code=400)
+    if file_path.is_file():
         return FileResponse(file_path)
     return JSONResponse({"error": "Chart not found"}, status_code=404)
 
@@ -467,7 +603,7 @@ async def play_chord_api(req: ChordPlayReq):
     if req.countdown_seconds > 0:
         await run_sound_countdown(req.description, req.countdown_seconds)
     tuples = [
-        (int(n["note"]), int(n["velocity"]), float(n.get("duration_s", 0.45)))
+        (int(n.note), int(n.velocity), float(n.duration_s))
         for n in req.notes
     ]
     records = safety_guard.schedule_chord_or_notes(
@@ -495,16 +631,16 @@ async def play_sequence_api(req: SequencePlayReq):
     max_end_offset = 0.0
 
     # Group events by time_offset_s (within 5 ms) so chords get scheduled together
-    sorted_evs = sorted(req.events, key=lambda x: float(x.get("time_offset_s", 0.0)))
+    sorted_evs = sorted(req.events, key=lambda x: float(x.time_offset_s))
     for ev in sorted_evs:
-        t_off = float(ev.get("time_offset_s", 0.0))
-        dur = float(ev.get("duration_s", 0.35))
+        t_off = float(ev.time_offset_s)
+        dur = float(ev.duration_s)
         max_end_offset = max(max_end_offset, t_off + dur)
-        note = int(ev.get("note", 0))
-        vel = int(ev.get("velocity", 55))
-        pedal = ev.get("pedal_cc64", None)
-        halo = bool(ev.get("sympathetic_halo", False))
-        tag = str(ev.get("source_tag", "sequence"))
+        note = int(ev.note)
+        vel = int(ev.velocity)
+        pedal = ev.pedal_cc64
+        halo = bool(ev.sympathetic_halo)
+        tag = str(ev.source_tag or "sequence")
 
         if note > 0:
             safety_guard.schedule_chord_or_notes(
@@ -554,10 +690,6 @@ async def update_studio_state(payload: Dict[str, Any]):
 
 @app.post("/api/session/proxy_demo")
 async def api_session_proxy_demo():
-    import importlib
-    import src.session.accompaniment_engine as acc_mod
-
-    importlib.reload(acc_mod)
     return await acc_mod.run_live_proxy_session_demo(
         safety_guard=safety_guard,
         audio_monitor=audio_monitor,
@@ -571,10 +703,6 @@ async def api_session_proxy_demo():
 async def api_composer_listen_and_compose(req: Dict[str, Any]):
     if virtuoso_engine.streaming_active:
         virtuoso_engine.stop_stream()
-    import importlib
-    import src.composer.ai_classical_composer as comp_mod
-
-    importlib.reload(comp_mod)
     return await comp_mod.listen_and_compose_live(
         req=req,
         safety_guard=safety_guard,
@@ -587,10 +715,6 @@ async def api_composer_listen_and_compose(req: Dict[str, Any]):
 
 @app.post("/api/dialogue/your_turn")
 async def api_dialogue_your_turn():
-    import importlib
-    import src.composer.ai_classical_composer as comp_mod
-
-    importlib.reload(comp_mod)
     return await comp_mod.start_human_turn_listening(
         safety_guard=safety_guard,
         audio_monitor=audio_monitor,
@@ -601,10 +725,6 @@ async def api_dialogue_your_turn():
 
 @app.post("/api/dialogue/inject_notes")
 async def api_dialogue_inject_notes(req: Dict[str, Any]):
-    import importlib
-    import src.composer.ai_classical_composer as comp_mod
-
-    importlib.reload(comp_mod)
     notes = [int(x) for x in req.get("notes", [61, 65, 68, 73])]
     return await comp_mod.inject_interactive_motif_notes(
         notes=notes,
@@ -632,10 +752,6 @@ async def api_closed_loop_optimize_sustain(req: Dict[str, Any]):
 
 @app.post("/api/composer/export_midi")
 async def api_composer_export_midi():
-    import importlib
-    import src.composer.ai_classical_composer as comp_mod
-
-    importlib.reload(comp_mod)
     path = comp_mod.export_latest_composed_midi(studio_state)
     return {"ok": True, "path": str(path)}
 
@@ -644,10 +760,6 @@ async def api_composer_export_midi():
 async def api_midi_play_optimized(req: Dict[str, Any]):
     if virtuoso_engine.streaming_active:
         virtuoso_engine.stop_stream()
-    import importlib
-    import src.midi.imslp_library as midi_mod
-
-    importlib.reload(midi_mod)
     return await midi_mod.play_optimized_piece(
         piece_id=str(req.get("piece_id", "saint_saens_swan")),
         safety_guard=safety_guard,
@@ -659,10 +771,6 @@ async def api_midi_play_optimized(req: Dict[str, Any]):
 
 @app.post("/api/rehearsal/record_proxy_take")
 async def api_rehearsal_record_take():
-    import importlib
-    import src.session.accompaniment_engine as acc_mod
-
-    importlib.reload(acc_mod)
     return await acc_mod.record_rehearsal_take_live(
         safety_guard=safety_guard,
         audio_monitor=audio_monitor,
@@ -674,10 +782,6 @@ async def api_rehearsal_record_take():
 
 @app.post("/api/rehearsal/replay_style")
 async def api_rehearsal_replay_style(req: Dict[str, Any]):
-    import importlib
-    import src.session.accompaniment_engine as acc_mod
-
-    importlib.reload(acc_mod)
     return await acc_mod.replay_rehearsal_take_with_style(
         style=str(req.get("style", "faure")),
         safety_guard=safety_guard,
@@ -768,6 +872,8 @@ async def api_obsidian_graph():
 
 @app.get("/api/obsidian/note/{note_id}")
 async def api_obsidian_note(note_id: str):
+    if ".." in note_id or "/" in note_id or "\\" in note_id:
+        return JSONResponse({"error": "Invalid note id"}, status_code=400)
     note = obsidian_brain.get_note_content(note_id)
     if note is None:
         return JSONResponse({"error": "Note not found"}, status_code=404)
@@ -788,8 +894,10 @@ async def api_obsidian_directives(req: Dict[str, Any]):
 @app.post("/api/obsidian/play_hof")
 async def api_obsidian_play_hof(req: Dict[str, Any]):
     midi_rel = str(req.get("midi_rel", ""))
-    midi_path = obsidian_brain.vault_dir / midi_rel
-    if not midi_rel or not midi_path.exists():
+    midi_path = resolve_safe_path(obsidian_brain.vault_dir, midi_rel, (".mid",))
+    if midi_path is None:
+        return JSONResponse({"error": "Invalid Hall of Fame MIDI path"}, status_code=400)
+    if not midi_path.is_file():
         return JSONResponse({"error": "Hall of Fame MIDI not found"}, status_code=404)
 
     was_streaming = virtuoso_engine.streaming_active
@@ -1152,47 +1260,435 @@ async def api_system_doctor():
 
 
 @app.get("/api/remote/info")
-async def api_remote_info():
-    return get_lan_remote_info(8765)
+async def api_remote_info(request: Request):
+    allow_tok = _is_loopback_client(request.client) or _is_authorized_request(request)
+    return get_lan_remote_info(8765, token=STUDIO_AUTH_TOKEN if allow_tok else "")
+
+
+# -------------------------------------------------------------------------
+# Phase 4 & 5 Analytics, SQLite Logs, Critic Weights, Blind A/B, Dialogue & Safety Profile
+# -------------------------------------------------------------------------
+@app.get("/api/virtuoso/weights")
+async def api_get_virtuoso_weights():
+    return {"ok": True, **virtuoso_engine.get_critic_weights()}
+
+
+@app.post("/api/virtuoso/weights")
+async def api_set_virtuoso_weights(req: Dict[str, Any] = Body(default={})):
+    weights = req.get("axis_weights") if isinstance(req.get("axis_weights"), dict) else req.get("weights")
+    preset = req.get("preset")
+    return await asyncio.to_thread(virtuoso_engine.set_critic_weights, weights, preset)
+
+
+@app.post("/api/timemachine/blind_ab")
+async def api_timemachine_blind_ab(req: Dict[str, Any] = Body(default={})):
+    action = str(req.get("action", "start"))
+    choice = req.get("choice")
+    return await asyncio.to_thread(virtuoso_engine.blind_ab_action, action, choice)
+
+
+@app.get("/api/dialogue/comparison")
+async def api_dialogue_comparison():
+    return {"ok": True, **virtuoso_engine.get_dialogue_comparison()}
+
+
+@app.get("/api/safety/profile")
+async def api_get_safety_profile():
+    snap = safety_guard.get_telemetry_snapshot()
+    return {
+        "ok": True,
+        "model_profile_id": snap.get("model_profile_id", "envious_mark_iv"),
+        "model_profiles": snap.get("model_profiles", {}),
+        "safety": snap,
+    }
+
+
+@app.post("/api/safety/profile")
+async def api_set_safety_profile(req: Dict[str, Any] = Body(default={})):
+    profile_id = str(req.get("profile_id", "envious_mark_iv"))
+    return safety_guard.apply_model_profile(profile_id)
+
+
+@app.get("/api/analytics/overview")
+async def api_analytics_overview():
+    v_snap = virtuoso_engine.get_telemetry_snapshot()
+    telemetry_store.seed_generation_history_if_empty(virtuoso_engine.evolution_history)
+    gen_hist = telemetry_store.get_generation_history_db(limit=120)
+    if not gen_hist:
+        gen_hist = list(v_snap.get("evolution_history", []))
+
+    vdl_db = telemetry_store.get_vdl_measurements_db(limit=120)
+    if not vdl_db:
+        vdl_db = list(telemetry_store.experiments_data.get("exp1_vdl", {}).get("points", []))
+    pedal_db = telemetry_store.get_pedal_measurements_db(limit=80)
+    if not pedal_db:
+        pedal_db = list(telemetry_store.experiments_data.get("exp2_pedal", {}).get("points", []))
+
+    latest_events = list(v_snap.get("latest_events", []))
+    by_pitch: Dict[int, List[float]] = {}
+    velocities: List[int] = []
+    for ev in latest_events:
+        n = int(ev.get("note", 0))
+        if n > 0:
+            by_pitch.setdefault(n, []).append(float(ev.get("time_offset_s", 0.0)))
+            velocities.append(int(ev.get("velocity", 64)))
+    retrigger_ms: List[float] = []
+    for times in by_pitch.values():
+        ts = sorted(times)
+        for i in range(1, len(ts)):
+            retrigger_ms.append(round((ts[i] - ts[i - 1]) * 1000.0, 1))
+
+    s_snap = safety_guard.get_telemetry_snapshot()
+    return {
+        "ok": True,
+        "generation_history": gen_hist,
+        "vdl_measurements": vdl_db,
+        "pedal_measurements": pedal_db,
+        "experiments": telemetry_store.experiments_data,
+        "latest_events": latest_events,
+        "retrigger_intervals_ms": retrigger_ms,
+        "velocities": velocities,
+        "safety": s_snap,
+        "performance": await api_performance(),
+    }
+
+
+@app.get("/api/logs/search")
+async def api_logs_search(
+    table: str = "all",
+    q: str = "",
+    min_score: Optional[float] = None,
+    limit: int = 100,
+):
+    rows = telemetry_store.search_sqlite_logs(
+        query=q, category=table, limit=limit, min_score=min_score
+    )
+    return {"ok": True, "table": table, "count": len(rows), "rows": rows}
+
+
+@app.get("/api/logs/export")
+async def api_logs_export(
+    table: str = "generation_history",
+    fmt: str = "csv",
+    q: str = "",
+    min_score: Optional[float] = None,
+    limit: int = 200,
+):
+    safe_table = "".join(c for c in table if c.isalnum() or c == "_") or "logs"
+    rows = telemetry_store.export_sqlite_rows(
+        table=table, query=q, min_score=min_score, limit=limit
+    )
+    fmt_clean = fmt.lower().strip()
+    if fmt_clean == "json":
+        payload = json.dumps({"table": table, "count": len(rows), "rows": rows}, ensure_ascii=False, indent=2)
+        return Response(
+            content=payload.encode("utf-8"),
+            media_type="application/json; charset=utf-8",
+            headers={"Content-Disposition": f'attachment; filename="disklavier_{safe_table}.json"'},
+        )
+    buf = io.StringIO()
+    if rows:
+        fieldnames = list(rows[0].keys())
+        writer = csv.DictWriter(buf, fieldnames=fieldnames)
+        writer.writeheader()
+        for r in rows:
+            writer.writerow(r)
+    else:
+        buf.write("id,message\n")
+    return Response(
+        content=buf.getvalue().encode("utf-8-sig"),
+        media_type="text/csv; charset=utf-8",
+        headers={"Content-Disposition": f'attachment; filename="disklavier_{safe_table}.csv"'},
+    )
 
 
 @app.get("/remote", response_class=HTMLResponse)
-async def serve_mobile_remote() -> HTMLResponse:
+async def serve_mobile_remote(request: Request) -> HTMLResponse:
     remote_path = BASE_DIR / "src" / "ui" / "remote.html"
     if remote_path.exists():
-        return HTMLResponse(remote_path.read_text(encoding="utf-8"))
+        allow_tok = _is_loopback_client(request.client) or _is_authorized_request(request)
+        resp = HTMLResponse(_inject_token_html(remote_path.read_text(encoding="utf-8"), allow_tok))
+        if allow_tok:
+            resp.set_cookie(
+                key="disklavier_token",
+                value=STUDIO_AUTH_TOKEN,
+                httponly=True,
+                samesite="strict",
+                path="/",
+            )
+        return resp
     return HTMLResponse("<h1>スマホリモコンを準備中です...</h1>")
 
 
 
 # -------------------------------------------------------------------------
-# 60fps Real-Time WebSocket Stream
+# Single 30Hz Multi-Rate Delta WebSocket Broadcaster
 # -------------------------------------------------------------------------
+
+
+class WebSocketBroadcaster:
+    """Broadcasts a single shared 30Hz multi-rate delta stream to all connected WS clients."""
+
+    TARGET_HZ = 30.0
+
+    def __init__(self) -> None:
+        self._clients: Dict[WebSocket, asyncio.Queue[str]] = {}
+        self._task: Optional[asyncio.Task[None]] = None
+        self._running: bool = False
+        self._tick: int = 0
+        self._last_banner_hash: str = ""
+        self._last_v_hashes: Dict[str, str] = {}
+        self._last_safety_slow_hash: str = ""
+        self._last_agent_hash: str = ""
+        self._last_obs_hash: str = ""
+        self._send_samples: deque[Tuple[float, int, int]] = deque(maxlen=300)
+        self._bw_history: deque[Dict[str, Any]] = deque(maxlen=60)
+        self._last_hist_ts: float = 0.0
+        self._delta_saved_bytes: int = 0
+
+    def ensure_started(self) -> None:
+        if self._task is None or self._task.done():
+            loop = asyncio.get_running_loop()
+            self._running = True
+            self._task = loop.create_task(self._broadcast_loop())
+
+    async def stop(self) -> None:
+        self._running = False
+        if self._task is not None and not self._task.done():
+            self._task.cancel()
+            try:
+                await self._task
+            except asyncio.CancelledError:
+                pass
+        self._task = None
+
+    def register(self, ws: WebSocket) -> asyncio.Queue[str]:
+        q: asyncio.Queue[str] = asyncio.Queue(maxsize=6)
+        self._clients[ws] = q
+        self.ensure_started()
+        return q
+
+    def unregister(self, ws: WebSocket) -> None:
+        self._clients.pop(ws, None)
+
+    @staticmethod
+    def _compact_json(obj: Any) -> str:
+        return json.dumps(obj, ensure_ascii=False, separators=(",", ":"))
+
+    def build_initial_frame(self) -> str:
+        obs_snap = obsidian_brain.get_knowledge_graph_snapshot()
+        v_snap = dict(virtuoso_engine.get_telemetry_snapshot())
+        if isinstance(v_snap.get("latest_events"), list) and len(v_snap["latest_events"]) > 64:
+            v_snap["latest_events"] = v_snap["latest_events"][-64:]
+        frame: Dict[str, Any] = {
+            "ts": round(time.time(), 3),
+            "banner": telemetry_store.banner_state,
+            "audio": audio_monitor.get_telemetry_snapshot(),
+            "safety": safety_guard.get_telemetry_snapshot(),
+            "twin": virtual_twin.get_telemetry_snapshot(),
+            "virtuoso": v_snap,
+            "virtuoso_delta": False,
+            "agent": telemetry_store.get_snapshot(),
+            "obsidian_meta": {
+                "stats": obs_snap.get("stats", {}),
+                "hof_leaderboard": obs_snap.get("hof_leaderboard", [])[:5],
+            },
+        }
+        return self._compact_json(frame)
+
+    def _build_tick_frame(self, tick: int) -> Dict[str, Any]:
+        a_snap = audio_monitor.get_telemetry_snapshot()
+        s_snap = safety_guard.get_telemetry_snapshot()
+        t_snap = virtual_twin.get_telemetry_snapshot()
+        frame: Dict[str, Any] = {
+            "ts": round(time.time(), 3),
+            "audio": {
+                "device_name": a_snap.get("device_name"),
+                "active": bool(float(a_snap.get("rms_dbfs", -120.0)) > -90.0),
+                "rms_dbfs": a_snap.get("rms_dbfs"),
+                "detected_notes": a_snap.get("detected_notes", []),
+                "detected_note_names": a_snap.get("detected_note_names", []),
+                "estimated_bpm": a_snap.get("estimated_bpm", 72),
+            },
+            "safety": {
+                "active_voices_count": s_snap.get("active_voices_count", 0),
+                "active_voices_limit": s_snap.get("active_voices_limit", 20),
+                "notes_per_sec": s_snap.get("notes_per_sec", 0),
+                "notes_per_sec_limit": s_snap.get("notes_per_sec_limit", 30),
+                "pedal_cc64": s_snap.get("pedal_cc64", 0),
+                "vdl_buffer_count": s_snap.get("vdl_buffer_count", 0),
+                "active_keys": s_snap.get("active_keys", {}),
+            },
+            "twin": {
+                "virtual_sound_enabled": t_snap.get("virtual_sound_enabled"),
+                "hardware_output_enabled": t_snap.get("hardware_output_enabled"),
+                "physics": {
+                    "effective_cc64": (t_snap.get("physics") or {}).get("effective_cc64", 0),
+                },
+            },
+        }
+
+        banner_raw = self._compact_json(telemetry_store.banner_state)
+        bh = hashlib.md5(banner_raw.encode("utf-8")).hexdigest()
+        if bh != self._last_banner_hash:
+            self._last_banner_hash = bh
+            frame["banner"] = telemetry_store.banner_state
+        else:
+            self._delta_saved_bytes += len(banner_raw)
+
+        # 5Hz Virtuoso delta channel (every 6 ticks at 30Hz): diff ALL keys
+        if tick % 6 == 1:
+            v_full = dict(virtuoso_engine.get_telemetry_snapshot())
+            if isinstance(v_full.get("latest_events"), list) and len(v_full["latest_events"]) > 64:
+                v_full["latest_events"] = v_full["latest_events"][-64:]
+            delta_v: Dict[str, Any] = {}
+            for k, val in v_full.items():
+                raw = self._compact_json(val)
+                h = hashlib.md5(raw.encode("utf-8")).hexdigest()
+                if self._last_v_hashes.get(k) != h:
+                    self._last_v_hashes[k] = h
+                    delta_v[k] = val
+                else:
+                    self._delta_saved_bytes += len(raw)
+            if delta_v:
+                frame["virtuoso"] = delta_v
+                frame["virtuoso_delta"] = True
+
+        # 1Hz Slow channel (every 30 ticks at 30Hz)
+        if tick % 30 == 1:
+            safety_slow = {
+                "stats": s_snap.get("stats", {}),
+                "scheduler_jitter": s_snap.get("scheduler_jitter", {}),
+                "vdl_params": s_snap.get("vdl_params", {}),
+            }
+            ss_raw = self._compact_json(safety_slow)
+            sh = hashlib.md5(ss_raw.encode("utf-8")).hexdigest()
+            if sh != self._last_safety_slow_hash:
+                self._last_safety_slow_hash = sh
+                frame["safety"].update(safety_slow)
+
+            agent_snap = telemetry_store.get_snapshot()
+            agent_raw = self._compact_json(agent_snap)
+            ah = hashlib.md5(agent_raw.encode("utf-8")).hexdigest()
+            if ah != self._last_agent_hash:
+                self._last_agent_hash = ah
+                frame["agent"] = agent_snap
+            else:
+                self._delta_saved_bytes += len(agent_raw)
+
+            obs_snap = obsidian_brain.get_knowledge_graph_snapshot()
+            obs_meta = {
+                "stats": obs_snap.get("stats", {}),
+                "hof_leaderboard": obs_snap.get("hof_leaderboard", [])[:5],
+            }
+            obs_raw = self._compact_json(obs_meta)
+            oh = hashlib.md5(obs_raw.encode("utf-8")).hexdigest()
+            if oh != self._last_obs_hash:
+                self._last_obs_hash = oh
+                frame["obsidian_meta"] = obs_meta
+        return frame
+
+    def _record_broadcast(self, now: float, payload_bytes: int, client_count: int) -> None:
+        self._send_samples.append((now, payload_bytes, client_count))
+        if (now - self._last_hist_ts) >= 1.0:
+            self._last_hist_ts = now
+            m = self.get_metrics()
+            self._bw_history.append(
+                {
+                    "ts": round(now, 2),
+                    "kb_per_sec_per_client": m["kb_per_sec_per_client"],
+                    "messages_per_sec_per_client": m["messages_per_sec_per_client"],
+                    "clients": m["connected_clients"],
+                }
+            )
+
+    def get_metrics(self) -> Dict[str, Any]:
+        now = time.time()
+        window = [s for s in self._send_samples if (now - s[0]) <= 5.0]
+        if window:
+            span = max(1.0, now - window[0][0])
+            total_bytes_per_client = sum(s[1] for s in window)
+            kbps = (total_bytes_per_client / 1024.0) / span
+            mps = len(window) / span
+        else:
+            kbps = 0.0
+            mps = 0.0
+        return {
+            "target_hz": self.TARGET_HZ,
+            "connected_clients": len(self._clients),
+            "bytes_per_sec_per_client": int(round(kbps * 1024.0)),
+            "kb_per_sec_per_client": round(kbps, 2),
+            "messages_per_sec_per_client": round(mps, 2),
+            "delta_saved_kb": round(self._delta_saved_bytes / 1024.0, 1),
+            "history": list(self._bw_history),
+        }
+
+    async def _broadcast_loop(self) -> None:
+        interval = 1.0 / self.TARGET_HZ
+        while self._running:
+            t0 = time.perf_counter()
+            if self._clients:
+                self._tick += 1
+                try:
+                    frame = await asyncio.to_thread(self._build_tick_frame, self._tick)
+                    text = self._compact_json(frame)
+                    payload_bytes = len(text.encode("utf-8"))
+                    self._record_broadcast(time.time(), payload_bytes, len(self._clients))
+                    for q in list(self._clients.values()):
+                        if q.full():
+                            try:
+                                q.get_nowait()
+                            except asyncio.QueueEmpty:
+                                pass
+                        try:
+                            q.put_nowait(text)
+                        except asyncio.QueueFull:
+                            pass
+                except Exception as exc:
+                    record_caught_exception("mission_control_server.ws_broadcaster", exc)
+            elapsed = time.perf_counter() - t0
+            await asyncio.sleep(max(0.002, interval - elapsed))
+
+
+ws_broadcaster = WebSocketBroadcaster()
+
+
+@app.get("/api/performance")
+async def api_performance():
+    safety_snap = safety_guard.get_telemetry_snapshot()
+    v_snap = virtuoso_engine.get_telemetry_snapshot()
+    return {
+        "ok": True,
+        "websocket": ws_broadcaster.get_metrics(),
+        "scheduler_jitter": safety_snap.get("scheduler_jitter", {}),
+        "preflight": v_snap.get("preflight", {}),
+        "hardware_accel": v_snap.get("hardware_accel", {}),
+        "obsidian_cache": {
+            "cached": obsidian_brain._graph_cache is not None,
+            "graph_version": obsidian_brain._graph_version,
+        },
+        "exceptions": get_exception_metrics(),
+    }
+
+
 @app.websocket("/ws")
 async def websocket_endpoint(ws: WebSocket):
+    provided = _extract_token(ws.headers, ws.query_params, ws.cookies)
+    if not provided or not hmac.compare_digest(provided, STUDIO_AUTH_TOKEN):
+        await ws.close(code=1008)
+        return
     await ws.accept()
-    tick = 0
+    queue = ws_broadcaster.register(ws)
     try:
+        # Send one immediate full snapshot so first paint is instant
+        initial_payload = await asyncio.to_thread(ws_broadcaster.build_initial_frame)
+        await ws.send_text(initial_payload)
         while True:
-            tick += 1
-            # Stream audio, twin, & piano keys at 60fps; virtuoso at 20Hz; obsidian & agent at 5-10Hz
-            frame: Dict[str, Any] = {
-                "ts": time.time(),
-                "banner": telemetry_store.banner_state,
-                "audio": audio_monitor.get_telemetry_snapshot(),
-                "safety": safety_guard.get_telemetry_snapshot(),
-                "twin": virtual_twin.get_telemetry_snapshot(),
-            }
-            if tick % 3 == 1:
-                frame["virtuoso"] = virtuoso_engine.get_telemetry_snapshot()
-            if tick % 6 == 1:
-                frame["agent"] = telemetry_store.get_snapshot()
-                frame["studio"] = studio_state
-            if tick % 15 == 1:
-                frame["obsidian"] = obsidian_brain.get_knowledge_graph_snapshot()
-            await ws.send_json(frame)
-            await asyncio.sleep(1.0 / 60.0)
+            payload = await queue.get()
+            await ws.send_text(payload)
     except WebSocketDisconnect:
         pass
-    except Exception:
-        pass
+    except Exception as exc:
+        record_caught_exception("mission_control_server.websocket_endpoint", exc)
+    finally:
+        ws_broadcaster.unregister(ws)
