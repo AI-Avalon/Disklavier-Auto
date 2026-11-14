@@ -1132,8 +1132,9 @@
       ctx.lineWidth = 2.6;
       ctx.beginPath();
       history.forEach((pt, idx) => {
+        const sc = pt.best_score ?? pt.score ?? 70;
         const x = 35 + (idx / Math.max(1, history.length - 1)) * (W - 55);
-        const y = H - 20 - ((Math.max(50, Math.min(100, pt.score || 70)) - 50) / 52) * (H - 40);
+        const y = H - 20 - ((Math.max(50, Math.min(100, sc)) - 50) / 52) * (H - 40);
         if (idx === 0) ctx.moveTo(x, y); else ctx.lineTo(x, y);
       });
       ctx.stroke();
@@ -1170,7 +1171,7 @@
 
       // Emergent Inspiration Source Meters
       const insp = v.inspiration || {};
-      const weights = insp.weights || [];
+      const weights = insp.sources || insp.weights || [];
       const inspBox = document.getElementById('inspiration-bars');
       inspBox.innerHTML = '';
       weights.forEach(w => {
@@ -1185,14 +1186,14 @@
       if (weights.length) {
         document.getElementById('inspiration-top').textContent = `${weights[0].label_ja} ${weights[0].pct}%`;
       }
-      document.getElementById('inspiration-comment').textContent = insp.summary_ja || '';
+      document.getElementById('inspiration-comment').textContent = insp.narrative_ja || insp.summary_ja || '';
 
       // 4 Human Scores
       const hs = v.human_scores || {};
       document.getElementById('hs-legato').textContent = `${hs.legato_smoothness_100 ?? '--'}点`;
-      document.getElementById('hs-vivace').textContent = `${hs.vivace_energy_100 ?? '--'}点`;
-      document.getElementById('hs-story').textContent = `${hs.melody_beauty_100 ?? '--'}点`;
-      document.getElementById('hs-safety').textContent = `${hs.hardware_kindness_100 ?? '--'}点`;
+      document.getElementById('hs-vivace').textContent = `${hs.rhythmic_vivacity_100 ?? hs.vivace_energy_100 ?? '--'}点`;
+      document.getElementById('hs-story').textContent = `${hs.melodic_story_100 ?? hs.melody_beauty_100 ?? '--'}点`;
+      document.getElementById('hs-safety').textContent = `${hs.hardware_safety_100 ?? hs.hardware_kindness_100 ?? '--'}点`;
 
       drawEvolutionChart(v.evolution_history);
 
@@ -1200,9 +1201,11 @@
       const bBox = document.getElementById('branch-list');
       bBox.innerHTML = '';
       (v.branches || []).slice(0, 5).forEach(b => {
+        const isWin = (b.status === 'ADOPTED') || b.winner;
+        const bLabel = b.strategy ? `${b.strategy} (${b.chord_label || ''})` : (b.name_ja || b.name || b.branch_id);
         const el = document.createElement('div');
-        el.style.cssText = 'display:flex; justify-content:space-between; align-items:center; padding:6px 10px; border-radius:8px; background:#0d1320; border:1px solid ' + (b.winner ? '#f59e0b' : '#28344d');
-        el.innerHTML = `<span>${b.winner ? '🏆 ' : ''}${b.name_ja || b.name}</span><strong>${b.score}点</strong>`;
+        el.style.cssText = 'display:flex; justify-content:space-between; align-items:center; padding:6px 10px; border-radius:8px; background:#0d1320; border:1px solid ' + (isWin ? '#f59e0b' : '#28344d');
+        el.innerHTML = `<span>${isWin ? '🏆 ' : ''}${bLabel}</span><strong>${b.score}点</strong>`;
         bBox.appendChild(el);
       });
       const logsEl = document.getElementById('critic-logs');

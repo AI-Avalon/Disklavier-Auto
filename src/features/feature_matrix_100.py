@@ -287,7 +287,8 @@ def export_events_to_midi_file(
 
     safe_bpm = max(36.0, min(180.0, float(bpm or 82.0)))
     tempo_us = mido.bpm2tempo(safe_bpm)
-    track.append(mido.MetaMessage("track_name", name=title[:64], time=0))
+    safe_name = str(title).encode("ascii", "ignore").decode("ascii").strip()[:64] or "Disklavier-Auto Original"
+    track.append(mido.MetaMessage("track_name", name=safe_name, time=0))
     track.append(mido.MetaMessage("set_tempo", tempo=tempo_us, time=0))
 
     raw_msgs: List[Tuple[float, int, mido.Message]] = []
@@ -1067,8 +1068,8 @@ def invoke_feature(
         return {"ok": True, "feature": meta, "message_ja": "🎹 ラフマニノフ風の深い鐘の響きを意識したムードへ移行しました。", "data": res}
     if fid == "A10":
         raw_evs = engine.get_telemetry_snapshot().get("latest_events", [])
-        from src.evolution.human_reference_teacher import detect_and_humanize_mechanical_midi
-        hum, rep = detect_and_humanize_mechanical_midi(raw_evs)
+        from src.evolution.human_reference_teacher import HumanReferenceTeacher
+        hum, rep = HumanReferenceTeacher.detect_and_humanize_mechanical_midi(raw_evs)
         engine.play_events_now(hum, source_tag="humanize_repair")
         return {"ok": True, "feature": meta, "message_ja": f"✨ 直近フレーズを人間化検査しました（補正ノート数: {len(hum)}）", "data": rep}
     if fid == "B6":

@@ -175,8 +175,8 @@ class LocalPreflightChecker:
 
         # Enforce same-key repetition protection (<= 15 Hz) via octave redistribution
         last_on: Dict[int, float] = {}
-        # Enforce 1.5ms simultaneous burst stagger (<= 12 soft / <= 16 hard) & 28 nps cap
-        win_1ms: deque = deque()
+        # Enforce 1.8ms simultaneous burst stagger (<= 12 soft / <= 16 hard) & 28 nps cap
+        placed_1ms: List[float] = []
         win_1s: deque = deque()
         active_holds: List[Tuple[int, float]] = []
 
@@ -195,14 +195,9 @@ class LocalPreflightChecker:
                     t = round(last_on[n] + cls.SAME_KEY_MIN_PERIOD_S, 4)
                     ev["time_offset_s"] = t
 
-            while win_1ms and (t - win_1ms[0]) > 0.0015:
-                win_1ms.popleft()
-            if len(win_1ms) >= cls.SIMULTANEOUS_SOFT_LIMIT:
-                excess = len(win_1ms) - cls.SIMULTANEOUS_SOFT_LIMIT + 1
-                t = round(t + excess * cls.MICRO_STAGGER_S, 4)
+            while sum(1 for pt in placed_1ms if abs(t - pt) <= 0.0016) >= cls.SIMULTANEOUS_SOFT_LIMIT:
+                t = round(t + cls.MICRO_STAGGER_S, 4)
                 ev["time_offset_s"] = t
-                while win_1ms and (t - win_1ms[0]) > 0.0015:
-                    win_1ms.popleft()
 
             while win_1s and (t - win_1s[0]) > 1.0:
                 win_1s.popleft()
@@ -222,7 +217,9 @@ class LocalPreflightChecker:
                 active_holds.pop(0)
 
             last_on[n] = t
-            win_1ms.append(t)
+            placed_1ms.append(t)
+            if len(placed_1ms) > 40:
+                placed_1ms = [pt for pt in placed_1ms if abs(t - pt) <= 0.05]
             win_1s.append(t)
             active_holds.append((n, t + ev["duration_s"]))
             cleaned_notes.append(ev)

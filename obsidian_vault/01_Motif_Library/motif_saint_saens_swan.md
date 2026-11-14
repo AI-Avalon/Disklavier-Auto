@@ -19,7 +19,4 @@ tags: ['imslp', 'seed_memory', 'saint']
 
 ## 派生した名演・関連ノート (Bidirectional Links)
 - [[Evolution_Overview]]
-- [[HoF_Gen042_Score97_Exposition]]
-- [[HoF_Gen045_Score92_Recapitulation]]
-- [[HoF_Gen046_Score94_Metamorphosis]]
-- [[HoF_Gen097_Score96_Exposition]]
+- [[Evolution_Overview]]

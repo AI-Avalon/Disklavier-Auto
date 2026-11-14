@@ -19,6 +19,4 @@ tags: ['lydian', 'impressionist', 'half_pedal']
 
 ## 派生した名演・関連ノート (Bidirectional Links)
 - [[Evolution_Overview]]
-- [[HoF_Gen058_Score95_Development]]
-- [[HoF_Gen059_Score94_Climax]]
-- [[HoF_Gen060_Score95_Recapitulation]]
+- [[Evolution_Overview]]

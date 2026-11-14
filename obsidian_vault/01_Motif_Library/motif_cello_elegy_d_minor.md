@@ -19,11 +19,4 @@ tags: ['cello', 'minor', 'chromatic_bass', 'counterpoint']
 
 ## 派生した名演・関連ノート (Bidirectional Links)
 - [[Evolution_Overview]]
-- [[HoF_Gen052_Score95_Exposition]]
-- [[HoF_Gen053_Score95_Development]]
-- [[HoF_Gen054_Score97_Climax]]
-- [[HoF_Gen055_Score94_Recapitulation]]
-- [[HoF_Gen108_Score98_Development]]
-- [[HoF_Gen109_Score98_Climax]]
-- [[HoF_Gen110_Score97_Recapitulation]]
-- [[HoF_Gen164_Score98_Climax]]
+- [[Evolution_Overview]]

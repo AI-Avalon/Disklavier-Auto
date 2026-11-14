@@ -19,12 +19,4 @@ tags: ['imslp', 'seed_memory', 'chopin']
 
 ## 派生した名演・関連ノート (Bidirectional Links)
 - [[Evolution_Overview]]
-- [[HoF_Gen017_Score94_Exposition]]
-- [[HoF_Gen018_Score98_Development]]
-- [[HoF_Gen019_Score94_Climax]]
-- [[HoF_Gen020_Score93_Recapitulation]]
-- [[HoF_Gen021_Score96_Metamorphosis]]
-- [[HoF_Gen074_Score98_Climax]]
-- [[HoF_Gen075_Score95_Recapitulation]]
-- [[HoF_Gen130_Score98_Recapitulation]]
-- [[HoF_Gen183_Score98_Development]]
+- [[Evolution_Overview]]

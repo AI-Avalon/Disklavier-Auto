@@ -342,8 +342,8 @@
         document.getElementById('story-subtitle').textContent = v.live_story_subtitle_ja || '新しい物語を紡いでいます…';
         const hs = v.human_scores || {};
         document.getElementById('m-legato').textContent = (hs.legato_smoothness_100 ?? '--');
-        document.getElementById('m-vivace').textContent = (hs.vivace_energy_100 ?? '--');
-        document.getElementById('m-story').textContent = (hs.melody_beauty_100 ?? '--');
+        document.getElementById('m-vivace').textContent = (hs.rhythmic_vivacity_100 ?? hs.vivace_energy_100 ?? '--');
+        document.getElementById('m-story').textContent = (hs.melodic_story_100 ?? hs.melody_beauty_100 ?? '--');
 
         const tabs = (v.workspace && v.workspace.tabs) || [];
         const activeId = v.workspace && v.workspace.active_tab_id;

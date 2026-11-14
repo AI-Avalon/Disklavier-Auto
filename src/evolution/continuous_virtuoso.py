@@ -576,7 +576,10 @@ class ContinuousVirtuosoEngine:
 
     def play_events_now(self, events: List[Dict[str, Any]], source_tag: str = "replay") -> None:
         repaired, report = LocalPreflightChecker.audit_and_repair(events)
-        self.last_preflight_report = report
+        with self._lock:
+            self.last_preflight_report = report
+            self.latest_events = list(repaired[:80])
+            self.workspace.get_active_tab().latest_events = list(self.latest_events)
         base_t = time.perf_counter() + 0.16
         self._dispatch_events_to_guard(repaired, base_t, source_tag=source_tag)
 
