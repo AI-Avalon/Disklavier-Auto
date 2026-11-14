@@ -1,0 +1,367 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+  <title>Disklavier-Auto 📱 スマホライブコントローラー</title>
+  <style>
+    :root {
+      color-scheme: dark;
+      --bg: #0b0e14;
+      --surface: #141923;
+      --surface-2: #1c2331;
+      --border: #2a3447;
+      --text: #f3f6fc;
+      --muted: #9aa7bd;
+      --accent: #f59e0b;
+      --accent-soft: rgba(245, 158, 11, 0.16);
+      --green: #10b981;
+      --red: #ef4444;
+      --blue: #38bdf8;
+      --violet: #a78bfa;
+    }
+    * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+    body {
+      margin: 0;
+      padding: 12px 12px 28px;
+      font-family: -apple-system, BlinkMacSystemFont, "Hiragino Sans", "Noto Sans JP", sans-serif;
+      background: radial-gradient(circle at top, #171e2e 0%, var(--bg) 65%);
+      color: var(--text);
+      line-height: 1.45;
+    }
+    .wrap { max-width: 560px; margin: 0 auto; display: flex; flex-direction: column; gap: 12px; }
+    header {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 16px;
+      padding: 12px 14px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      gap: 10px;
+    }
+    .brand { font-weight: 800; font-size: 1rem; color: var(--accent); letter-spacing: 0.02em; }
+    .sub-pill {
+      font-size: 0.78rem;
+      font-weight: 700;
+      padding: 4px 10px;
+      border-radius: 999px;
+      background: var(--surface-2);
+      color: var(--green);
+      border: 1px solid rgba(16, 185, 129, 0.35);
+      white-space: nowrap;
+    }
+    .panic-btn {
+      width: 100%;
+      min-height: 56px;
+      border: 2px solid #fca5a5;
+      border-radius: 16px;
+      background: linear-gradient(135deg, #dc2626, #991b1b);
+      color: #ffffff;
+      font-size: 1.12rem;
+      font-weight: 800;
+      cursor: pointer;
+      box-shadow: 0 8px 24px rgba(239, 68, 68, 0.35);
+    }
+    .card {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 16px;
+      padding: 14px;
+    }
+    .card-title {
+      font-size: 0.85rem;
+      font-weight: 700;
+      color: var(--muted);
+      margin-bottom: 8px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+    .story-box {
+      background: var(--surface-2);
+      border-left: 4px solid var(--accent);
+      border-radius: 10px;
+      padding: 10px 12px;
+      font-size: 0.96rem;
+      font-weight: 600;
+      color: #fff8e7;
+    }
+    .metrics-row {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 8px;
+      margin-top: 10px;
+    }
+    .metric {
+      background: var(--surface-2);
+      border-radius: 10px;
+      padding: 8px;
+      text-align: center;
+    }
+    .metric-val { font-size: 1.15rem; font-weight: 800; color: var(--accent); }
+    .metric-lbl { font-size: 0.72rem; color: var(--muted); }
+    .btn-grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+    .btn-grid-3 { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; }
+    .rbtn {
+      min-height: 48px;
+      border-radius: 12px;
+      border: 1px solid var(--border);
+      background: var(--surface-2);
+      color: var(--text);
+      font-size: 0.9rem;
+      font-weight: 700;
+      padding: 8px 10px;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      text-align: center;
+      gap: 6px;
+    }
+    .rbtn:active { transform: scale(0.97); }
+    .rbtn-primary { background: linear-gradient(135deg, #059669, #047857); border-color: #34d399; color: #ffffff; }
+    .rbtn-gold { background: linear-gradient(135deg, #d97706, #b45309); border-color: #fcd34d; color: #ffffff; }
+    .rbtn-blue { background: linear-gradient(135deg, #0284c7, #0369a1); border-color: #7dd3fc; color: #ffffff; }
+    .rbtn-violet { background: linear-gradient(135deg, #6d28d9, #5b21b6); border-color: #c4b5fd; color: #ffffff; }
+
+    /* Modern accessible range sliders (separate vendor pseudo rules) */
+    .slider-group { margin-bottom: 12px; }
+    .slider-label {
+      display: flex;
+      justify-content: space-between;
+      font-size: 0.85rem;
+      font-weight: 700;
+      margin-bottom: 6px;
+    }
+    input[type="range"].studio-range {
+      --attr-min: -100;
+      --attr-max: 100;
+      --control-value: 0;
+      width: 100%;
+      height: 10px;
+      border-radius: 999px;
+      background: linear-gradient(to right, #38bdf8, #f59e0b);
+      outline: none;
+      appearance: none;
+      -webkit-appearance: none;
+      cursor: pointer;
+    }
+    input[type="range"].studio-range::-webkit-slider-thumb {
+      -webkit-appearance: none;
+      width: 28px;
+      height: 28px;
+      border-radius: 50%;
+      background: #ffffff;
+      border: 3px solid var(--accent);
+      box-shadow: 0 2px 8px rgba(0, 0, 0, 0.5);
+    }
+    input[type="range"].studio-range::-moz-range-thumb {
+      width: 28px;
+      height: 28px;
+      border-radius: 50%;
+      background: #ffffff;
+      border: 3px solid var(--accent);
+      box-shadow: 0 2px 8px rgba(0, 0, 0, 0.5);
+    }
+    .tab-pills { display: flex; flex-wrap: wrap; gap: 6px; }
+    .tab-pill {
+      padding: 8px 12px;
+      border-radius: 999px;
+      border: 1px solid var(--border);
+      background: var(--surface-2);
+      color: var(--text);
+      font-size: 0.82rem;
+      font-weight: 700;
+      cursor: pointer;
+    }
+    .tab-pill.active {
+      background: var(--accent-soft);
+      border-color: var(--accent);
+      color: #fde68a;
+    }
+    .toast {
+      position: fixed;
+      bottom: 16px;
+      left: 50%;
+      transform: translateX(-50%);
+      background: #0f172a;
+      border: 1px solid var(--accent);
+      color: #fff;
+      padding: 10px 16px;
+      border-radius: 999px;
+      font-size: 0.86rem;
+      font-weight: 700;
+      opacity: 0;
+      pointer-events: none;
+      transition: opacity 0.2s ease;
+      max-width: 90vw;
+      text-align: center;
+      z-index: 50;
+    }
+    .toast.show { opacity: 1; }
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <header>
+      <div class="brand">🎹 Disklavier-Auto リモコン</div>
+      <div id="status-pill" class="sub-pill">🟢 接続中…</div>
+    </header>
+
+    <button class="panic-btn" onclick="callApi('/api/panic', {}, '緊急停止しました')">
+      🛑 すぐ音を止める（緊急停止）
+    </button>
+
+    <section class="card">
+      <div class="card-title">
+        <span>今の音楽の実況</span>
+        <span id="gen-badge">第1世代</span>
+      </div>
+      <div id="story-subtitle" class="story-box">読み込み中…</div>
+      <div class="metrics-row">
+        <div class="metric"><div id="m-legato" class="metric-val">--</div><div class="metric-lbl">歌うなめらかさ</div></div>
+        <div class="metric"><div id="m-vivace" class="metric-val">--</div><div class="metric-lbl">活発さ・キレ</div></div>
+        <div class="metric"><div id="m-story" class="metric-val">--</div><div class="metric-lbl">メロディ魅力</div></div>
+      </div>
+    </section>
+
+    <section class="card">
+      <div class="card-title"><span>🎛️ リアルタイム演奏スタイル操作</span></div>
+      <div class="slider-group">
+        <div class="slider-label">
+          <span>しっとり歌う</span>
+          <span id="lbl-x">バランス</span>
+          <span>活発に跳ねる</span>
+        </div>
+        <input id="rng-x" class="studio-range" type="range" min="-100" max="100" value="-25" aria-label="歌い方と活発さのバランス" />
+      </div>
+      <div class="slider-group" style="margin-bottom:0;">
+        <div class="slider-label">
+          <span>穏やかに囁く</span>
+          <span id="lbl-y">強さ 65%</span>
+          <span>情熱的クライマックス</span>
+        </div>
+        <input id="rng-y" class="studio-range" type="range" min="10" max="100" value="65" aria-label="演奏の熱量と強弱" />
+      </div>
+    </section>
+
+    <section class="card">
+      <div class="card-title"><span>⏱️ 演奏操作＆タイムマシン</span></div>
+      <div class="btn-grid-2" style="margin-bottom:8px;">
+        <button id="btn-stream" class="rbtn rbtn-primary" onclick="callApi('/api/virtuoso/toggle_stream', {}, '演奏状態を切り替えました')">⏯️ 自動演奏 ON/OFF</button>
+        <button class="rbtn rbtn-gold" onclick="callApi('/api/timemachine/rescue_30s', {}, '直近30秒を新タブに救出しました！')">⏪ 30秒前を救出！</button>
+      </div>
+      <div class="btn-grid-3" style="margin-bottom:8px;">
+        <button class="rbtn" onclick="callApi('/api/timemachine/undo', {}, '前の状態に戻しました')">◀ 戻す</button>
+        <button class="rbtn" onclick="callApi('/api/timemachine/redo', {}, '次の状態へ進みました')">進む ▶</button>
+        <button class="rbtn rbtn-blue" onclick="callApi('/api/timemachine/ab_compare', {which:'both'}, '進化前と進化後を聴き比べ再生！')">🎧 聴き比べ</button>
+      </div>
+      <div class="btn-grid-2">
+        <button class="rbtn rbtn-violet" onclick="callApi('/api/virtuoso/like', {}, '👍 いいねを記憶しました！')">👍 今の曲いいね！</button>
+        <button class="rbtn" onclick="callApi('/api/cello/warmup_wave', {}, '🎻 チェロ開放弦ウェーブを開始！')">🎻 開放弦ウェーブ</button>
+      </div>
+    </section>
+
+    <section class="card">
+      <div class="card-title"><span>🎭 雰囲気とひらめきを操る</span></div>
+      <div class="btn-grid-2" style="margin-bottom:8px;">
+        <button class="rbtn" onclick="callApi('/api/virtuoso/spark', {}, '⚡ ひらめきスパークを注入！')">⚡ ひらめきスパーク</button>
+        <button class="rbtn" onclick="callApi('/api/virtuoso/mood_change', {}, '✨ 頭脳を保ったまま曲調チェンジ！')">✨ 雰囲気チェンジ</button>
+      </div>
+      <div class="btn-grid-2" style="margin-bottom:8px;">
+        <button class="rbtn" onclick="callApi('/api/virtuoso/character_preset', {preset_id:'tchaikovsky_passion'}, '🔥 情熱カンタービレへ変身')">🔥 情熱ロマン</button>
+        <button class="rbtn" onclick="callApi('/api/virtuoso/character_preset', {preset_id:'vivace_scherzando'}, '💃 活発スケルツォへ変身')">💃 活発に跳ねる</button>
+        <button class="rbtn" onclick="callApi('/api/virtuoso/character_preset', {preset_id:'debussy_watercolor'}, '🌊 透明な倍音へ変身')">🌊 透明な光の音</button>
+        <button class="rbtn" onclick="callApi('/api/virtuoso/character_preset', {preset_id:'night_nocturne'}, '🌙 静かな夜想曲へ変身')">🌙 静かな夜</button>
+      </div>
+      <button class="rbtn" style="width:100%; border-color:#f87171; color:#fecaca;" onclick="callApi('/api/virtuoso/full_reset', {}, '🔄 記憶を白紙にして一から新曲を作ります！')">
+        🔄 完全リセット（記憶を白紙にして新曲へ）
+      </button>
+    </section>
+
+    <section class="card">
+      <div class="card-title">
+        <span>🗂️ 曲のタブ切り替え</span>
+        <button class="tab-pill" onclick="callApi('/api/tabs/new', {}, '新しい曲タブを作りました')">＋ 新しい曲</button>
+      </div>
+      <div id="tab-list" class="tab-pills">読み込み中…</div>
+    </section>
+  </div>
+
+  <div id="toast" class="toast"></div>
+
+  <script>
+    const toastEl = document.getElementById('toast');
+    let toastTimer = null;
+    function showToast(msg) {
+      toastEl.textContent = msg;
+      toastEl.classList.add('show');
+      clearTimeout(toastTimer);
+      toastTimer = setTimeout(() => toastEl.classList.remove('show'), 2400);
+    }
+
+    async function callApi(path, body, msg) {
+      try {
+        const res = await fetch(path, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(body || {})
+        });
+        const data = await res.json();
+        showToast(msg || data.message_ja || '操作を実行しました');
+        refreshState();
+      } catch (e) {
+        showToast('通信エラーが発生しました');
+      }
+    }
+
+    const rngX = document.getElementById('rng-x');
+    const rngY = document.getElementById('rng-y');
+    let padTimer = null;
+    function sendPad() {
+      const x = Number(rngX.value) / 100.0;
+      const y = Number(rngY.value) / 100.0;
+      rngX.style.setProperty('--control-value', rngX.value);
+      rngY.style.setProperty('--control-value', rngY.value);
+      document.getElementById('lbl-y').textContent = `強さ ${rngY.value}%`;
+      document.getElementById('lbl-x').textContent = x < -0.25 ? 'しっとりレガート' : (x > 0.25 ? '活発ヴィヴァーチェ' : 'バランス');
+      clearTimeout(padTimer);
+      padTimer = setTimeout(() => callApi('/api/virtuoso/expression_pad', { x, y }, '表現バランスを反映しました'), 120);
+    }
+    rngX.addEventListener('input', sendPad);
+    rngY.addEventListener('input', sendPad);
+
+    async function refreshState() {
+      try {
+        const res = await fetch('/api/virtuoso/status');
+        const payload = await res.json();
+        const v = payload.virtuoso || {};
+        document.getElementById('status-pill').textContent = v.streaming_active ? '🟢 自動演奏中' : '⏸️ 一休み中';
+        document.getElementById('gen-badge').textContent = `第${v.current_generation || 1}世代`;
+        document.getElementById('story-subtitle').textContent = v.live_story_subtitle_ja || '新しい物語を紡いでいます…';
+        const hs = v.human_scores || {};
+        document.getElementById('m-legato').textContent = (hs.legato_smoothness_100 ?? '--');
+        document.getElementById('m-vivace').textContent = (hs.vivace_energy_100 ?? '--');
+        document.getElementById('m-story').textContent = (hs.melody_beauty_100 ?? '--');
+
+        const tabs = (v.workspace && v.workspace.tabs) || [];
+        const activeId = v.workspace && v.workspace.active_tab_id;
+        const container = document.getElementById('tab-list');
+        container.innerHTML = '';
+        tabs.forEach(t => {
+          const b = document.createElement('button');
+          b.className = 'tab-pill' + (t.tab_id === activeId ? ' active' : '');
+          b.textContent = t.title;
+          b.onclick = () => callApi('/api/tabs/switch', { tab_id: t.tab_id }, `「${t.title}」へ切り替えました`);
+          container.appendChild(b);
+        });
+      } catch (e) {
+        document.getElementById('status-pill').textContent = '⚠️ 再接続中';
+      }
+    }
+    refreshState();
+    setInterval(refreshState, 2000);
+  </script>
+</body>
+</html>

@@ -16,14 +16,25 @@ from typing import Any, Dict, List, Optional, Tuple
 
 import mido
 import numpy as np
-from fastapi import FastAPI, WebSocket, WebSocketDisconnect
+from fastapi import Body, FastAPI, WebSocket, WebSocketDisconnect
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import FileResponse, HTMLResponse, JSONResponse
+from fastapi.responses import FileResponse, HTMLResponse, JSONResponse, Response
 from pydantic import BaseModel
 
 from src.audio.c519ml_monitor import C519MLAudioMonitor, midi_to_name
 from src.evolution.continuous_virtuoso import ContinuousVirtuosoEngine
 from src.evolution.seed_ingestor import SeedMemoryPool
+from src.features.feature_matrix_100 import (
+    build_cello_open_string_warmup_wave,
+    build_sheet_music_payload,
+    export_events_to_midi_file,
+    export_events_to_musicxml,
+    export_events_to_wav,
+    get_feature_catalog,
+    get_lan_remote_info,
+    invoke_feature,
+    run_japanese_system_doctor,
+)
 from src.midi.imslp_library import build_and_persist_imslp_library
 from src.obsidian import ObsidianMusicalBrain
 from src.safety.disklavier_safety_guard import DisklavierSafetyGuard
@@ -91,17 +102,17 @@ studio_state: Dict[str, Any] = {
 async def _startup_autonomous_stream() -> None:
     virtuoso_engine.start_stream()
     mode_label = (
-        "Hardware Disklavier + Virtual Twin"
+        "実機Disklavier ＋ バーチャルスタジオ"
         if safety_guard.outport is not None
-        else "Virtual Disklavier Digital Twin (Mac CoreAudio)"
+        else "Mac内蔵バーチャルピアノ (安全モード)"
     )
     telemetry_store.update_banner(
         code="READY",
-        message=f"♾️ 自律型AIピアニスト稼働中 ({mode_label}) — 途切れない連続演奏＆リアルタイム自己採点・自己進化実行中",
-        sub_message=f"Seed Pool: {len(seed_pool.get_all_motifs())} motifs | Obsidian Vault: obsidian_vault/ | 4平行未来ツリー & 5軸Critic稼働中",
-        task_name="Autonomous Self-Evolving Virtuoso Stream",
+        message=f"🟢 自動で作曲・進化中 ({mode_label})",
+        sub_message="人間のお手本から学んだ歌うレガート＆活発な躍動感でオリジナル曲を紡いでいます",
+        task_name="自動作曲・ライブ進化スタジオ",
         progress_pct=100,
-        current_phase="♾️ NON-STOP STREAMING",
+        current_phase="🟢 自動演奏中",
     )
 
 
@@ -236,10 +247,10 @@ async def trigger_emergency_panic():
     snap = safety_guard.emergency_panic()
     telemetry_store.update_banner(
         code="ACTION_NEEDED",
-        message="🔴 EMERGENCY PANIC が実行されました。連続ストリーム停止・全88鍵Note-OffおよびCC#64=0を送信しました。",
-        sub_message="安全が確認できたら『連続ストリーム開始』または各タブから操作を再開できます。",
+        message="🛑 すべての音を緊急停止しました — 全88鍵と右ペダルを安全に解放しました",
+        sub_message="落ち着いて確認できたら、右上の『自動演奏を再開』からいつでも続きを演奏できます。",
     )
-    return {"status": "panicked", "safety": snap}
+    return {"status": "panicked", "ok": True, "safety": snap}
 
 
 @app.post("/api/banner")
@@ -688,7 +699,7 @@ async def api_experiments_rerun(req: Dict[str, Any]):
 # Autonomous Virtuoso, Virtual Digital Twin & Obsidian Brain Endpoints
 # -------------------------------------------------------------------------
 @app.post("/api/virtuoso/toggle_stream")
-async def api_virtuoso_toggle_stream(req: Dict[str, Any]):
+async def api_virtuoso_toggle_stream(req: Dict[str, Any] = Body(default={})):
     want_active = req.get("active")
     if want_active is None:
         want_active = not virtuoso_engine.streaming_active
@@ -696,16 +707,16 @@ async def api_virtuoso_toggle_stream(req: Dict[str, Any]):
         snap = virtuoso_engine.start_stream()
         telemetry_store.update_banner(
             code="READY",
-            message="♾️ 途切れない自律演奏ストリーム稼働中 — 4平行未来候補をリアルタイム自己採点・進化中",
-            sub_message=f"Gen {snap['current_generation']} | Best {snap['best_score_ever']} pts | Virtual Sound={'ON' if virtual_twin.virtual_sound_enabled else 'OFF'}",
-            current_phase="♾️ NON-STOP STREAMING",
+            message="🟢 自動で作曲・進化中 — 人間のお手本に学びながら途切れず演奏しています",
+            sub_message=f"第{snap['current_generation']}世代 | 最高 {snap['best_score_ever']}点 | Mac音出し={'ON' if virtual_twin.virtual_sound_enabled else '消音中'}",
+            current_phase="🟢 自動演奏中",
         )
     else:
         snap = virtuoso_engine.stop_stream()
         telemetry_store.update_banner(
             code="READY",
-            message="⏸️ 自律連続ストリーム一時停止中 — 再開ボタンまたは高速進化トレーニングを実行できます",
-            current_phase="⏸️ STREAM PAUSED",
+            message="⏸️ いま一休み中 — 『演奏をはじめる』や各タブからいつでも再開できます",
+            current_phase="⏸️ 一休み中",
         )
     return {"ok": True, "virtuoso": snap}
 
@@ -825,6 +836,260 @@ async def api_obsidian_play_hof(req: Dict[str, Any]):
         f"🏆 [OBSIDIAN HoF PLAYBACK] Playing {midi_path.name} ({scheduled} notes) on Digital Twin / Disklavier"
     )
     return {"ok": True, "midi_name": midi_path.name, "scheduled_notes": scheduled}
+
+
+# -------------------------------------------------------------------------
+# v3.0 Studio Endpoints: Multi-Song Tabs, Time-Machine, Expression Pad,
+# Resets, Score & Exports, Cello Warmup, 100-Feature Explorer & Mobile Remote
+# -------------------------------------------------------------------------
+@app.get("/api/tabs")
+async def api_tabs_list():
+    return {
+        "ok": True,
+        "workspace": virtuoso_engine.workspace.get_summary(),
+        "virtuoso": virtuoso_engine.get_telemetry_snapshot(),
+    }
+
+
+@app.post("/api/tabs/switch")
+async def api_tabs_switch(req: Dict[str, Any] = Body(default={})):
+    tab_id = str(req.get("tab_id", ""))
+    return await asyncio.to_thread(virtuoso_engine.switch_song_tab, tab_id)
+
+
+@app.post("/api/tabs/new")
+async def api_tabs_new(req: Dict[str, Any] = Body(default={})):
+    return await asyncio.to_thread(
+        virtuoso_engine.create_song_tab,
+        title=req.get("title"),
+        character_preset=req.get("character_preset"),
+    )
+
+
+@app.post("/api/tabs/close")
+async def api_tabs_close(req: Dict[str, Any] = Body(default={})):
+    tab_id = str(req.get("tab_id", ""))
+    return await asyncio.to_thread(virtuoso_engine.close_song_tab, tab_id)
+
+
+@app.post("/api/tabs/restore")
+async def api_tabs_restore():
+    return await asyncio.to_thread(virtuoso_engine.restore_closed_song_tab)
+
+
+@app.post("/api/timemachine/undo")
+async def api_timemachine_undo():
+    return await asyncio.to_thread(virtuoso_engine.timemachine_undo)
+
+
+@app.post("/api/timemachine/redo")
+async def api_timemachine_redo():
+    return await asyncio.to_thread(virtuoso_engine.timemachine_redo)
+
+
+@app.post("/api/timemachine/scrub")
+async def api_timemachine_scrub(req: Dict[str, Any] = Body(default={})):
+    target_gen = int(req.get("generation", 1))
+    return await asyncio.to_thread(virtuoso_engine.timemachine_scrub, target_gen)
+
+
+@app.post("/api/timemachine/ab_compare")
+async def api_timemachine_ab_compare(req: Dict[str, Any] = Body(default={})):
+    which = str(req.get("which", "both"))
+    return await asyncio.to_thread(virtuoso_engine.play_ab_comparison, which)
+
+
+@app.post("/api/timemachine/rescue_30s")
+async def api_timemachine_rescue_30s(req: Dict[str, Any] = Body(default={})):
+    secs = float(req.get("seconds", 35.0))
+    return await asyncio.to_thread(virtuoso_engine.rescue_last_30s_to_tab, secs)
+
+
+@app.get("/api/virtuoso/status")
+async def api_virtuoso_status():
+    return {"ok": True, "virtuoso": virtuoso_engine.get_telemetry_snapshot()}
+
+
+@app.post("/api/virtuoso/full_reset")
+async def api_virtuoso_full_reset(req: Dict[str, Any] = Body(default={})):
+    return await asyncio.to_thread(virtuoso_engine.full_reset_new_song, title=req.get("title"))
+
+
+@app.post("/api/virtuoso/mood_change")
+async def api_virtuoso_mood_change(req: Dict[str, Any] = Body(default={})):
+    return await asyncio.to_thread(virtuoso_engine.mood_change_keep_brain, preset_id=req.get("preset_id"))
+
+
+@app.post("/api/virtuoso/spark")
+async def api_virtuoso_spark():
+    return await asyncio.to_thread(virtuoso_engine.trigger_inspiration_spark)
+
+
+@app.post("/api/virtuoso/like")
+async def api_virtuoso_like():
+    return await asyncio.to_thread(virtuoso_engine.register_human_like_vote)
+
+
+@app.post("/api/virtuoso/expression_pad")
+async def api_virtuoso_expression_pad(req: Dict[str, Any] = Body(default={})):
+    x = float(req.get("x", 0.0))
+    y = float(req.get("y", 0.6))
+    return await asyncio.to_thread(virtuoso_engine.set_expression_pad, x, y)
+
+
+@app.post("/api/virtuoso/character_preset")
+async def api_virtuoso_character_preset(req: Dict[str, Any] = Body(default={})):
+    preset_id = str(req.get("preset_id", "tchaikovsky_passion"))
+    return await asyncio.to_thread(virtuoso_engine.apply_character_preset, preset_id)
+
+
+@app.get("/api/score/current")
+async def api_score_current():
+    snap = virtuoso_engine.get_telemetry_snapshot()
+    title = str(snap.get("active_motif", {}).get("title", "今のオリジナル曲"))
+    bpm = float(snap.get("elite_genome", {}).get("tempo_bpm", 82.0))
+    return build_sheet_music_payload(snap.get("latest_events", []), title=title, bpm=bpm)
+
+
+def _get_export_dir() -> Path:
+    d = TELEMETRY_DIR / "exports"
+    d.mkdir(parents=True, exist_ok=True)
+    return d
+
+
+@app.get("/api/export/midi")
+async def api_export_midi():
+    snap = virtuoso_engine.get_telemetry_snapshot()
+    title = str(snap.get("active_motif", {}).get("title", "disklavier_original"))
+    bpm = float(snap.get("elite_genome", {}).get("tempo_bpm", 82.0))
+    out_p = _get_export_dir() / f"disklavier_gen_{snap.get('current_generation', 1)}.mid"
+    export_events_to_midi_file(snap.get("latest_events", []), title=title, out_path=out_p, bpm=bpm)
+    return FileResponse(str(out_p), media_type="audio/midi", filename=out_p.name)
+
+
+@app.get("/api/export/musicxml")
+async def api_export_musicxml():
+    snap = virtuoso_engine.get_telemetry_snapshot()
+    title = str(snap.get("active_motif", {}).get("title", "Disklavier Original"))
+    bpm = float(snap.get("elite_genome", {}).get("tempo_bpm", 82.0))
+    out_p = _get_export_dir() / f"disklavier_gen_{snap.get('current_generation', 1)}.musicxml"
+    export_events_to_musicxml(snap.get("latest_events", []), title=title, out_path=out_p, bpm=bpm)
+    return FileResponse(str(out_p), media_type="application/vnd.recordare.musicxml+xml", filename=out_p.name)
+
+
+@app.get("/api/export/wav")
+async def api_export_wav():
+    snap = virtuoso_engine.get_telemetry_snapshot()
+    out_p = _get_export_dir() / f"disklavier_gen_{snap.get('current_generation', 1)}.wav"
+    await asyncio.to_thread(export_events_to_wav, snap.get("latest_events", []), out_p)
+    return FileResponse(str(out_p), media_type="audio/wav", filename=out_p.name)
+
+
+@app.post("/api/cello/warmup_wave")
+async def api_cello_warmup_wave():
+    events, summary = build_cello_open_string_warmup_wave()
+    await asyncio.to_thread(virtuoso_engine.play_events_now, events, "cello_warmup")
+    return {"ok": True, "message_ja": summary, "event_count": len(events)}
+
+
+@app.post("/api/safety/panic")
+async def api_safety_panic():
+    return await trigger_emergency_panic()
+
+
+@app.post("/api/safety/test_note")
+async def api_safety_test_note():
+    now_t = time.perf_counter() + 0.12
+    for idx, pitch in enumerate([60, 64, 67, 72]):
+        safety_guard.schedule_chord_or_notes(
+            notes=[(pitch, 58 + idx * 4, 0.45)],
+            target_sound_time=now_t + idx * 0.14,
+            use_vdl_compensation=True,
+            source_tag="test_phrase",
+        )
+    return {"ok": True, "message_ja": "🎹 美しい確認和音（Cメジャー・アルペジオ）を安全に鳴らしました。"}
+
+
+@app.post("/api/safety/harmonic_halo")
+async def api_safety_harmonic_halo():
+    now_t = time.perf_counter() + 0.10
+    safety_guard.schedule_chord_or_notes(
+        notes=[(36, 1, 2.2), (48, 1, 2.2), (60, 1, 2.2)],
+        target_sound_time=now_t,
+        use_vdl_compensation=False,
+        sympathetic_halo=True,
+        source_tag="sympathetic_halo",
+    )
+    return {"ok": True, "message_ja": "✨ サイレント打鍵(Velocity=1)でC開放弦の倍音共鳴ダンパーを開きました。"}
+
+
+@app.post("/api/sound/enable")
+async def api_sound_enable(req: Dict[str, Any] = Body(default={})):
+    want = req.get("enabled")
+    target = (not virtual_twin.virtual_sound_enabled) if want is None else bool(want)
+    if target:
+        await run_sound_countdown("Mac内蔵バーチャルピアノの音出しを開始します", seconds=3)
+    snap = virtual_twin.set_config(virtual_sound_enabled=target)
+    return {"ok": True, "twin": snap}
+
+
+@app.post("/api/audio/toggle")
+async def api_audio_toggle(req: Dict[str, Any] = Body(default={})):
+    if getattr(audio_monitor, "_running", False):
+        audio_monitor._running = False
+        return {"ok": True, "active": False, "message_ja": "🎤 マイク傾聴を一時停止しました。"}
+    audio_monitor.start()
+    return {"ok": True, "active": True, "message_ja": "🎤 チェロ音程マイク傾聴を開始しました。"}
+
+
+@app.get("/api/imslp/list")
+async def api_imslp_list():
+    return {"ok": True, "items": studio_state.get("imslp_library", [])}
+
+
+@app.get("/api/obsidian/snapshot")
+async def api_obsidian_snapshot():
+    return obsidian_brain.get_knowledge_graph_snapshot()
+
+
+@app.get("/api/features/catalog")
+async def api_features_catalog():
+    return get_feature_catalog()
+
+
+@app.post("/api/features/invoke")
+async def api_features_invoke(req: Dict[str, Any] = Body(default={})):
+    fid = str(req.get("feature_id", "J9"))
+    params = req.get("params") or {}
+    return await asyncio.to_thread(
+        invoke_feature,
+        fid,
+        virtuoso_engine,
+        safety_guard,
+        audio_monitor,
+        virtual_twin,
+        obsidian_brain,
+        studio_state,
+        params,
+    )
+
+
+@app.get("/api/system/doctor")
+async def api_system_doctor():
+    return run_japanese_system_doctor(safety_guard, audio_monitor, virtual_twin, virtuoso_engine)
+
+
+@app.get("/api/remote/info")
+async def api_remote_info():
+    return get_lan_remote_info(8765)
+
+
+@app.get("/remote", response_class=HTMLResponse)
+async def serve_mobile_remote() -> HTMLResponse:
+    remote_path = BASE_DIR / "src" / "ui" / "remote.html"
+    if remote_path.exists():
+        return HTMLResponse(remote_path.read_text(encoding="utf-8"))
+    return HTMLResponse("<h1>スマホリモコンを準備中です...</h1>")
 
 
 

@@ -3,1420 +3,1429 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Antigravity 2.0 — Autonomous Self-Evolving Virtuoso & Virtual Disklavier Digital Twin</title>
+  <title>Disklavier-Auto — 作曲して自己進化するAIピアニスト</title>
   <style>
     :root {
       color-scheme: dark;
-      --bg-dark: #070b14;
-      --bg-panel: #101726;
-      --bg-card: #172133;
-      --border: #28354d;
-      --text-main: #f3f4f6;
-      --text-muted: #9ca3af;
-      --accent-blue: #38bdf8;
-      --accent-gold: #fbbf24;
-      --accent-green: #10b981;
-      --accent-red: #ef4444;
-      --accent-purple: #a855f7;
-      accent-color: var(--accent-blue);
-    }
-    * { box-sizing: border-box; margin: 0; padding: 0; }
-    body {
-      background: var(--bg-dark);
-      color: var(--text-main);
-      font-family: -apple-system, BlinkMacSystemFont, "SF Pro Display", "Segoe UI", Roboto, sans-serif;
-      overflow-x: hidden;
-    }
-
-    @supports not (accent-color: #38bdf8) {
-      input[type="range"] { -webkit-appearance: none; appearance: none; background: transparent; }
-      input[type="range"]::-webkit-slider-runnable-track { height: 6px; background: #334155; border-radius: 4px; }
-      input[type="range"]::-webkit-slider-thumb { -webkit-appearance: none; height: 14px; width: 14px; border-radius: 50%; background: #38bdf8; margin-top: -4px; }
+      --bg: #080b11;
+      --bg-elevated: #101622;
+      --surface: #151c2b;
+      --surface-2: #1c2538;
+      --border: #28344d;
+      --border-strong: #394a6d;
+      --text: #f3f6fc;
+      --text-dim: #9aa7c0;
+      --accent: #f59e0b;
+      --accent-bright: #fbbf24;
+      --accent-soft: rgba(245, 158, 11, 0.16);
+      --green: #10b981;
+      --green-soft: rgba(16, 185, 129, 0.16);
+      --blue: #38bdf8;
+      --blue-soft: rgba(56, 189, 248, 0.16);
+      --violet: #a78bfa;
+      --red: #ef4444;
+      --radius: 14px;
     }
 
-    .global-header {
-      position: sticky;
-      top: 0;
-      z-index: 1000;
-      background: rgba(11, 16, 29, 0.97);
-      backdrop-filter: blur(12px);
-      border-bottom: 2px solid var(--border);
-      padding: 8px 14px;
+    * { box-sizing: border-box; }
+    html, body {
+      margin: 0;
+      padding: 0;
+      background: radial-gradient(1200px 600px at 15% -10%, #172036 0%, var(--bg) 60%);
+      color: var(--text);
+      font-family: -apple-system, BlinkMacSystemFont, "Hiragino Sans", "Noto Sans JP", "Segoe UI", sans-serif;
+      font-size: 14px;
+      line-height: 1.5;
+    }
+
+    .app-shell {
+      max-width: 1540px;
+      margin: 0 auto;
+      padding: 12px 16px 28px;
       display: flex;
       flex-direction: column;
-      gap: 7px;
-      box-shadow: 0 6px 24px rgba(0,0,0,0.65);
+      gap: 10px;
     }
 
-    .user-banner {
+    /* Top Status & Concert Action Bar */
+    .topbar {
+      display: grid;
+      grid-template-columns: 1fr auto;
+      gap: 12px;
+      align-items: center;
+      background: var(--bg-elevated);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 10px 14px;
+    }
+    .brand-row { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
+    .brand-title {
+      font-size: 1.15rem;
+      font-weight: 800;
+      letter-spacing: 0.01em;
+      color: var(--accent-bright);
       display: flex;
       align-items: center;
-      justify-content: space-between;
-      gap: 12px;
-      padding: 8px 14px;
-      border-radius: 10px;
-      border: 2px solid #38bdf8;
-      background: linear-gradient(90deg, rgba(56,189,248,0.20) 0%, rgba(16,23,38,0.95) 100%);
+      gap: 8px;
     }
-    .user-banner.HANDS_OFF { border-color: #10b981; background: linear-gradient(90deg, rgba(16,185,129,0.22) 0%, rgba(16,23,38,0.95) 100%); }
-    .user-banner.SOUND_COUNTDOWN { border-color: #f59e0b; background: linear-gradient(90deg, rgba(245,158,11,0.38) 0%, rgba(120,53,15,0.65) 100%); }
-    .user-banner.ACTION_NEEDED { border-color: #ef4444; background: linear-gradient(90deg, rgba(239,68,68,0.35) 0%, rgba(16,23,38,0.95) 100%); }
-
-    .banner-left { display: flex; align-items: center; gap: 12px; flex: 1; min-width: 0; }
-    .banner-badge {
-      font-weight: 800; font-size: 13px; padding: 5px 10px; border-radius: 6px;
-      background: rgba(0,0,0,0.45); white-space: nowrap;
-    }
-    .banner-main-msg { font-size: 14px; font-weight: 700; color: #fff; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-    .banner-sub-msg { font-size: 11.5px; color: #cbd5e1; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-    .gen-hero-pill {
-      display: flex; align-items: center; gap: 10px; background: rgba(15,23,42,0.9);
-      border: 1px solid #fbbf24; border-radius: 8px; padding: 5px 12px; font-size: 12.5px; font-weight: 800; white-space: nowrap;
-    }
-    .countdown-pill {
-      display: none; font-size: 20px; font-weight: 900; color: #fef08a;
-      background: rgba(0,0,0,0.6); padding: 4px 14px; border-radius: 8px; border: 1px solid #facc15;
-    }
-
-    .virtuoso-quick-bar {
-      display: flex; align-items: center; justify-content: space-between; gap: 8px; flex-wrap: wrap;
-      background: linear-gradient(90deg, rgba(168,85,247,0.16), rgba(56,189,248,0.14));
-      border: 1px solid #3b82f6; border-radius: 8px; padding: 6px 10px;
-    }
-    .btn-group { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
-
-    .btn {
-      background: #2563eb; color: #fff; border: 1px solid #60a5fa;
-      padding: 6px 11px; border-radius: 7px; font-size: 12px; font-weight: 700; cursor: pointer;
-      transition: transform 0.1s, background 0.15s;
-    }
-    .btn:hover { background: #1d4ed8; }
-    .btn:active { transform: scale(0.98); }
-    .btn-green { background: #059669; border-color: #34d399; }
-    .btn-green:hover { background: #047857; }
-    .btn-purple { background: #7c3aed; border-color: #c084fc; }
-    .btn-purple:hover { background: #6d28d9; }
-    .btn-gold { background: #d97706; border-color: #fbbf24; }
-    .btn-gold:hover { background: #b45309; }
-    .btn-outline { background: #1e293b; border-color: #475569; color: #e2e8f0; }
-    .btn-outline.active-toggle { background: #059669; border-color: #34d399; color: #fff; }
-    .panic-btn {
-      background: linear-gradient(135deg, #dc2626, #991b1b); color: #fff; border: 2px solid #f87171;
-      padding: 6px 14px; border-radius: 8px; font-weight: 900; font-size: 12.5px; cursor: pointer;
-      box-shadow: 0 0 12px rgba(239,68,68,0.45);
-    }
-
-    /* 60fps Heartbeat Digital Twin Dock */
-    .heartbeat-dock {
-      display: grid;
-      grid-template-columns: 1.15fr 1.75fr 1.15fr;
+    .status-banner {
+      display: flex;
+      align-items: center;
       gap: 10px;
-      padding: 9px 14px;
-      background: #0b111e;
-      border-bottom: 1px solid var(--border);
+      padding: 6px 12px;
+      border-radius: 999px;
+      background: var(--surface);
+      border: 1px solid var(--border-strong);
+      font-size: 0.88rem;
+      font-weight: 700;
     }
-    .hb-card, .panel-box {
-      background: var(--bg-panel);
-      border: 1px solid var(--border);
+    .status-banner.ready { border-color: rgba(16, 185, 129, 0.55); background: rgba(16, 185, 129, 0.12); color: #d1fae5; }
+    .status-banner.countdown { border-color: rgba(245, 158, 11, 0.75); background: rgba(245, 158, 11, 0.18); color: #fef3c7; }
+    .status-banner.action { border-color: rgba(239, 68, 68, 0.75); background: rgba(239, 68, 68, 0.18); color: #fee2e2; }
+    .banner-sub { font-size: 0.78rem; color: var(--text-dim); margin-top: 2px; }
+
+    .action-cluster { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; justify-content: flex-end; }
+    .btn {
+      border: 1px solid var(--border-strong);
+      background: var(--surface);
+      color: var(--text);
+      padding: 7px 11px;
       border-radius: 10px;
-      padding: 9px 11px;
-      display: flex;
-      flex-direction: column;
-      gap: 6px;
-      content-visibility: auto;
-      contain-intrinsic-size: auto 320px;
-    }
-    @supports not (content-visibility: auto) {
-      .hb-card, .panel-box { contain: layout style paint; }
-    }
-    .hb-title {
-      display: flex; justify-content: space-between; align-items: center;
-      font-size: 11.5px; font-weight: 800; color: var(--accent-blue); text-transform: uppercase;
-    }
-    canvas.vis-canvas {
-      width: 100%; background: #050811; border-radius: 6px; border: 1px solid #1e293b; display: block;
-    }
-
-    .gauges-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; }
-    .gauge-item {
-      background: var(--bg-card); border: 1px solid #263248; border-radius: 6px; padding: 5px 8px;
-    }
-    .gauge-label { font-size: 10.5px; color: var(--text-muted); display: flex; justify-content: space-between; }
-    .gauge-val { font-size: 14px; font-weight: 800; color: #fff; margin: 1px 0; }
-    .gauge-bar { height: 5px; background: #070b14; border-radius: 4px; overflow: hidden; }
-    .gauge-fill { height: 100%; background: #10b981; width: 0%; transition: width 0.08s linear; }
-
-    /* Tabs following modern-web-guidance (single row, aria-selected underline) */
-    .nav-tabs {
-      display: flex;
-      gap: 4px;
-      padding: 6px 14px 0 14px;
-      background: #0c1220;
-      border-bottom: 1px solid var(--border);
-      overflow-x: auto;
-      scrollbar-width: thin;
-    }
-    .tab-btn {
-      position: relative;
-      flex: none;
-      background: #162032;
-      color: var(--text-muted);
-      border: 1px solid var(--border);
-      border-bottom: none;
-      padding: 8px 13px;
-      border-radius: 8px 8px 0 0;
-      font-size: 12.5px;
+      font-size: 0.84rem;
       font-weight: 700;
       cursor: pointer;
+      display: inline-flex;
+      align-items: center;
+      gap: 5px;
       white-space: nowrap;
+      transition: background 0.15s ease, transform 0.1s ease, border-color 0.15s ease;
     }
-    .tab-btn[aria-selected="true"] {
-      background: var(--bg-panel);
-      color: var(--accent-blue);
+    .btn:hover { background: var(--surface-2); border-color: var(--accent); }
+    .btn:active { transform: translateY(1px); }
+    .btn-primary { background: linear-gradient(135deg, #059669, #047857); border-color: #34d399; color: #fff; }
+    .btn-primary:hover { background: linear-gradient(135deg, #10b981, #059669); }
+    .btn-gold { background: linear-gradient(135deg, #d97706, #b45309); border-color: #fcd34d; color: #fff; }
+    .btn-gold:hover { background: linear-gradient(135deg, #f59e0b, #d97706); }
+    .btn-blue { background: linear-gradient(135deg, #0284c7, #0369a1); border-color: #7dd3fc; color: #fff; }
+    .btn-panic {
+      background: linear-gradient(135deg, #dc2626, #991b1b);
+      border-color: #fca5a5;
+      color: #ffffff;
+      font-weight: 800;
+      padding: 8px 14px;
     }
-    .tab-btn[aria-selected="true"]::after {
+    .btn-panic:hover { background: linear-gradient(135deg, #ef4444, #b91c1c); }
+
+    /* Browser-Style Multi-Song Workspace Bar + Time-Machine */
+    .workspace-strip {
+      background: var(--bg-elevated);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 8px 12px;
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+    }
+    .song-tabs-row {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+    .tablist-scroll {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      flex-wrap: nowrap;
+      overflow-x: auto;
+      scrollbar-width: thin;
+      flex: 1;
+      padding-bottom: 2px;
+    }
+    .song-tab {
+      position: relative;
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      padding: 6px 11px;
+      border-radius: 10px 10px 4px 4px;
+      border: 1px solid var(--border);
+      background: var(--surface);
+      color: var(--text-dim);
+      font-weight: 700;
+      font-size: 0.84rem;
+      cursor: pointer;
+      white-space: nowrap;
+      flex-shrink: 0;
+    }
+    .song-tab[aria-selected="true"] {
+      color: var(--text);
+      background: var(--surface-2);
+      border-color: var(--accent);
+    }
+    .song-tab[aria-selected="true"]::after {
       content: "";
       position: absolute;
-      inset: auto 0 0;
-      border-block-end: 3px solid var(--accent-blue);
+      left: 8px;
+      right: 8px;
+      bottom: -2px;
+      border-bottom: 3px solid var(--accent-bright);
+    }
+    .tab-close-x {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      width: 18px;
+      height: 18px;
+      border-radius: 50%;
+      font-size: 0.78rem;
+      color: var(--text-dim);
+      margin-left: 2px;
+    }
+    .tab-close-x:hover { background: rgba(239, 68, 68, 0.3); color: #fff; }
+
+    .timemachine-row {
+      display: flex;
+      align-items: center;
+      flex-wrap: wrap;
+      gap: 10px;
+      padding-top: 6px;
+      border-top: 1px solid rgba(40, 52, 77, 0.7);
+    }
+    .scrubber-wrap {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      flex: 1;
+      min-width: 240px;
+    }
+    .scrubber-tag {
+      font-size: 0.78rem;
+      font-weight: 700;
+      color: var(--text-dim);
+      white-space: nowrap;
+      font-variant-numeric: tabular-nums;
     }
 
-    .tab-pane { padding: 12px 14px 28px 14px; }
-    .tab-pane[hidden] { display: none; }
-    .grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
-    .grid-cockpit { display: grid; grid-template-columns: 1.32fr 1fr; gap: 12px; }
-    .grid-3 { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 10px; }
-
-    .panel-header {
-      display: flex; justify-content: space-between; align-items: center;
-      border-bottom: 1px solid #1f2937; padding-bottom: 6px; flex-wrap: wrap; gap: 6px;
+    /* Modern accessible range sliders (NEVER comma-join vendor pseudo selectors) */
+    input[type="range"].studio-slider {
+      --attr-min: 1;
+      --attr-max: 50;
+      --control-value: 1;
+      flex: 1;
+      height: 8px;
+      border-radius: 999px;
+      background: linear-gradient(90deg, #38bdf8, #f59e0b);
+      appearance: none;
+      -webkit-appearance: none;
+      outline: none;
+      cursor: pointer;
     }
-    .panel-title { font-size: 13.5px; font-weight: 800; color: #f8fafc; }
-
-    .terminal-box {
-      background: #050811; border: 1px solid #1e293b; border-radius: 8px; padding: 8px 10px;
-      font-family: "SF Mono", Menlo, monospace; font-size: 11.5px; line-height: 1.48; color: #a7f3d0;
-      height: 185px; overflow-y: auto; white-space: pre-wrap;
+    input[type="range"].studio-slider::-webkit-slider-thumb {
+      -webkit-appearance: none;
+      width: 20px;
+      height: 20px;
+      border-radius: 50%;
+      background: #ffffff;
+      border: 3px solid var(--accent);
+      box-shadow: 0 1px 6px rgba(0, 0, 0, 0.5);
     }
-    .badge-pill {
-      padding: 3px 8px; border-radius: 99px; font-size: 11px; font-weight: 700;
-      background: #1e293b; color: #cbd5e1;
+    input[type="range"].studio-slider::-moz-range-thumb {
+      width: 20px;
+      height: 20px;
+      border-radius: 50%;
+      background: #ffffff;
+      border: 3px solid var(--accent);
+      box-shadow: 0 1px 6px rgba(0, 0, 0, 0.5);
     }
-    .badge-pill.on { background: rgba(16,185,129,0.22); color: #a7f3d0; border: 1px solid #10b981; }
-    .badge-pill.gold { background: rgba(251,191,36,0.2); color: #fde68a; border: 1px solid #fbbf24; }
-
-    table.data-table { width: 100%; border-collapse: collapse; font-size: 12px; }
-    table.data-table th, table.data-table td {
-      padding: 6px 8px; border-bottom: 1px solid #1f2937; text-align: left;
-    }
-    table.data-table th { color: var(--text-muted); font-weight: 700; background: rgba(0,0,0,0.25); }
-
-    .arc-track {
-      display: flex; gap: 6px; align-items: center; flex-wrap: wrap; font-size: 11px;
-    }
-    .arc-node {
-      padding: 4px 8px; border-radius: 6px; background: #172133; border: 1px solid #334155; color: #94a3b8; font-weight: 700;
-    }
-    .arc-node.active {
-      background: rgba(168,85,247,0.26); border-color: #c084fc; color: #f3e8ff;
-      box-shadow: 0 0 10px rgba(168,85,247,0.45);
+    @supports not (accent-color: #f59e0b) {
+      input[type="range"].studio-slider { border: 1px solid var(--border-strong); }
     }
 
-    textarea.directives-editor {
-      width: 100%; min-height: 150px; background: #050811; color: #e2e8f0; border: 1px solid #334155;
-      border-radius: 8px; padding: 9px; font-family: "SF Mono", Menlo, monospace; font-size: 12px; line-height: 1.5;
-      resize: vertical;
+    /* Main View Navigation Tabs (Single Row, Forced-Colors ::after underline) */
+    .main-tablist {
+      display: flex;
+      flex-wrap: nowrap;
+      overflow-x: auto;
+      gap: 6px;
+      border-bottom: 1px solid var(--border);
+      padding-bottom: 2px;
+      scrollbar-width: thin;
     }
-    pre.md-preview {
-      background: #050811; border: 1px solid #1e293b; border-radius: 8px; padding: 10px;
-      font-family: "SF Mono", Menlo, monospace; font-size: 11.5px; line-height: 1.5; color: #cbd5e1;
-      max-height: 230px; overflow-y: auto; white-space: pre-wrap;
+    .main-tab {
+      position: relative;
+      border: 1px solid transparent;
+      background: transparent;
+      color: var(--text-dim);
+      padding: 9px 15px;
+      border-radius: 10px 10px 0 0;
+      font-size: 0.92rem;
+      font-weight: 800;
+      cursor: pointer;
+      white-space: nowrap;
+      flex-shrink: 0;
+    }
+    .main-tab[aria-selected="true"] {
+      color: var(--accent-bright);
+      background: var(--bg-elevated);
+      border-color: var(--border) var(--border) transparent var(--border);
+    }
+    .main-tab[aria-selected="true"]::after {
+      content: "";
+      position: absolute;
+      left: 0;
+      right: 0;
+      bottom: -2px;
+      border-bottom: 3px solid var(--accent);
+    }
+
+    .panel-grid-stage {
+      display: grid;
+      grid-template-columns: 360px 1fr;
+      gap: 12px;
+      align-items: start;
+    }
+    @media (max-width: 1100px) {
+      .panel-grid-stage { grid-template-columns: 1fr; }
+    }
+    .panel-grid-2 {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 12px;
+    }
+    @media (max-width: 960px) {
+      .panel-grid-2 { grid-template-columns: 1fr; }
+    }
+
+    .card {
+      background: var(--bg-elevated);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 14px;
+    }
+    .card-hd {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 10px;
+      gap: 8px;
+    }
+    .card-title { font-size: 0.96rem; font-weight: 800; color: #fff; }
+    .badge {
+      padding: 3px 9px;
+      border-radius: 999px;
+      font-size: 0.76rem;
+      font-weight: 700;
+      background: var(--surface-2);
+      border: 1px solid var(--border-strong);
+      color: var(--text-dim);
+      font-variant-numeric: tabular-nums;
+    }
+    .badge-ok { background: var(--green-soft); border-color: rgba(16, 185, 129, 0.5); color: #a7f3d0; }
+    .badge-gold { background: var(--accent-soft); border-color: rgba(245, 158, 11, 0.5); color: #fde68a; }
+
+    /* Live Story Subtitle & Thought Bubble */
+    .story-hero {
+      background: linear-gradient(135deg, rgba(245, 158, 11, 0.14), rgba(56, 189, 248, 0.08));
+      border: 1px solid rgba(245, 158, 11, 0.42);
+      border-radius: 14px;
+      padding: 12px 16px;
+      margin-bottom: 12px;
+    }
+    .story-subtitle {
+      font-size: 1.08rem;
+      font-weight: 800;
+      color: #fffbeb;
+      margin-bottom: 6px;
+    }
+    .thought-bubble {
+      font-size: 0.88rem;
+      color: #dbeafe;
+      background: rgba(15, 23, 42, 0.68);
+      border-radius: 10px;
+      padding: 7px 11px;
+      display: inline-block;
+    }
+
+    /* 2D Expression Pad */
+    .pad-box {
+      position: relative;
+      width: 100%;
+      aspect-ratio: 1.25 / 1;
+      border-radius: 12px;
+      border: 1px solid var(--border-strong);
+      background:
+        radial-gradient(circle at 20% 25%, rgba(56, 189, 248, 0.22), transparent 55%),
+        radial-gradient(circle at 82% 22%, rgba(245, 158, 11, 0.25), transparent 55%),
+        radial-gradient(circle at 50% 85%, rgba(16, 185, 129, 0.16), transparent 60%),
+        #0c1220;
+      cursor: crosshair;
+      touch-action: none;
+      overflow: hidden;
+      margin-bottom: 10px;
+    }
+    .pad-axis-label {
+      position: absolute;
+      font-size: 0.74rem;
+      font-weight: 700;
+      color: var(--text-dim);
+      pointer-events: none;
+      background: rgba(8, 11, 17, 0.72);
+      padding: 2px 7px;
+      border-radius: 6px;
+    }
+    .pad-top { top: 6px; left: 50%; transform: translateX(-50%); }
+    .pad-bottom { bottom: 6px; left: 50%; transform: translateX(-50%); }
+    .pad-left { left: 6px; top: 50%; transform: translateY(-50%); }
+    .pad-right { right: 6px; top: 50%; transform: translateY(-50%); }
+    .pad-orb {
+      position: absolute;
+      width: 24px;
+      height: 24px;
+      border-radius: 50%;
+      background: radial-gradient(circle, #ffffff 15%, var(--accent) 70%);
+      border: 2px solid #fff;
+      box-shadow: 0 0 18px rgba(245, 158, 11, 0.85);
+      transform: translate(-50%, -50%);
+      pointer-events: none;
+    }
+
+    .preset-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; }
+
+    /* Inspiration Source Meters & Human Score Meters */
+    .meter-row { margin-bottom: 8px; }
+    .meter-hd {
+      display: flex;
+      justify-content: space-between;
+      font-size: 0.82rem;
+      font-weight: 700;
+      margin-bottom: 3px;
+      font-variant-numeric: tabular-nums;
+    }
+    .meter-track {
+      width: 100%;
+      height: 9px;
+      border-radius: 999px;
+      background: #0a0e17;
+      border: 1px solid var(--border);
+      overflow: hidden;
+    }
+    .meter-fill {
+      height: 100%;
+      border-radius: 999px;
+      background: linear-gradient(90deg, var(--blue), var(--accent-bright));
+      transition: width 0.35s ease;
+    }
+
+    /* Sheet Music & Virtual Piano Canvases */
+    canvas.stage-canvas {
+      width: 100%;
+      display: block;
+      border-radius: 10px;
+      background: #0b0f18;
+      border: 1px solid var(--border);
+    }
+
+    .score-cards-4 {
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      gap: 10px;
+      margin-bottom: 12px;
+    }
+    @media (max-width: 800px) { .score-cards-4 { grid-template-columns: 1fr 1fr; } }
+    .score-card {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 12px;
+    }
+    .score-big {
+      font-size: 1.6rem;
+      font-weight: 800;
+      color: var(--accent-bright);
+      font-variant-numeric: tabular-nums;
+    }
+    .score-name { font-size: 0.84rem; font-weight: 700; color: var(--text); }
+    .score-desc { font-size: 0.75rem; color: var(--text-dim); margin-top: 2px; }
+
+    .feature-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(290px, 1fr));
+      gap: 10px;
+    }
+    .feat-card {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 11px;
+      display: flex;
+      flex-direction: column;
+      justify-content: space-between;
+      gap: 8px;
+    }
+    .feat-top { display: flex; justify-content: space-between; gap: 6px; align-items: start; }
+    .feat-title { font-weight: 800; font-size: 0.88rem; color: #fff; }
+    .feat-desc { font-size: 0.78rem; color: var(--text-dim); }
+
+    textarea, input[type="text"] {
+      width: 100%;
+      background: #0c111b;
+      color: var(--text);
+      border: 1px solid var(--border-strong);
+      border-radius: 10px;
+      padding: 9px 11px;
+      font-family: inherit;
+      font-size: 0.88rem;
+    }
+
+    dialog#qr-dialog {
+      background: var(--bg-elevated);
+      color: var(--text);
+      border: 1px solid var(--accent);
+      border-radius: 18px;
+      padding: 20px;
+      max-width: 420px;
+      text-align: center;
+      box-shadow: 0 24px 64px rgba(0, 0, 0, 0.75);
+    }
+    dialog#qr-dialog::backdrop { background: rgba(0, 0, 0, 0.72); }
+
+    .toast {
+      position: fixed;
+      right: 18px;
+      bottom: 18px;
+      background: #0f172a;
+      border: 1px solid var(--accent);
+      color: #fff;
+      padding: 10px 16px;
+      border-radius: 12px;
+      font-weight: 700;
+      font-size: 0.88rem;
+      box-shadow: 0 12px 28px rgba(0, 0, 0, 0.6);
+      opacity: 0;
+      pointer-events: none;
+      transition: opacity 0.2s ease;
+      z-index: 99;
+    }
+    .toast.show { opacity: 1; }
+
+    @media (prefers-reduced-motion: reduce) {
+      *, *::before, *::after { transition: none !important; animation: none !important; }
     }
   </style>
 </head>
 <body>
-
-  <!-- GLOBAL TOP BAR -->
-  <header class="global-header">
-    <div id="userBanner" class="user-banner READY">
-      <div class="banner-left">
-        <span id="bannerBadge" class="banner-badge">♾️ [AUTONOMOUS VIRTUOSO]</span>
-        <div style="min-width:0;">
-          <div id="bannerMainMsg" class="banner-main-msg">
-            自律型AIピアニスト稼働中 — Virtual Disklavier Digital Twin 上で途切れない音楽を生成・自己採点・進化中
-          </div>
-          <div id="bannerSubMsg" class="banner-sub-msg">
-            Look-Ahead Double Ring Buffer + 5-Axis Actor-Critic + Obsidian Musical Brain 稼働中
+  <div class="app-shell">
+    <!-- TOP BAR -->
+    <header class="topbar">
+      <div>
+        <div class="brand-row">
+          <div class="brand-title">🎹 Disklavier-Auto ライブ作曲スタジオ</div>
+          <div id="banner-pill" class="status-banner ready">
+            <span id="banner-msg">🟢 自動で作曲・進化中</span>
           </div>
         </div>
-      </div>
-      <div class="gen-hero-pill">
-        <span>🧬 Gen <strong id="topGenNum" style="color:#38bdf8;">1</strong></span>
-        <span>|</span>
-        <span>🎯 Latest <strong id="topLatestScore" style="color:#10b981;">--</strong></span>
-        <span>|</span>
-        <span>🏆 Peak <strong id="topBestScore" style="color:#fbbf24;">--</strong></span>
-      </div>
-      <div id="countdownPill" class="countdown-pill">🔊 3s</div>
-    </div>
-
-    <!-- CONTINUOUS STREAM, DIGITAL TWIN AUDIO, HYPER-EVOLUTION & MOTIF INJECTION BAR -->
-    <div class="virtuoso-quick-bar">
-      <div class="btn-group">
-        <button id="btnStreamToggle" class="btn btn-green" onclick="toggleContinuousStream()">
-          ♾️ 連続演奏ストリーム: ON
-        </button>
-        <button id="btnVirtualSound" class="btn btn-outline active-toggle" onclick="toggleVirtualSound()">
-          🔊 Mac内蔵音源で聴く: ON
-        </button>
-        <button id="btnHardwareOut" class="btn btn-outline" onclick="toggleHardwareOutput()">
-          🎹 実機Disklavier出力: AUTO
-        </button>
-        <button class="btn btn-purple" onclick="runHyperEvolution(15, 30)">
-          ⚡ 高速脳内進化 (15世代 @ 30x)
-        </button>
+        <div id="banner-sub" class="banner-sub">人間のお手本（名演）に学びながら、リアルタイムでオリジナル曲を育てています</div>
       </div>
 
-      <div class="btn-group">
-        <span style="font-size:11.5px;color:#cbd5e1;font-weight:700;">🎻 モチーフ即時吸収 (無停止):</span>
-        <button class="btn btn-outline" onclick="injectLiveMotif([62, 65, 69, 68, 65, 62], 'cello_lament')">チェロ短調主題</button>
-        <button class="btn btn-outline" onclick="injectLiveMotif([61, 65, 68, 73, 70, 68, 65], 'debussy_moon')">ドビュッシー主題</button>
-        <button class="btn btn-outline" onclick="injectLiveMotif([43, 50, 59, 57, 59, 62, 67], 'bach_bariolage')">バッハ対位主題</button>
-        <button class="panic-btn" onclick="triggerPanic()">🔴 STOP / PANIC</button>
+      <div class="action-cluster">
+        <button class="btn btn-primary" id="btn-stream-toggle" onclick="postAction('/api/virtuoso/toggle_stream', {})">⏯️ 自動演奏 ON/OFF</button>
+        <button class="btn" id="btn-sound-toggle" onclick="postAction('/api/sound/enable', {})">🔊 ピアノ音出し</button>
+        <button class="btn btn-gold" onclick="postAction('/api/timemachine/rescue_30s', {})">⏪ 今の30秒前を救出！</button>
+        <button class="btn" onclick="postAction('/api/virtuoso/mood_change', {})">✨ 雰囲気チェンジ</button>
+        <button class="btn" onclick="postAction('/api/virtuoso/spark', {})">⚡ ひらめきスパーク</button>
+        <button class="btn" onclick="postAction('/api/virtuoso/full_reset', {})">🔄 完全リセット</button>
+        <button class="btn btn-blue" onclick="openQrModal()">📱 スマホリモコン</button>
+        <button class="btn btn-panic" onclick="postAction('/api/panic', {})">🛑 すぐ音を止める</button>
       </div>
-    </div>
-  </header>
+    </header>
 
-  <!-- ALWAYS-VISIBLE 60FPS DIGITAL TWIN & PHYSICS DOCK -->
-  <section class="heartbeat-dock">
-    <!-- 1. Virtual Twin Acoustic Output & C519ML Mic Spectrum -->
-    <div class="hb-card">
-      <div class="hb-title">
-        <span>🔊 1. Virtual Twin 音響出力 & C519ML スペクトル</span>
-        <span id="audioDbBadge" style="color:#10b981;">Twin: -40.0 dBFS</span>
+    <!-- BROWSER-STYLE MULTI-SONG WORKSPACE TABS + TIME-MACHINE -->
+    <section class="workspace-strip" aria-label="曲の切り替えとタイムマシン履歴">
+      <div class="song-tabs-row">
+        <span style="font-size:0.8rem; font-weight:800; color:var(--text-dim); white-space:nowrap;">🗂️ 曲のタブ</span>
+        <div id="song-tablist" class="tablist-scroll" role="tablist" aria-label="作業中の曲タブ" focusgroup="tablist nomemory"></div>
+        <button class="btn" onclick="postAction('/api/tabs/new', {})">＋ 新しい曲を作る</button>
+        <button class="btn" onclick="postAction('/api/tabs/restore', {})">↩ 閉じた曲を戻す</button>
       </div>
-      <canvas id="oscCanvas" class="vis-canvas" width="440" height="54"></canvas>
-      <canvas id="cqtCanvas" class="vis-canvas" width="440" height="58"></canvas>
-      <div style="display:flex;justify-content:space-between;font-size:11px;color:#cbd5e1;background:#162032;padding:4px 8px;border-radius:5px;">
-        <span>出力デバイス: <strong id="twinAudioDev" style="color:#38bdf8;">CoreAudio</strong></span>
-        <span>検出/演奏音: <strong id="liveDetectedNotes" style="color:#fbbf24;">--</strong></span>
-      </div>
-    </div>
 
-    <!-- 2. 88-Key Virtual & Physical Disklavier + VDL Prelay Bars + CC#64 Inertia -->
-    <div class="hb-card">
-      <div class="hb-title">
-        <span>🎹 2. 88-Key Disklavier Digital Twin (打鍵・VDL先行 ms・Half-Pedal CC#64)</span>
-        <span id="pianoActiveSummary" style="color:#fbbf24;">Active Keys: 0 | VDL: -- ms</span>
-      </div>
-      <canvas id="pianoCanvas" class="vis-canvas" width="600" height="88"></canvas>
-      <div style="display:flex;align-items:center;gap:10px;">
-        <span style="font-size:11px;font-weight:700;color:#cbd5e1;white-space:nowrap;">
-          🦶 右ペダル CC#64 (45ms慣性):
-        </span>
-        <div style="flex:1;height:13px;background:#070b14;border-radius:6px;border:1px solid #334155;position:relative;overflow:hidden;">
-          <div style="position:absolute;left:24.4%;width:42.5%;top:0;bottom:0;background:rgba(251,191,36,0.16);border-left:1px dashed #fbbf24;border-right:1px dashed #fbbf24;" title="Half-Pedal Sweet Spot (31-85)"></div>
-          <div id="pedalBarFill" style="height:100%;width:0%;background:linear-gradient(90deg,#38bdf8,#fbbf24,#10b981);transition:width 0.05s;"></div>
+      <div class="timemachine-row">
+        <button class="btn" onclick="postAction('/api/timemachine/undo', {})">◀ 前の状態に戻す</button>
+        <button class="btn" onclick="postAction('/api/timemachine/redo', {})">次の状態に進む ▶</button>
+        <div class="scrubber-wrap">
+          <span class="scrubber-tag">第1世代 (原石)</span>
+          <input id="gen-scrubber" class="studio-slider" type="range" min="1" max="50" value="1" aria-label="進化タイムライン世代スライダー" />
+          <span id="scrubber-cur" class="scrubber-tag">現在 第1世代</span>
         </div>
-        <span id="pedalZoneLabel" style="font-size:11px;color:#fbbf24;min-width:155px;text-align:right;">0 (Seated)</span>
+        <button class="btn btn-gold" onclick="postAction('/api/timemachine/ab_compare', {which:'both'})">🎧 進化前(A) vs 進化後(B) 聴き比べ</button>
+        <span id="hw-accel-badge" class="badge badge-ok">Apple Silicon 並列エンジン待機</span>
+        <span id="preflight-badge" class="badge badge-ok">🛡️ 安全チェック 0.01ms 合格</span>
       </div>
-      <div style="display:flex;justify-content:space-between;font-size:10.5px;color:#9ca3af;">
-        <span>🟢 Piano | 🟡 Cello Motif | 🔵 Human MIDI IN | 🟣 Halo (Vel 1) | 水色バー=VDL先行補正ms</span>
-        <span>途切れ防止ブロック: <strong id="statStaleBlocked" style="color:#10b981;">0</strong></span>
-      </div>
-    </div>
+    </section>
 
-    <!-- 3. Look-Ahead Double Ring Buffer & Disklavier Physics Simulator -->
-    <div class="hb-card">
-      <div class="hb-title">
-        <span>🛡️ 3. 先読みリングバッファ & 物理シミュレータ検証</span>
-        <span id="guardPortStatus" style="color:#10b981;">0 Crashes</span>
-      </div>
-      <div class="gauges-grid">
-        <div class="gauge-item">
-          <div class="gauge-label"><span>先読み Horizon</span><span id="bufSlotLabel">Buffer A</span></div>
-          <div class="gauge-val" id="gHorizonVal" style="color:#38bdf8;">0.00 s</div>
-          <div class="gauge-bar"><div class="gauge-fill" id="gHorizonBar" style="background:#38bdf8;"></div></div>
-        </div>
-        <div class="gauge-item">
-          <div class="gauge-label"><span>ソレノイド同時負荷</span><span>Max 16 / 20</span></div>
-          <div class="gauge-val" id="gVoicesVal">0 / 20</div>
-          <div class="gauge-bar"><div class="gauge-fill" id="gVoicesBar"></div></div>
-        </div>
-        <div class="gauge-item">
-          <div class="gauge-label"><span>VDL 先行誤差</span><span>目標 &lt; 5ms</span></div>
-          <div class="gauge-val" id="gVdlErrVal" style="color:#10b981;">0.0 ms</div>
-          <div class="gauge-bar"><div class="gauge-fill" id="gVdlErrBar" style="width:95%;"></div></div>
-        </div>
-        <div class="gauge-item">
-          <div class="gauge-label"><span>物理エラー (Ghost/Sag/Crash)</span><span>SafetyGuard</span></div>
-          <div class="gauge-val" id="gPhysicsHealthVal" style="color:#10b981;">0 Errors</div>
-          <div class="gauge-bar"><div class="gauge-fill" id="gPhysicsHealthBar" style="width:100%;"></div></div>
-        </div>
-      </div>
-      <div style="display:flex;justify-content:space-between;font-size:10.5px;color:#9ca3af;">
-        <span>LegatoOverlap: <strong id="statOverlapMs" style="color:#fff;">+10ms</strong></span>
-        <span>HalfPedalRes: <strong id="statHalfPedalRes" style="color:#fbbf24;">0.00</strong></span>
-        <span>Sent: <strong id="statTotalSent" style="color:#10b981;">0</strong></span>
-      </div>
-    </div>
-  </section>
+    <!-- MAIN VIEW TABS (SINGLE ROW, MANDATORY INITIAL ARIA-SELECTED & HIDDEN PANELS) -->
+    <nav class="main-tablist" role="tablist" aria-label="スタジオ切り替え" focusgroup="tablist nomemory">
+      <button id="vtab-stage" class="main-tab" role="tab" aria-selected="true" aria-controls="vpanel-stage" focusgroupstart>🎹 ライブ演奏＆五線譜</button>
+      <button id="vtab-evolve" class="main-tab" role="tab" aria-selected="false" aria-controls="vpanel-evolve">🧬 AIの自己進化ラボ</button>
+      <button id="vtab-cello" class="main-tab" role="tab" aria-selected="false" aria-controls="vpanel-cello">🎻 チェロ共演＆名曲</button>
+      <button id="vtab-notes" class="main-tab" role="tab" aria-selected="false" aria-controls="vpanel-notes">📓 記憶ノート＆リクエスト</button>
+      <button id="vtab-features" class="main-tab" role="tab" aria-selected="false" aria-controls="vpanel-features">✨ 全100機能＆健康診断</button>
+    </nav>
 
-  <!-- NAVIGATION TABS -->
-  <nav class="nav-tabs" role="tablist" aria-label="Virtuoso Studio Views">
-    <button type="button" role="tab" aria-selected="true" class="tab-btn" onclick="switchTab(1)" id="tabBtn1">
-      🧠 Tab 1: 自律進化・平行未来ツリー＆5軸採点コックピット
-    </button>
-    <button type="button" role="tab" aria-selected="false" class="tab-btn" onclick="switchTab(2)" id="tabBtn2">
-      🕸️ Tab 2: Obsidian 音楽脳グラフ＆進化履歴ビューア
-    </button>
-    <button type="button" role="tab" aria-selected="false" class="tab-btn" onclick="switchTab(3)" id="tabBtn3">
-      🎼 Tab 3: 対話型AI作曲＆秒数指定展開スタジオ
-    </button>
-    <button type="button" role="tab" aria-selected="false" class="tab-btn" onclick="switchTab(4)" id="tabBtn4">
-      🎹 Tab 4: IMSLP フルレガート名曲再生
-    </button>
-    <button type="button" role="tab" aria-selected="false" class="tab-btn" onclick="switchTab(5)" id="tabBtn5">
-      🎻 Tab 5: チェロ伴奏＆Time-Machine 聴き比べ
-    </button>
-    <button type="button" role="tab" aria-selected="false" class="tab-btn" onclick="switchTab(6)" id="tabBtn6">
-      🔬 Tab 6: 自律実験データ図鑑 (Exp 1–5)
-    </button>
-  </nav>
-
-  <!-- ===================================================================== -->
-  <!-- TAB 1 (MAIN COCKPIT): MULTIVERSE FUTURE TREE & 5-AXIS CRITIC RADAR    -->
-  <!-- ===================================================================== -->
-  <main id="tabPane1" role="tabpanel" aria-labelledby="tabBtn1" class="tab-pane">
-    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px;gap:10px;flex-wrap:wrap;background:#101726;padding:8px 12px;border-radius:10px;border:1px solid #28354d;">
-      <div class="arc-track" id="storyArcTrack">
-        <span style="font-weight:800;color:#c084fc;margin-right:4px;">🎭 音楽の呼吸 (Story Arc):</span>
-        <span class="arc-node" data-arc="Exposition">① 主題提示 (Exposition)</span>
-        <span>→</span>
-        <span class="arc-node" data-arc="Development">② 動機展開 (Development)</span>
-        <span>→</span>
-        <span class="arc-node" data-arc="Climax">③ クライマックス (Climax)</span>
-        <span>→</span>
-        <span class="arc-node" data-arc="Recapitulation">④ 静謐な再現 (Recapitulation)</span>
-        <span>→</span>
-        <span class="arc-node" data-arc="Metamorphosis">⑤ 主題変容 (Metamorphosis)</span>
-      </div>
-      <div style="font-size:12px;color:#e2e8f0;">
-        現在の核モチーフ: <strong id="activeMotifTitle" style="color:#fbbf24;">Loading...</strong>
-        (<span id="activeMotifKey" style="color:#38bdf8;">--</span>) |
-        小節: <strong id="virtuosoBarCount" style="color:#10b981;">0</strong>
-      </div>
-    </div>
-
-    <div class="grid-cockpit">
-      <!-- Left: Multiverse Future Branch Visualizer + Live Critic Log -->
-      <div class="panel-box">
-        <div class="panel-header">
-          <span class="panel-title">🌳 Multiverse Future Branch Visualizer (4平行未来候補リアルタイム採点・選択)</span>
-          <span class="badge-pill gold" id="hyperTrainingBadge">Hyper-Speed Ready</span>
-        </div>
-        <canvas id="multiverseTreeCanvas" class="vis-canvas" width="760" height="285"></canvas>
-
-        <div class="panel-header" style="margin-top:4px;">
-          <span class="panel-title">💬 AI Critic ライブ実況講評ログ (Generation Evolution Stream)</span>
-          <span class="badge-pill on" id="activeDirectiveSummary">Fitness: Classical Balanced</span>
-        </div>
-        <div id="criticLogsBox" class="terminal-box" style="height:175px;"></div>
+    <!-- ================================================================ -->
+    <!-- PANEL 1: LIVE PERFORMANCE & GRAND STAFF STAGE                    -->
+    <!-- ================================================================ -->
+    <section id="vpanel-stage" role="tabpanel" aria-labelledby="vtab-stage">
+      <div class="story-hero">
+        <div id="live-story-subtitle" class="story-subtitle">新しいオリジナルの物語を紡ぎ始めています…</div>
+        <div id="pianist-thought-bubble" class="thought-bubble">💬 AIピアニスト: レガートの響きとメロディの輪郭を探しています</div>
       </div>
 
-      <!-- Right: 5-Axis Self-Scoring Radar Chart & Evolvable Genome Parameters -->
-      <div class="panel-box">
-        <div class="panel-header">
-          <span class="panel-title">🎯 5軸・100点満点 自己採点レーダーチャート (Actor-Critic)</span>
-          <span id="radarTotalBadge" style="font-size:15px;font-weight:900;color:#fbbf24;">-- / 100 pts</span>
-        </div>
-        <canvas id="criticRadarCanvas" class="vis-canvas" width="480" height="275"></canvas>
-
-        <div class="panel-header" style="margin-top:2px;">
-          <span class="panel-title">🧬 自己進化ゲノム重み (Elite MusicalGenome)</span>
-        </div>
-        <div class="gauges-grid" id="genomeParamsGrid">
-          <div class="gauge-item">
-            <div class="gauge-label"><span>反行率重み (Contrary Motion)</span><span id="gGenomeContrary">--</span></div>
-            <div class="gauge-bar"><div class="gauge-fill" id="bGenomeContrary" style="background:#38bdf8;"></div></div>
+      <div class="panel-grid-stage">
+        <!-- Left Controls: 2D Expression Pad, Presets, Emergent Inspiration -->
+        <div style="display:flex; flex-direction:column; gap:12px;">
+          <div class="card">
+            <div class="card-hd">
+              <span class="card-title">🎛️ 演奏の表情をライブ操作</span>
+              <span id="pad-coord-badge" class="badge badge-gold">バランス</span>
+            </div>
+            <div id="expression-pad" class="pad-box" role="application" aria-label="演奏の表情とエネルギー操作パッド">
+              <div class="pad-axis-label pad-top">情熱的・クライマックス</div>
+              <div class="pad-axis-label pad-bottom">穏やかに囁く</div>
+              <div class="pad-axis-label pad-left">しっとり歌う</div>
+              <div class="pad-axis-label pad-right">活発に跳ねる</div>
+              <div id="pad-orb" class="pad-orb" style="left:40%; top:38%;"></div>
+            </div>
+            <div class="preset-grid">
+              <button class="btn" onclick="applyPreset('night_nocturne')">🌙 静かな夜の夜想曲</button>
+              <button class="btn" onclick="applyPreset('tchaikovsky_passion')">🔥 情熱カンタービレ</button>
+              <button class="btn" onclick="applyPreset('vivace_scherzando')">💃 活発スケルツォ</button>
+              <button class="btn" onclick="applyPreset('debussy_watercolor')">🌊 透明な光の倍音</button>
+            </div>
+            <button class="btn btn-blue" style="width:100%; margin-top:8px; justify-content:center;" onclick="warmupCelloWave()">
+              🎻 チェロ開放弦ウォームアップ＆88鍵ウェーブ
+            </button>
           </div>
-          <div class="gauge-item">
-            <div class="gauge-label"><span>半音階バス (Chromatic Bass)</span><span id="gGenomeChroma">--</span></div>
-            <div class="gauge-bar"><div class="gauge-fill" id="bGenomeChroma" style="background:#a855f7;"></div></div>
+
+          <div class="card">
+            <div class="card-hd">
+              <span class="card-title">✨ 今のひらめきの源泉</span>
+              <span id="inspiration-top" class="badge badge-gold">自発ブレンド</span>
+            </div>
+            <div id="inspiration-bars"></div>
+            <div id="inspiration-comment" style="font-size:0.78rem; color:var(--text-dim); margin-top:6px;"></div>
           </div>
-          <div class="gauge-item">
-            <div class="gauge-label"><span>対位法密度 (Counterpoint)</span><span id="gGenomeCp">--</span></div>
-            <div class="gauge-bar"><div class="gauge-fill" id="bGenomeCp" style="background:#10b981;"></div></div>
+        </div>
+
+        <!-- Right Stage: Sheet Music View + 88-Key Piano + Wave & Pedal -->
+        <div style="display:flex; flex-direction:column; gap:12px;">
+          <div class="card">
+            <div class="card-hd">
+              <span class="card-title">🎼 リアルタイム五線譜（楽譜ビュー）</span>
+              <div style="display:flex; gap:6px; flex-wrap:wrap;">
+                <a class="btn" href="/api/export/midi" download>💾 MIDI保存</a>
+                <a class="btn" href="/api/export/musicxml" download>🎼 楽譜(MusicXML)</a>
+                <a class="btn" href="/api/export/wav" download>🔊 高音質WAV</a>
+              </div>
+            </div>
+            <canvas id="canvas-score" class="stage-canvas" width="980" height="230"></canvas>
           </div>
-          <div class="gauge-item">
-            <div class="gauge-label"><span>スタッカート/レガート対比</span><span id="gGenomeContrast">--</span></div>
-            <div class="gauge-bar"><div class="gauge-fill" id="bGenomeContrast" style="background:#fbbf24;"></div></div>
+
+          <div class="card">
+            <div class="card-hd">
+              <span class="card-title">🎹 88鍵盤リアルタイム打鍵 ＆ 音響の波紋</span>
+              <div style="display:flex; gap:6px; flex-wrap:wrap;">
+                <span id="badge-voices" class="badge">保持 0/20音</span>
+                <span id="badge-nps" class="badge">速度 0音/秒 (上限28)</span>
+                <span id="badge-pedal" class="badge">右ペダル 0</span>
+                <span id="badge-vdl" class="badge badge-ok">打弦遅延補正 ON</span>
+              </div>
+            </div>
+            <canvas id="canvas-ripple" class="stage-canvas" width="980" height="115" style="margin-bottom:8px;"></canvas>
+            <canvas id="canvas-piano" class="stage-canvas" width="980" height="125"></canvas>
           </div>
         </div>
       </div>
-    </div>
-  </main>
+    </section>
 
-  <!-- ===================================================================== -->
-  <!-- TAB 2: OBSIDIAN KNOWLEDGE GRAPH & EVOLUTION HISTORY                   -->
-  <!-- ===================================================================== -->
-  <main id="tabPane2" role="tabpanel" aria-labelledby="tabBtn2" class="tab-pane" hidden>
-    <div class="grid-2">
-      <!-- Left: Evolution Score Trajectory + Obsidian Knowledge Graph Canvas -->
-      <div class="panel-box">
-        <div class="panel-header">
-          <span class="panel-title">📈 世代別進化スコア曲線 (Gen 1 → Current Gen)</span>
-          <span class="badge-pill on" id="obsidianStatsBadge">Vault: 0 notes | 0 links</span>
+    <!-- ================================================================ -->
+    <!-- PANEL 2: SELF-EVOLUTION LAB (4 HUMAN SCORES & PARALLEL TREE)     -->
+    <!-- ================================================================ -->
+    <section id="vpanel-evolve" role="tabpanel" aria-labelledby="vtab-evolve" hidden>
+      <div class="score-cards-4">
+        <div class="score-card">
+          <div class="score-name">🎼 歌い方のなめらかさ</div>
+          <div id="hs-legato" class="score-big">--</div>
+          <div class="score-desc">音と音のつながり・丁寧な離鍵・先行レガートペダル</div>
         </div>
-        <canvas id="evolutionHistoryCanvas" class="vis-canvas" width="640" height="175"></canvas>
-
-        <div class="panel-header" style="margin-top:4px;">
-          <span class="panel-title">🕸️ Obsidian 知識グラフ (クリックしてノート閲覧・MIDI再生)</span>
+        <div class="score-card">
+          <div class="score-name">⚡ リズムの活発さ・キレ</div>
+          <div id="hs-vivace" class="score-big">--</div>
+          <div class="score-desc">跳ねる躍動感・安全35ms+スタッカート・強弱コントラスト</div>
         </div>
-        <canvas id="obsidianGraphCanvas" class="vis-canvas" width="640" height="270" style="cursor:pointer;"></canvas>
+        <div class="score-card">
+          <div class="score-name">📖 メロディの美しさ・物語性</div>
+          <div id="hs-story" class="score-big">--</div>
+          <div class="score-desc">歌う主旋律の浮き立ち・和声の変化・展開のドラマ</div>
+        </div>
+        <div class="score-card">
+          <div class="score-name">🛡️ ピアノ実機への優しさ</div>
+          <div id="hs-safety" class="score-big">--</div>
+          <div class="score-desc">30音クラッシュ回避・VDL先読み・熱保護100%遵守</div>
+        </div>
       </div>
 
-      <!-- Right: Selected Note Preview, Hall of Fame Leaderboard, Live Directives Editor -->
-      <div class="panel-box">
-        <div class="panel-header">
-          <span class="panel-title">🏆 Hall of Fame 殿堂入り名演 (85点以上・最適化MIDI保存済)</span>
-        </div>
-        <div style="max-height:145px;overflow-y:auto;">
-          <table class="data-table">
-            <thead>
-              <tr><th>Note</th><th>Gen</th><th>Score</th><th>再生</th></tr>
-            </thead>
-            <tbody id="hofLeaderboardTbody"></tbody>
-          </table>
+      <div class="panel-grid-2">
+        <div class="card">
+          <div class="card-hd">
+            <span class="card-title">📈 世代ごとの成長グラフ</span>
+            <div style="display:flex; gap:6px;">
+              <button class="btn btn-gold" onclick="postAction('/api/virtuoso/like', {})">👍 今のフレーズいいね！</button>
+              <button class="btn btn-primary" onclick="runHyperEvolve()">⚡ 裏で一気に50世代進化させる</button>
+            </div>
+          </div>
+          <canvas id="canvas-evo" class="stage-canvas" width="660" height="220"></canvas>
+          <div id="hyper-summary" style="font-size:0.82rem; color:var(--text-dim); margin-top:8px;"></div>
         </div>
 
-        <div class="panel-header">
-          <span class="panel-title" id="selectedObsidianNoteTitle">📄 ノートプレビュー (グラフ上のノードをクリック)</span>
-          <button id="btnPlaySelectedHof" class="btn btn-gold" style="display:none;padding:4px 10px;" onclick="playSelectedHofMidi()">
-            ▶️ この名演の最適化MIDIを再生
-          </button>
+        <div class="card">
+          <div class="card-hd">
+            <span class="card-title">🌿 同時生成された作曲候補たちの比較</span>
+            <span id="gen-count-badge" class="badge badge-gold">第1世代</span>
+          </div>
+          <div id="branch-list" style="display:flex; flex-direction:column; gap:7px; margin-bottom:10px;"></div>
+          <div class="card-title" style="font-size:0.86rem; margin-bottom:4px;">📝 AIの成長ひとりごとログ</div>
+          <div id="critic-logs" style="font-size:0.8rem; color:var(--text-dim); max-height:140px; overflow:auto; background:#0b0f18; padding:8px; border-radius:8px;"></div>
         </div>
-        <pre id="selectedObsidianNoteContent" class="md-preview">グラフ上のノードまたはHall of Fame行をクリックすると、Obsidian VaultのMarkdown分析ノートが表示されます。</pre>
+      </div>
+    </section>
 
-        <div class="panel-header">
-          <span class="panel-title">📝 04_Human_Directives.md (人間からのリアルタイム進化指示)</span>
-          <div class="btn-group">
-            <button class="btn btn-outline" style="padding:3px 8px;font-size:11px;" onclick="appendDirectivePreset('短調の半音階的バス (chromatic bass) を増やす')">+短調半音階バス</button>
-            <button class="btn btn-outline" style="padding:3px 8px;font-size:11px;" onclick="appendDirectivePreset('スタッカートとレガートの対比を強くする')">+緩急対比強化</button>
-            <button class="btn btn-green" style="padding:4px 10px;font-size:11px;" onclick="saveHumanDirectives()">💾 保存して即時反映</button>
+    <!-- ================================================================ -->
+    <!-- PANEL 3: CELLO DUET & IMSLP MASTERWORKS                           -->
+    <!-- ================================================================ -->
+    <section id="vpanel-cello" role="tabpanel" aria-labelledby="vtab-cello" hidden>
+      <div class="panel-grid-2">
+        <div class="card">
+          <div class="card-hd">
+            <span class="card-title">🎻 リアルタイム・チェロ共演</span>
+            <span id="mic-badge" class="badge">マイク待機中</span>
+          </div>
+          <p style="color:var(--text-dim); font-size:0.86rem; margin-top:0;">
+            チェロの音程をリアルタイムで聴き取り、邪魔をしない美しい帯域でピアノ伴奏をつけます。実チェロが手元にないときは代理テスト演奏も試せます。
+          </p>
+          <div style="display:flex; flex-wrap:wrap; gap:8px; margin-bottom:10px;">
+            <button class="btn btn-primary" onclick="postAction('/api/audio/toggle', {})">🎤 マイク聴き取り ON/OFF</button>
+            <button class="btn btn-blue" onclick="warmupCelloWave()">🎻 開放弦(C-G-D-A)＆88鍵ウェーブ</button>
+            <button class="btn" onclick="postAction('/api/session/proxy_demo', {style:'faure'})">🎼 代理チェロと自動共演テスト</button>
+            <button class="btn" onclick="postAction('/api/safety/test_note', {})">🎹 確認テスト音</button>
+          </div>
+          <div id="cello-live-readout" style="background:#0c111b; border:1px solid var(--border); border-radius:10px; padding:10px; font-weight:700;">
+            検出中の音高: 待機中
           </div>
         </div>
-        <textarea id="directivesTextarea" class="directives-editor"></textarea>
+
+        <div class="card">
+          <div class="card-hd">
+            <span class="card-title">🏛️ 巨匠レパートリー安全演奏コレクション</span>
+            <span class="badge badge-ok">実機保護最適化済</span>
+          </div>
+          <div id="imslp-list" style="display:flex; flex-direction:column; gap:8px;"></div>
+        </div>
       </div>
+    </section>
+
+    <!-- ================================================================ -->
+    <!-- PANEL 4: OBSIDIAN NOTES & HUMAN DIRECTIVES                       -->
+    <!-- ================================================================ -->
+    <section id="vpanel-notes" role="tabpanel" aria-labelledby="vtab-notes" hidden>
+      <div class="panel-grid-2">
+        <div class="card">
+          <div class="card-hd">
+            <span class="card-title">💌 AIピアニストへのリクエストメモ</span>
+            <button class="btn btn-gold" onclick="saveDirectives()">✨ リクエストを送信</button>
+          </div>
+          <p style="font-size:0.82rem; color:var(--text-dim); margin-top:0;">
+            例:「もっとレガートで歌って」「情熱的に盛り上げて」「速く駆け抜けて」「静かなペダルで」のように日本語で指示を書けます。
+          </p>
+          <textarea id="directives-input" rows="5" placeholder="例: レガートを極限まで滑らかにして、ときどき情熱的に盛り上がってください"></textarea>
+          <div style="margin-top:12px;">
+            <div class="card-title" style="font-size:0.88rem; margin-bottom:6px;">🏆 殿堂入りベスト演奏アーカイブ</div>
+            <div id="hof-list" style="display:flex; flex-direction:column; gap:6px;"></div>
+          </div>
+        </div>
+
+        <div class="card">
+          <div class="card-hd">
+            <span class="card-title">🕸️ 記憶ネットワーク (Obsidian 知識マップ)</span>
+            <button class="btn" onclick="loadObsidianGraph()">🔄 最新化</button>
+          </div>
+          <canvas id="canvas-graph" class="stage-canvas" width="640" height="280"></canvas>
+        </div>
+      </div>
+    </section>
+
+    <!-- ================================================================ -->
+    <!-- PANEL 5: ALL 100 FEATURES & SYSTEM DOCTOR                        -->
+    <!-- ================================================================ -->
+    <section id="vpanel-features" role="tabpanel" aria-labelledby="vtab-features" hidden>
+      <div class="card" style="margin-bottom:12px;">
+        <div class="card-hd">
+          <span class="card-title">🩺 システム健康診断（日本語ヘルスチェック）</span>
+          <button class="btn btn-primary" onclick="runSystemDoctor()">🩺 いま健康診断を実行</button>
+        </div>
+        <div id="doctor-summary" style="font-weight:700; margin-bottom:8px;">診断ボタンを押すと最新状態を確認します</div>
+        <div id="doctor-checks" style="display:grid; grid-template-columns:repeat(auto-fill, minmax(260px,1fr)); gap:8px;"></div>
+      </div>
+
+      <div class="card">
+        <div class="card-hd">
+          <span class="card-title">✨ 実装済み 100大機能エクスプローラー</span>
+          <span id="feat-count-badge" class="badge badge-gold">全100機能 実装済み</span>
+        </div>
+        <div style="display:flex; flex-wrap:wrap; gap:8px; margin-bottom:10px;">
+          <input id="feat-search" type="text" placeholder="機能を検索（例：レガート、タブ、QR、MusicXML、安全）" style="max-width:340px;" />
+          <div id="feat-cat-pills" style="display:flex; flex-wrap:wrap; gap:6px;"></div>
+        </div>
+        <div id="feature-grid" class="feature-grid"></div>
+      </div>
+    </section>
+  </div>
+
+  <!-- QR SMARTPHONE REMOTE MODAL -->
+  <dialog id="qr-dialog">
+    <h3 style="margin-top:0; color:var(--accent-bright);">📱 スマホ・iPad ライブコントローラー</h3>
+    <p style="font-size:0.84rem; color:var(--text-dim);">同じWi-FiにつないだスマホやiPadのカメラで読み取ると、手元から曲の切り替えや演奏操作ができます。</p>
+    <div id="qr-svg-box" style="margin:12px auto; display:flex; justify-content:center;"></div>
+    <div id="qr-url-text" style="font-family:monospace; font-size:0.86rem; background:#0b0f18; padding:8px; border-radius:8px; word-break:break-all;"></div>
+    <div style="margin-top:12px; display:flex; justify-content:center; gap:8px;">
+      <a id="qr-open-link" class="btn btn-blue" href="/remote" target="_blank">🔗 このブラウザで開く</a>
+      <button class="btn" onclick="document.getElementById('qr-dialog').close()">閉じる</button>
     </div>
-  </main>
+  </dialog>
 
-  <!-- ===================================================================== -->
-  <!-- TAB 3: INTERACTIVE DIALOGUE & DURATION-CONFIGURABLE COMPOSER          -->
-  <!-- ===================================================================== -->
-  <main id="tabPane3" role="tabpanel" aria-labelledby="tabBtn3" class="tab-pane" hidden>
-    <div class="grid-2">
-      <div class="panel-box">
-        <div class="panel-header">
-          <span class="panel-title">🎹 Step 1: あなたの演奏を撮る（Disklavier鍵盤 / マイク / 画面ボタン）</span>
-          <span class="badge-pill on" id="dialogueStateBadge">🟢 待機中</span>
-        </div>
-        <div style="display:flex;gap:8px;flex-wrap:wrap;">
-          <button class="btn btn-green" onclick="startHumanTurn()">🟢 録音をクリアして「私が弾く」開始</button>
-          <button class="btn btn-outline" onclick="injectSampleMotif([61, 65, 68, 73, 70, 68, 65])">🌙 ドビュッシー風主題</button>
-          <button class="btn btn-outline" onclick="injectSampleMotif([55, 62, 71, 69, 67, 64, 66, 67])">🦢 サン＝サーンス風主題</button>
-          <button class="btn btn-outline" onclick="injectSampleMotif([48, 55, 60, 63, 62, 58, 55, 48])">🎻 チェロC minor主題</button>
-          <span style="font-size:12px;align-self:center;">収録済: <strong id="topHumanNotesCount" style="color:#fbbf24;">0 notes</strong></span>
-        </div>
-
-        <div class="panel-header"><span class="panel-title">🎼 Step 2: 展開秒数・スタイル指定</span></div>
-        <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;font-size:12px;">
-          <label>⏱️ 目標秒数: <strong id="durSliderLabel" style="color:#fbbf24;">30 秒</strong>
-            <input type="range" id="compDurationSlider" min="10" max="75" step="5" value="30" style="width:100%;"
-              oninput="document.getElementById('durSliderLabel').textContent = this.value + ' 秒';" />
-          </label>
-          <label>🎨 展開スタイル:
-            <select id="compStyleSelect" style="width:100%;background:#0f172a;color:#fff;padding:6px;border-radius:6px;border:1px solid #475569;">
-              <option value="debussy_impressionist">🌊 ドビュッシー印象派レガート展開</option>
-              <option value="call_and_response">💬 対話コール＆レスポンス展開</option>
-              <option value="faure_chopin_lyric">🎻 フォーレ／ショパン叙情展開</option>
-              <option value="bach_counterpoint">🏛️ バッハ4声部対位法展開</option>
-              <option value="dramatic_crescendo">🔥 ブラームス劇的クライマックス展開</option>
-            </select>
-          </label>
-          <label>🔗 レガート重複 (%): <input type="range" id="compLegatoSlider" min="105" max="135" value="115" style="width:100%;" /></label>
-          <label>🎹 アルペジオ密度: <input type="range" id="compDensitySlider" min="2" max="5" value="3" style="width:100%;" /></label>
-          <label>🦶 CC#64 深さ: <input type="range" id="compPedalSlider" min="50" max="76" value="68" style="width:100%;" /></label>
-        </div>
-        <div style="display:flex;gap:8px;">
-          <button class="btn btn-purple" style="flex:1;" onclick="listenAndComposeMotif()">✨ 展開作曲＆実演</button>
-          <button class="btn btn-outline" onclick="exportComposedMidi()">💾 SMF保存</button>
-        </div>
-      </div>
-
-      <div class="panel-box">
-        <div class="panel-header"><span class="panel-title">📊 生成スコア & MIDI持続検証</span></div>
-        <canvas id="composerPianoRollCanvas" class="vis-canvas" width="600" height="170"></canvas>
-        <div id="composedPieceInfo" style="font-size:12px;color:#e2e8f0;background:#162032;padding:8px;border-radius:7px;">待機中</div>
-        <table class="data-table">
-          <thead><tr><th>Note</th><th>Vel</th><th>Target</th><th>Actual</th><th>CC#64</th><th>達成率</th></tr></thead>
-          <tbody id="sustainVerificationTbody"></tbody>
-        </table>
-      </div>
-    </div>
-  </main>
-
-  <!-- ===================================================================== -->
-  <!-- TAB 4: IMSLP LIBRARY                                                  -->
-  <!-- ===================================================================== -->
-  <main id="tabPane4" role="tabpanel" aria-labelledby="tabBtn4" class="tab-pane" hidden>
-    <div class="panel-box">
-      <div class="panel-header"><span class="panel-title">📚 IMSLP クラシック名曲ライブラリ（フルレガート＆シンコペーションペダル最適化）</span></div>
-      <table class="data-table">
-        <thead><tr><th>曲名</th><th>作曲家</th><th>ノート数・調性</th><th>実機 / Twin 再生</th></tr></thead>
-        <tbody id="imslpLibraryTbody"></tbody>
-      </table>
-    </div>
-  </main>
-
-  <!-- ===================================================================== -->
-  <!-- TAB 5: LIVE CELLO & TIME-MACHINE                                      -->
-  <!-- ===================================================================== -->
-  <main id="tabPane5" role="tabpanel" aria-labelledby="tabBtn5" class="tab-pane" hidden>
-    <div class="grid-2">
-      <div class="panel-box">
-        <div class="panel-header">
-          <span class="panel-title">🎻 リアルタイム・チェロ音響検知 & Proxy Session</span>
-          <button class="btn btn-green" onclick="runAutoProxySessionDemo()">▶️ Auto Proxy Session Demo</button>
-        </div>
-        <div class="grid-3">
-          <div class="gauge-item"><div class="gauge-label">Detected</div><div class="gauge-val" id="t2Notes">--</div></div>
-          <div class="gauge-item"><div class="gauge-label">Double Stop</div><div class="gauge-val" id="t2DoubleStop">Single</div></div>
-          <div class="gauge-item"><div class="gauge-label">Flageolet</div><div class="gauge-val" id="t2Flageolet">Normal</div></div>
-          <div class="gauge-item"><div class="gauge-label">Bowing</div><div class="gauge-val" id="t2Bowing" style="font-size:12px;">Legato</div></div>
-          <div class="gauge-item"><div class="gauge-label">BPM</div><div class="gauge-val" id="t2Bpm">72.0</div></div>
-          <div class="gauge-item"><div class="gauge-label">Sustain %</div><div class="gauge-val" id="t2Bleed">98.2%</div></div>
-        </div>
-      </div>
-
-      <div class="panel-box">
-        <div class="panel-header">
-          <span class="panel-title">📼 Time-Machine 聴き比べ</span>
-          <button class="btn btn-green" onclick="recordNewRehearsalTake()">🔴 テイク収録</button>
-        </div>
-        <div style="display:flex;gap:6px;flex-wrap:wrap;">
-          <button class="btn btn-gold" onclick="replayTakeWithStyle('debussy')">Debussy</button>
-          <button class="btn btn-purple" onclick="replayTakeWithStyle('faure')">Fauré</button>
-          <button class="btn" onclick="replayTakeWithStyle('saint_saens')">Saint-Saëns</button>
-          <button class="btn" onclick="replayTakeWithStyle('bach')">Bach</button>
-          <button class="btn btn-green" onclick="replayTakeWithStyle('brahms')">Brahms</button>
-        </div>
-        <table class="data-table">
-          <thead><tr><th>Take</th><th>Theme</th><th>Features</th><th>Status</th></tr></thead>
-          <tbody id="rehearsalTakesTbody"></tbody>
-        </table>
-        <table class="data-table">
-          <thead><tr><th>Style</th><th>Roughness</th><th>Melody Lead</th><th>Consonance</th></tr></thead>
-          <tbody id="timeMachineComparisonTbody"></tbody>
-        </table>
-      </div>
-    </div>
-  </main>
-
-  <!-- ===================================================================== -->
-  <!-- TAB 6: R&D TELEMETRY & LOGS                                           -->
-  <!-- ===================================================================== -->
-  <main id="tabPane6" role="tabpanel" aria-labelledby="tabBtn6" class="tab-pane" hidden>
-    <div class="grid-2">
-      <div class="panel-box">
-        <div class="panel-header"><span class="panel-title">🖥️ Live System Telemetry & Git Commits</span></div>
-        <div id="terminalStreamBox" class="terminal-box"></div>
-        <div id="gitCommitsContainer" style="display:flex;flex-direction:column;gap:4px;font-size:12px;"></div>
-      </div>
-      <div class="panel-box">
-        <div class="panel-header"><span class="panel-title">📈 Experiment 1–5 Charts</span></div>
-        <div class="grid-2">
-          <img src="/telemetry/charts/exp1_vdl_curve.png" style="width:100%;border-radius:6px;" alt="Exp 1 VDL Curve" />
-          <img src="/telemetry/charts/exp2_half_pedal.png" style="width:100%;border-radius:6px;" alt="Exp 2 Half Pedal" />
-          <img src="/telemetry/charts/exp4_ab_comparison.png" style="width:100%;border-radius:6px;" alt="Exp 4 AB Comparison" />
-          <img src="/telemetry/charts/exp5_ai_composer.png" style="width:100%;border-radius:6px;" alt="Exp 5 AI Composer" />
-        </div>
-      </div>
-    </div>
-  </main>
+  <div id="toast" class="toast"></div>
 
   <script>
-    let ws = null;
-    let latestVirtuoso = null;
-    let latestObsidian = null;
-    let selectedHofMidiRel = null;
-    let obsidianNodePositions = [];
-    let directivesDirty = false;
-    let animPhase = 0;
+    // -----------------------------------------------------------------------
+    // Accessible WAI-ARIA Tabs (modern-web-guidance compliant)
+    // -----------------------------------------------------------------------
+    const viewTabs = Array.from(document.querySelectorAll('.main-tab'));
+    function activateViewTab(tabBtn) {
+      viewTabs.forEach(t => {
+        const selected = (t === tabBtn);
+        t.setAttribute('aria-selected', String(selected));
+        if (selected) t.setAttribute('focusgroupstart', ''); else t.removeAttribute('focusgroupstart');
+        const panel = document.getElementById(t.getAttribute('aria-controls'));
+        if (panel) panel.hidden = !selected;
+      });
+      tabBtn.scrollIntoView({ block: 'nearest', inline: 'nearest' });
+    }
+    viewTabs.forEach((btn, idx) => {
+      btn.addEventListener('click', () => activateViewTab(btn));
+      btn.addEventListener('keydown', (e) => {
+        if (e.key === 'ArrowRight') { const nxt = viewTabs[(idx + 1) % viewTabs.length]; nxt.focus(); activateViewTab(nxt); }
+        if (e.key === 'ArrowLeft') { const prv = viewTabs[(idx - 1 + viewTabs.length) % viewTabs.length]; prv.focus(); activateViewTab(prv); }
+      });
+    });
 
-    function switchTab(tabIdx) {
-      for (let i = 1; i <= 6; i++) {
-        const pane = document.getElementById('tabPane' + i);
-        const btn = document.getElementById('tabBtn' + i);
-        const isSel = i === tabIdx;
-        if (pane) pane.hidden = !isSel;
-        if (btn) btn.setAttribute('aria-selected', isSel ? 'true' : 'false');
+    const toastEl = document.getElementById('toast');
+    let toastTimer = null;
+    function showToast(msg) {
+      if (!msg) return;
+      toastEl.textContent = msg;
+      toastEl.classList.add('show');
+      clearTimeout(toastTimer);
+      toastTimer = setTimeout(() => toastEl.classList.remove('show'), 2800);
+    }
+
+    async function postAction(path, body = {}) {
+      try {
+        const res = await fetch(path, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(body)
+        });
+        const data = await res.json();
+        if (data.message_ja || data.message || data.summary) {
+          showToast(data.message_ja || data.message || data.summary);
+        }
+        if (data.virtuoso) renderVirtuoso(data.virtuoso);
+        return data;
+      } catch (e) {
+        showToast('通信に少し時間がかかっています…');
+        return null;
       }
     }
 
-    function connectWebSocket() {
-      const proto = location.protocol === 'https:' ? 'wss:' : 'ws:';
-      ws = new WebSocket(`${proto}//${location.host}/ws`);
-      ws.onmessage = (event) => {
-        const data = JSON.parse(event.data);
-        renderRealtimeFrame(data);
-      };
-      ws.onclose = () => setTimeout(connectWebSocket, 1000);
+    // -----------------------------------------------------------------------
+    // 2D Expression Pad Interaction
+    // -----------------------------------------------------------------------
+    const padBox = document.getElementById('expression-pad');
+    const padOrb = document.getElementById('pad-orb');
+    let padDragging = false;
+    let padThrottle = null;
+    function updatePadFromPointer(clientX, clientY, sendNow = false) {
+      const rect = padBox.getBoundingClientRect();
+      const nx = Math.max(0, Math.min(1, (clientX - rect.left) / rect.width));
+      const ny = Math.max(0, Math.min(1, (clientY - rect.top) / rect.height));
+      padOrb.style.left = `${(nx * 100).toFixed(1)}%`;
+      padOrb.style.top = `${(ny * 100).toFixed(1)}%`;
+      const x = Number((nx * 2 - 1).toFixed(2));
+      const y = Number((1 - ny * 0.9).toFixed(2));
+      document.getElementById('pad-coord-badge').textContent =
+        x < -0.25 ? 'しっとり歌うレガート' : (x > 0.25 ? '活発に跳ねる' : '優雅なバランス');
+      clearTimeout(padThrottle);
+      padThrottle = setTimeout(() => postAction('/api/virtuoso/expression_pad', { x, y }), sendNow ? 0 : 120);
     }
+    padBox.addEventListener('pointerdown', (e) => { padDragging = true; padBox.setPointerCapture(e.pointerId); updatePadFromPointer(e.clientX, e.clientY, true); });
+    padBox.addEventListener('pointermove', (e) => { if (padDragging) updatePadFromPointer(e.clientX, e.clientY); });
+    padBox.addEventListener('pointerup', () => { padDragging = false; });
 
-    function renderRealtimeFrame(data) {
-      animPhase += 0.08;
-
-      if (data.banner) {
-        const b = data.banner;
-        const bannerEl = document.getElementById('userBanner');
-        bannerEl.className = 'user-banner ' + (b.code || 'READY');
-        document.getElementById('bannerBadge').textContent = b.badge || '♾️ [AUTONOMOUS VIRTUOSO]';
-        document.getElementById('bannerMainMsg').textContent = b.message || '';
-        document.getElementById('bannerSubMsg').textContent = b.sub_message || '';
-        const cdPill = document.getElementById('countdownPill');
-        if (b.code === 'SOUND_COUNTDOWN' && b.countdown_sec > 0) {
-          cdPill.style.display = 'block';
-          cdPill.textContent = `🔊 ${b.countdown_sec}s`;
-        } else {
-          cdPill.style.display = 'none';
-        }
-      }
-
-      if (data.twin) {
-        const t = data.twin;
-        document.getElementById('twinAudioDev').textContent = (t.audio_device_name || 'Mac CoreAudio').slice(0, 24);
-        document.getElementById('audioDbBadge').textContent =
-          `Twin: ${t.twin_rms_dbfs.toFixed(1)} dBFS | Voices: ${t.active_synth_voices}`;
-
-        const btnVS = document.getElementById('btnVirtualSound');
-        btnVS.textContent = `🔊 Mac内蔵音源で聴く: ${t.virtual_sound_enabled ? 'ON' : 'OFF'}`;
-        btnVS.classList.toggle('active-toggle', !!t.virtual_sound_enabled);
-
-        const btnHW = document.getElementById('btnHardwareOut');
-        btnHW.textContent = `🎹 実機Disklavier出力: ${t.hardware_output_enabled ? 'ON' : (t.hardware_connected ? 'OFF' : 'VIRTUAL TWIN')}`;
-        btnHW.classList.toggle('active-toggle', !!t.hardware_output_enabled);
-
-        const p = t.physics && t.physics.stats ? t.physics.stats : {};
-        const prelayErr = p.mean_prelay_error_ms || 0;
-        document.getElementById('gVdlErrVal').textContent = `${prelayErr.toFixed(1)} ms`;
-        document.getElementById('gVdlErrBar').style.width = `${Math.max(15, Math.min(100, 100 - prelayErr * 3))}%`;
-
-        const errCount = (p.ghost_notes_simulated || 0) + (p.solenoid_sags_detected || 0) + (p.crashes_detected || 0);
-        document.getElementById('gPhysicsHealthVal').textContent = errCount === 0 ? '0 Errors (Safe)' : `${errCount} Alerts`;
-        document.getElementById('statHalfPedalRes').textContent = (p.half_pedal_resonance_factor || 0).toFixed(2);
-        document.getElementById('guardPortStatus').textContent =
-          `${p.crashes_detected || 0} Crashes | Last VDL ${p.last_vdl_ms || 0}ms`;
-
-        // Draw live waveform from Virtual Twin when active, else mic
-        const wave = (t.virtual_sound_enabled && t.twin_rms_dbfs > -62)
-          ? (t.twin_waveform || [])
-          : ((data.audio && data.audio.waveform) || []);
-        drawOscilloscope(wave);
-      }
-
-      if (data.audio) {
-        const a = data.audio;
-        drawCqtSpectrogram(a.cqt_bins || []);
-        const notesStr = (a.detected_note_names && a.detected_note_names.length > 0)
-          ? a.detected_note_names.join(' + ')
-          : '--';
-        document.getElementById('t2Notes').textContent = notesStr;
-        document.getElementById('t2DoubleStop').textContent = a.is_double_stop ? '🔥 Double/Triple Stop!' : 'Single';
-        document.getElementById('t2Flageolet').textContent = a.is_flageolet ? '✨ Flageolet' : 'Normal';
-        document.getElementById('t2Bowing').textContent = a.bow_articulation || 'Legato';
-        document.getElementById('t2Bpm').textContent = `${a.estimated_bpm.toFixed(1)} BPM`;
-        document.getElementById('t2Bleed').textContent = `${(a.sustain_continuity_pct || 98).toFixed(1)}%`;
-      }
-
-      if (data.safety) {
-        const s = data.safety;
-        document.getElementById('topHumanNotesCount').textContent = `${s.human_notes_count || 0} notes`;
-        document.getElementById('gVoicesVal').textContent = `${s.active_voices_count} / 20`;
-        document.getElementById('gVoicesBar').style.width = `${Math.min(100, (s.active_voices_count / 20) * 100)}%`;
-
-        if (s.stats) {
-          document.getElementById('statStaleBlocked').textContent = s.stats.stale_note_offs_blocked || 0;
-          document.getElementById('statTotalSent').textContent = s.stats.total_notes_sent || 0;
-        }
-
-        const activeKeys = s.active_keys || {};
-        const keyNames = Object.keys(activeKeys).map(k => midiToNoteName(parseInt(k, 10)));
-        if (keyNames.length > 0) {
-          document.getElementById('liveDetectedNotes').textContent = keyNames.slice(0, 5).join(' ');
-        }
-
-        const pVal = s.pedal_cc64 || 0;
-        document.getElementById('pedalBarFill').style.width = `${(pVal / 127) * 100}%`;
-        let pZone = `${pVal} (Seated)`;
-        if (pVal >= 31 && pVal <= 85) pZone = `${pVal} (Half-Pedal Sweet Spot)`;
-        else if (pVal > 85) pZone = `${pVal} (Full Open)`;
-        document.getElementById('pedalZoneLabel').textContent = pZone;
-
-        draw88KeyPiano(activeKeys);
-
-        if (s.recent_verifications && s.recent_verifications.length > 0) {
-          const tbody = document.getElementById('sustainVerificationTbody');
-          tbody.innerHTML = s.recent_verifications.slice(-6).reverse().map(v =>
-            `<tr><td><strong>${midiToNoteName(v.note)}</strong></td><td>${v.velocity}</td><td>${v.target_s.toFixed(2)}s</td><td>${v.actual_s.toFixed(2)}s</td><td>${v.pedal_cc64}</td><td><span class="badge-pill on">${v.fulfillment_pct}%</span></td></tr>`
-          ).join('');
-        }
-      }
-
-      if (data.virtuoso) {
-        latestVirtuoso = data.virtuoso;
-        renderVirtuosoCockpit(data.virtuoso);
-      } else if (latestVirtuoso) {
-        // Keep 60fps smooth particle animation on multiverse tree even between 20Hz backend updates
-        drawMultiverseTree(latestVirtuoso);
-      }
-
-      if (data.obsidian) {
-        latestObsidian = data.obsidian;
-        renderObsidianPanel(data.obsidian);
-      }
-
-      if (data.agent) {
-        renderAgentTelemetry(data.agent, data.studio);
+    function applyPreset(presetId) { postAction('/api/virtuoso/character_preset', { preset_id: presetId }); }
+    async function warmupCelloWave() {
+      const res = await postAction('/api/cello/warmup_wave', {});
+      if (res && res.message_ja) showToast(res.message_ja);
+    }
+    async function runHyperEvolve() {
+      showToast('⚡ Apple Silicon 並列ワーカーで50世代の高速進化を開始しました！');
+      const res = await postAction('/api/virtuoso/hyper_evolve', { generations: 50, speed_multiplier: 60 });
+      if (res && res.result) {
+        document.getElementById('hyper-summary').textContent = res.result.summary;
+        showToast(res.result.summary);
       }
     }
 
-    const NOTE_NAMES = ['C','C#','D','D#','E','F','F#','G','G#','A','A#','B'];
-    function midiToNoteName(m) {
-      return NOTE_NAMES[m % 12] + (Math.floor(m / 12) - 1);
+    // -----------------------------------------------------------------------
+    // Generation Scrubber Slider
+    // -----------------------------------------------------------------------
+    const genScrubber = document.getElementById('gen-scrubber');
+    let scrubDebounce = null;
+    genScrubber.addEventListener('input', () => {
+      const val = Number(genScrubber.value);
+      genScrubber.style.setProperty('--control-value', val);
+      document.getElementById('scrubber-cur').textContent = `表示 第${val}世代`;
+      clearTimeout(scrubDebounce);
+      scrubDebounce = setTimeout(() => postAction('/api/timemachine/scrub', { generation: val }), 180);
+    });
+
+    // -----------------------------------------------------------------------
+    // Multi-Song Workspace Tabs Renderer
+    // -----------------------------------------------------------------------
+    let lastTabSig = '';
+    function renderWorkspaceTabs(ws) {
+      if (!ws || !ws.tabs) return;
+      const sig = JSON.stringify(ws.tabs.map(t => [t.tab_id, t.title, t.current_generation])) + ws.active_tab_id;
+      if (sig === lastTabSig) return;
+      lastTabSig = sig;
+      const list = document.getElementById('song-tablist');
+      list.innerHTML = '';
+      ws.tabs.forEach(t => {
+        const isActive = t.tab_id === ws.active_tab_id;
+        const btn = document.createElement('button');
+        btn.className = 'song-tab';
+        btn.setAttribute('role', 'tab');
+        btn.setAttribute('aria-selected', String(isActive));
+        if (isActive) btn.setAttribute('focusgroupstart', '');
+        const label = document.createElement('span');
+        label.textContent = `${t.pinned ? '📌 ' : ''}${t.title} (Gen ${t.current_generation})`;
+        btn.appendChild(label);
+        btn.onclick = (ev) => {
+          if (ev.target.classList.contains('tab-close-x')) return;
+          postAction('/api/tabs/switch', { tab_id: t.tab_id });
+          btn.scrollIntoView({ block: 'nearest', inline: 'nearest' });
+        };
+        if (ws.tabs.length > 1) {
+          const x = document.createElement('span');
+          x.className = 'tab-close-x';
+          x.textContent = '×';
+          x.title = 'この曲タブを閉じる';
+          x.onclick = (e) => { e.stopPropagation(); postAction('/api/tabs/close', { tab_id: t.tab_id }); };
+          btn.appendChild(x);
+        }
+        list.appendChild(btn);
+      });
     }
 
-    function renderVirtuosoCockpit(v) {
-      document.getElementById('topGenNum').textContent = v.current_generation;
-      document.getElementById('topLatestScore').textContent = `${v.latest_score.toFixed(1)} pts`;
-      document.getElementById('topBestScore').textContent = `${v.best_score_ever.toFixed(1)} pts`;
+    // -----------------------------------------------------------------------
+    // Canvas Drawers: 88-Key Piano, Ripple Wave, Evolution Chart & Grand Staff
+    // -----------------------------------------------------------------------
+    const BLACK_PCS = new Set([1, 3, 6, 8, 10]);
+    function draw88Piano(activeNotesMap) {
+      const cv = document.getElementById('canvas-piano');
+      const ctx = cv.getContext('2d');
+      const W = cv.width, H = cv.height;
+      ctx.clearRect(0, 0, W, H);
+      const whites = [];
+      for (let m = 21; m <= 108; m++) if (!BLACK_PCS.has(m % 12)) whites.push(m);
+      const wW = W / whites.length;
 
-      const btnStream = document.getElementById('btnStreamToggle');
-      btnStream.textContent = v.streaming_active ? '♾️ 連続演奏ストリーム: ON' : '⏸️ 連続演奏ストリーム: PAUSED';
-      btnStream.className = v.streaming_active ? 'btn btn-green' : 'btn btn-outline';
-
-      document.getElementById('gHorizonVal').textContent = `${v.lookahead_horizon_s.toFixed(2)} s`;
-      document.getElementById('gHorizonBar').style.width = `${Math.min(100, (v.lookahead_horizon_s / 9.0) * 100)}%`;
-      document.getElementById('bufSlotLabel').textContent = `${v.active_buffer_slot} (${v.buffer_slots_queued} queued)`;
-
-      document.getElementById('activeMotifTitle').textContent = (v.active_motif && v.active_motif.title) || '--';
-      document.getElementById('activeMotifKey').textContent = (v.active_motif && v.active_motif.key) || '--';
-      document.getElementById('virtuosoBarCount').textContent = v.bar_index;
-
-      // Story Arc highlight
-      document.querySelectorAll('#storyArcTrack .arc-node').forEach(el => {
-        el.classList.toggle('active', el.dataset.arc === v.story_arc_stage);
+      whites.forEach((m, i) => {
+        const vel = activeNotesMap[m] || 0;
+        ctx.fillStyle = vel > 0 ? (vel > 85 ? '#f59e0b' : '#fde68a') : '#e2e8f0';
+        ctx.fillRect(i * wW + 0.5, 0, wW - 1, H - 2);
+        ctx.strokeStyle = '#334155';
+        ctx.strokeRect(i * wW + 0.5, 0, wW - 1, H - 2);
       });
 
-      // Genome meters
-      if (v.elite_genome) {
-        const g = v.elite_genome;
-        document.getElementById('statOverlapMs').textContent = `+${g.legato_overlap_ms.toFixed(1)}ms`;
-        document.getElementById('gGenomeContrary').textContent = `${Math.round(g.contrary_motion_weight * 100)}%`;
-        document.getElementById('bGenomeContrary').style.width = `${g.contrary_motion_weight * 100}%`;
-        document.getElementById('gGenomeChroma').textContent = `${Math.round(g.bass_chromaticism * 100)}%`;
-        document.getElementById('bGenomeChroma').style.width = `${g.bass_chromaticism * 100}%`;
-        document.getElementById('gGenomeCp').textContent = `${Math.round(g.counterpoint_density * 100)}%`;
-        document.getElementById('bGenomeCp').style.width = `${g.counterpoint_density * 100}%`;
-        document.getElementById('gGenomeContrast').textContent = `${Math.round(g.staccato_contrast_ratio * 100)}%`;
-        document.getElementById('bGenomeContrast').style.width = `${Math.min(100, g.staccato_contrast_ratio * 180)}%`;
+      let whiteIdx = 0;
+      for (let m = 21; m <= 108; m++) {
+        if (!BLACK_PCS.has(m % 12)) { whiteIdx++; continue; }
+        const vel = activeNotesMap[m] || 0;
+        const bx = whiteIdx * wW - wW * 0.32;
+        ctx.fillStyle = vel > 0 ? '#38bdf8' : '#0f172a';
+        ctx.fillRect(bx, 0, wW * 0.64, H * 0.62);
+        ctx.strokeStyle = '#475569';
+        ctx.strokeRect(bx, 0, wW * 0.64, H * 0.62);
       }
-
-      if (v.directives) {
-        document.getElementById('activeDirectiveSummary').textContent = `Fitness: ${v.directives.summary || 'Balanced'}`;
-      }
-      if (v.hyper_training) {
-        document.getElementById('hyperTrainingBadge').textContent = v.hyper_training.last_run_summary || 'Ready';
-      }
-
-      document.getElementById('radarTotalBadge').textContent = `${v.latest_score.toFixed(1)} / 100 pts`;
-
-      if (v.critic_logs) {
-        const box = document.getElementById('criticLogsBox');
-        box.textContent = v.critic_logs.join('\n');
-        box.scrollTop = box.scrollHeight;
-      }
-
-      drawMultiverseTree(v);
-      drawCriticRadar(v.latest_axes || {});
-      drawEvolutionHistory(v.evolution_history || []);
     }
 
-    function drawMultiverseTree(v) {
-      const c = document.getElementById('multiverseTreeCanvas');
-      if (!c) return;
-      const ctx = c.getContext('2d');
-      const W = c.width, H = c.height;
-      ctx.fillStyle = '#050811';
+    const ripples = [];
+    function spawnRipple(pitch, vel) {
+      const x = ((pitch - 21) / 87) * 980;
+      ripples.push({ x, r: 4, maxR: 18 + (vel / 127) * 44, alpha: 0.9, color: pitch >= 60 ? '#fbbf24' : '#38bdf8' });
+    }
+    function drawRipples(pedalVal) {
+      const cv = document.getElementById('canvas-ripple');
+      const ctx = cv.getContext('2d');
+      const W = cv.width, H = cv.height;
+      ctx.fillStyle = 'rgba(11, 15, 24, 0.35)';
+      ctx.fillRect(0, 0, W, H);
+      for (let i = ripples.length - 1; i >= 0; i--) {
+        const rp = ripples[i];
+        rp.r += 1.6;
+        rp.alpha *= 0.95;
+        ctx.beginPath();
+        ctx.ellipse(rp.x, H * 0.52, rp.r * 1.4, rp.r * 0.55, 0, 0, Math.PI * 2);
+        ctx.strokeStyle = rp.color;
+        ctx.globalAlpha = rp.alpha;
+        ctx.lineWidth = 2;
+        ctx.stroke();
+        if (rp.alpha < 0.04) ripples.splice(i, 1);
+      }
+      ctx.globalAlpha = 1;
+      // Sustain Pedal bar at bottom
+      const pPct = Math.min(1, Math.max(0, (pedalVal || 0) / 127));
+      ctx.fillStyle = 'rgba(16, 185, 129, 0.25)';
+      ctx.fillRect(0, H - 7, W * pPct, 7);
+    }
+
+    let lastScoreEventsKey = '';
+    async function refreshSheetMusic(force = false) {
+      try {
+        const res = await fetch('/api/score/current');
+        const score = await res.json();
+        const sig = `${score.notes.length}:${score.notes[0]?.pitch}:${score.notes[score.notes.length - 1]?.pitch}`;
+        if (!force && sig === lastScoreEventsKey) return;
+        lastScoreEventsKey = sig;
+        drawGrandStaff(score);
+      } catch (_) {}
+    }
+
+    function drawGrandStaff(score) {
+      const cv = document.getElementById('canvas-score');
+      const ctx = cv.getContext('2d');
+      const W = cv.width, H = cv.height;
+      ctx.fillStyle = '#0d1320';
       ctx.fillRect(0, 0, W, H);
 
-      const branches = v.branches || [];
-      const rootX = 85, rootY = H / 2;
+      const leftPad = 68, rightPad = 24;
+      const lineGap = 11;
+      const trebleBottom = 88;  // E4 = diatonic step 30
+      const bassBottom = 188;   // G2 = diatonic step 18
 
-      // Subtle background grid
-      ctx.strokeStyle = 'rgba(56,189,248,0.07)';
+      ctx.strokeStyle = 'rgba(148, 163, 184, 0.38)';
       ctx.lineWidth = 1;
-      for (let gx = 40; gx < W; gx += 60) {
-        ctx.beginPath(); ctx.moveTo(gx, 0); ctx.lineTo(gx, H); ctx.stroke();
+      for (let i = 0; i < 5; i++) {
+        const yt = trebleBottom - i * lineGap;
+        ctx.beginPath(); ctx.moveTo(leftPad - 12, yt); ctx.lineTo(W - rightPad, yt); ctx.stroke();
+        const yb = bassBottom - i * lineGap;
+        ctx.beginPath(); ctx.moveTo(leftPad - 12, yb); ctx.lineTo(W - rightPad, yb); ctx.stroke();
       }
-
-      // Draw each of the 4 candidate branches
-      branches.forEach((b, idx) => {
-        const targetY = 42 + idx * ((H - 84) / Math.max(1, branches.length - 1));
-        const targetX = W - 265;
-        const isAdopted = b.status === 'ADOPTED';
-        const isBackup = b.status === 'BACKUP';
-
-        ctx.save();
-        ctx.beginPath();
-        ctx.moveTo(rootX, rootY);
-        ctx.bezierCurveTo(rootX + 130, rootY, targetX - 130, targetY, targetX, targetY);
-
-        if (isAdopted) {
-          ctx.strokeStyle = '#fbbf24';
-          ctx.lineWidth = 4.0;
-          ctx.shadowColor = '#fbbf24';
-          ctx.shadowBlur = 14;
-        } else if (isBackup) {
-          ctx.strokeStyle = '#38bdf8';
-          ctx.lineWidth = 2.0;
-        } else {
-          ctx.strokeStyle = 'rgba(148,163,184,0.32)';
-          ctx.lineWidth = 1.4;
-          ctx.setLineDash([5, 5]);
-        }
-        ctx.stroke();
-        ctx.restore();
-
-        // Flowing pulse particle along the adopted branch
-        if (isAdopted) {
-          const t = (animPhase * 0.35) % 1.0;
-          const u = 1 - t;
-          const px = u*u*u*rootX + 3*u*u*t*(rootX+130) + 3*u*t*t*(targetX-130) + t*t*t*targetX;
-          const py = u*u*u*rootY + 3*u*u*t*rootY + 3*u*t*t*targetY + t*t*t*targetY;
-          ctx.fillStyle = '#fef08a';
-          ctx.beginPath();
-          ctx.arc(px, py, 5.5, 0, Math.PI * 2);
-          ctx.fill();
-        }
-
-        // Branch label card
-        const cardX = targetX + 8, cardY = targetY - 25, cardW = 248, cardH = 50;
-        ctx.fillStyle = isAdopted ? 'rgba(251,191,36,0.16)' : (isBackup ? 'rgba(56,189,248,0.10)' : 'rgba(15,23,42,0.85)');
-        ctx.strokeStyle = isAdopted ? '#fbbf24' : (isBackup ? '#38bdf8' : '#334155');
-        ctx.lineWidth = isAdopted ? 2 : 1;
-        ctx.beginPath();
-        ctx.roundRect(cardX, cardY, cardW, cardH, 8);
-        ctx.fill();
-        ctx.stroke();
-
-        ctx.fillStyle = isAdopted ? '#fef08a' : (isBackup ? '#bae6fd' : '#94a3b8');
-        ctx.font = 'bold 12px -apple-system, sans-serif';
-        const badge = isAdopted ? '[ADOPTED ✨]' : (isBackup ? '[BACKUP]' : '[REJECTED]');
-        ctx.fillText(`${b.branch_id}: ${b.score.toFixed(1)} pts ${badge}`, cardX + 9, cardY + 19);
-
-        ctx.fillStyle = isAdopted ? '#e2e8f0' : '#64748b';
-        ctx.font = '11px -apple-system, sans-serif';
-        ctx.fillText(`${b.transform_type} | ${b.chord_label}`.slice(0, 34), cardX + 9, cardY + 37);
-      });
-
-      // Root node (Current Playing Bar M_t)
-      ctx.fillStyle = '#10b981';
-      ctx.beginPath();
-      ctx.arc(rootX, rootY, 34, 0, Math.PI * 2);
-      ctx.fill();
-      ctx.strokeStyle = '#a7f3d0';
+      // Left brace bar + clefs
+      ctx.strokeStyle = 'rgba(245, 158, 11, 0.7)';
       ctx.lineWidth = 2.5;
-      ctx.stroke();
+      ctx.beginPath(); ctx.moveTo(leftPad - 12, trebleBottom - 4 * lineGap); ctx.lineTo(leftPad - 12, bassBottom); ctx.stroke();
+      ctx.fillStyle = '#fbbf24';
+      ctx.font = 'bold 26px serif';
+      ctx.fillText('𝄞', 22, trebleBottom - 10);
+      ctx.fillStyle = '#38bdf8';
+      ctx.font = 'bold 24px serif';
+      ctx.fillText('𝄢', 24, bassBottom - 14);
 
-      ctx.fillStyle = '#052e16';
-      ctx.font = 'bold 12px -apple-system, sans-serif';
-      ctx.textAlign = 'center';
-      ctx.fillText(`M_${v.bar_index}`, rootX, rootY - 3);
-      ctx.font = 'bold 10px -apple-system, sans-serif';
-      ctx.fillText(`Gen ${v.current_generation}`, rootX, rootY + 13);
-      ctx.textAlign = 'left';
-    }
+      const notes = (score && score.notes) || [];
+      const usableW = W - leftPad - rightPad - 20;
+      let prevMelX = null, prevMelY = null;
 
-    function drawCriticRadar(axes) {
-      const c = document.getElementById('criticRadarCanvas');
-      if (!c) return;
-      const ctx = c.getContext('2d');
-      const W = c.width, H = c.height;
-      ctx.fillStyle = '#050811';
-      ctx.fillRect(0, 0, W, H);
+      notes.forEach(n => {
+        const x = leftPad + 14 + n.x_norm * usableW;
+        const isTreble = n.staff === 'treble';
+        const refStep = isTreble ? 30 : 18;
+        const baseLineY = isTreble ? trebleBottom : bassBottom;
+        const y = baseLineY - (n.diatonic_step - refStep) * (lineGap * 0.5);
+        const clampY = Math.max(18, Math.min(H - 18, y));
 
-      const cx = W / 2, cy = H / 2 + 8, R = 92;
-      const specs = [
-        { key: 'voice_leading', max: 25, label: '声部連結 /25' },
-        { key: 'motivic_continuity', max: 20, label: '動機接続 /20' },
-        { key: 'harmonic_originality', max: 20, label: '和声独創 /20' },
-        { key: 'expressive_articulation', max: 15, label: 'タッチ表現 /15' },
-        { key: 'physical_playability', max: 20, label: '物理適性 /20' },
-      ];
-
-      // Concentric web rings
-      for (let ring = 0.25; ring <= 1.0; ring += 0.25) {
-        ctx.strokeStyle = ring === 1.0 ? '#334155' : 'rgba(51,65,85,0.45)';
-        ctx.beginPath();
-        specs.forEach((s, i) => {
-          const ang = -Math.PI / 2 + (i * 2 * Math.PI) / 5;
-          const x = cx + Math.cos(ang) * R * ring;
-          const y = cy + Math.sin(ang) * R * ring;
-          if (i === 0) ctx.moveTo(x, y); else ctx.lineTo(x, y);
-        });
-        ctx.closePath();
-        ctx.stroke();
-      }
-
-      // Axis spokes + labels
-      specs.forEach((s, i) => {
-        const ang = -Math.PI / 2 + (i * 2 * Math.PI) / 5;
-        const x = cx + Math.cos(ang) * R;
-        const y = cy + Math.sin(ang) * R;
-        ctx.strokeStyle = '#1e293b';
-        ctx.beginPath(); ctx.moveTo(cx, cy); ctx.lineTo(x, y); ctx.stroke();
-
-        const val = Number(axes[s.key] || 0);
-        const lx = cx + Math.cos(ang) * (R + 24);
-        const ly = cy + Math.sin(ang) * (R + 18);
-        ctx.fillStyle = '#cbd5e1';
-        ctx.font = 'bold 11px -apple-system, sans-serif';
-        ctx.textAlign = 'center';
-        ctx.fillText(`${s.label}`, lx, ly - 2);
-        ctx.fillStyle = '#fbbf24';
-        ctx.fillText(`${val.toFixed(1)}`, lx, ly + 11);
-      });
-      ctx.textAlign = 'left';
-
-      // Score polygon
-      ctx.fillStyle = 'rgba(56,189,248,0.28)';
-      ctx.strokeStyle = '#38bdf8';
-      ctx.lineWidth = 2.5;
-      ctx.beginPath();
-      specs.forEach((s, i) => {
-        const norm = Math.max(0.05, Math.min(1.0, Number(axes[s.key] || 0) / s.max));
-        const ang = -Math.PI / 2 + (i * 2 * Math.PI) / 5;
-        const x = cx + Math.cos(ang) * R * norm;
-        const y = cy + Math.sin(ang) * R * norm;
-        if (i === 0) ctx.moveTo(x, y); else ctx.lineTo(x, y);
-      });
-      ctx.closePath();
-      ctx.fill();
-      ctx.stroke();
-    }
-
-    function drawEvolutionHistory(history) {
-      const c = document.getElementById('evolutionHistoryCanvas');
-      if (!c) return;
-      const ctx = c.getContext('2d');
-      const W = c.width, H = c.height;
-      ctx.fillStyle = '#050811';
-      ctx.fillRect(0, 0, W, H);
-
-      // Grid lines (60..100)
-      ctx.font = '10.5px monospace';
-      [60, 70, 80, 90, 100].forEach(val => {
-        const y = H - 20 - ((val - 60) / 40) * (H - 36);
-        ctx.strokeStyle = val === 90 ? 'rgba(251,191,36,0.35)' : '#1e293b';
-        ctx.beginPath(); ctx.moveTo(36, y); ctx.lineTo(W - 12, y); ctx.stroke();
-        ctx.fillStyle = '#94a3b8';
-        ctx.fillText(String(val), 6, y + 4);
-      });
-
-      if (!history.length) return;
-      const plotLine = (key, color, width) => {
-        ctx.strokeStyle = color;
-        ctx.lineWidth = width;
-        ctx.beginPath();
-        history.forEach((h, i) => {
-          const x = 36 + (i / Math.max(1, history.length - 1)) * (W - 54);
-          const y = H - 20 - ((Math.max(60, Math.min(100, h[key])) - 60) / 40) * (H - 36);
-          if (i === 0) ctx.moveTo(x, y); else ctx.lineTo(x, y);
-        });
-        ctx.stroke();
-      };
-      plotLine('mean_score', '#38bdf8', 1.8);
-      plotLine('best_score', '#fbbf24', 2.8);
-
-      ctx.fillStyle = '#fbbf24'; ctx.fillText('● Adopted Best Score', 46, 14);
-      ctx.fillStyle = '#38bdf8'; ctx.fillText('● Candidate Mean Score', 190, 14);
-    }
-
-    function renderObsidianPanel(obs) {
-      if (obs.stats) {
-        document.getElementById('obsidianStatsBadge').textContent =
-          `Vault: ${obs.stats.total_notes} notes | ${obs.stats.total_links} WikiLinks | ${obs.stats.hof_count} HoF`;
-      }
-      if (obs.hof_leaderboard) {
-        document.getElementById('hofLeaderboardTbody').innerHTML = obs.hof_leaderboard.map(r =>
-          `<tr style="cursor:pointer;" onclick="loadObsidianNote('${r.note_id}')">
-            <td><strong>${r.note_id}</strong></td>
-            <td>Gen ${r.generation}</td>
-            <td><strong style="color:#fbbf24;">${r.total_score.toFixed(1)}</strong></td>
-            <td><button class="btn btn-gold" style="padding:2px 8px;font-size:11px;" onclick="event.stopPropagation(); playHofMidi('${r.midi_rel}')">▶️</button></td>
-          </tr>`
-        ).join('') || '<tr><td colspan="4" style="color:#9ca3af;">85点以上の名演が自動で殿堂入りします</td></tr>';
-      }
-      if (!directivesDirty && obs.directives_raw) {
-        document.getElementById('directivesTextarea').value = obs.directives_raw;
-      }
-      drawObsidianGraph(obs);
-    }
-
-    function drawObsidianGraph(obs) {
-      const c = document.getElementById('obsidianGraphCanvas');
-      if (!c || !obs.nodes) return;
-      const ctx = c.getContext('2d');
-      const W = c.width, H = c.height;
-      ctx.fillStyle = '#050811';
-      ctx.fillRect(0, 0, W, H);
-
-      const cx = W / 2, cy = H / 2;
-      const posMap = {};
-      obsidianNodePositions = [];
-
-      const byCat = { dashboard: [], directives: [], discovery: [], motif: [], hall_of_fame: [] };
-      obs.nodes.forEach(n => (byCat[n.category] || byCat.motif).push(n));
-
-      const placeRing = (arr, radiusX, radiusY, startAng) => {
-        arr.forEach((n, idx) => {
-          const ang = startAng + (idx / Math.max(1, arr.length)) * Math.PI * 2;
-          const x = cx + Math.cos(ang) * radiusX;
-          const y = cy + Math.sin(ang) * radiusY;
-          posMap[n.id] = { x, y, node: n };
-          obsidianNodePositions.push({ x, y, r: 10, node: n });
-        });
-      };
-
-      if (byCat.dashboard[0]) {
-        const d = byCat.dashboard[0];
-        posMap[d.id] = { x: cx, y: cy, node: d };
-        obsidianNodePositions.push({ x: cx, y: cy, r: 14, node: d });
-      }
-      if (byCat.directives[0]) {
-        const dr = byCat.directives[0];
-        posMap[dr.id] = { x: cx, y: 36, node: dr };
-        obsidianNodePositions.push({ x: cx, y: 36, r: 12, node: dr });
-      }
-      placeRing(byCat.discovery, 105, 58, 0.4);
-      placeRing(byCat.motif, 240, 104, 0.2);
-      placeRing(byCat.hall_of_fame.slice(0, 12), 185, 92, 0.8);
-
-      // Draw WikiLink edges
-      ctx.strokeStyle = 'rgba(148,163,184,0.22)';
-      ctx.lineWidth = 1;
-      (obs.edges || []).forEach(e => {
-        const p1 = posMap[e.source], p2 = posMap[e.target];
-        if (p1 && p2) {
-          ctx.beginPath(); ctx.moveTo(p1.x, p1.y); ctx.lineTo(p2.x, p2.y); ctx.stroke();
+        // C4 middle ledger line if close
+        if (Math.abs(n.diatonic_step - 28) === 0) {
+          ctx.strokeStyle = 'rgba(248, 250, 252, 0.65)';
+          ctx.lineWidth = 1.2;
+          ctx.beginPath(); ctx.moveTo(x - 10, clampY); ctx.lineTo(x + 10, clampY); ctx.stroke();
         }
-      });
 
-      const colors = {
-        dashboard: '#ffffff',
-        directives: '#ef4444',
-        discovery: '#a855f7',
-        motif: '#38bdf8',
-        hall_of_fame: '#fbbf24',
-      };
-      obsidianNodePositions.forEach(item => {
-        const col = colors[item.node.category] || '#10b981';
+        // Color by voice role
+        const col = n.role === 'melody' ? '#fbbf24' : (n.role === 'bass' ? '#38bdf8' : '#34d399');
         ctx.fillStyle = col;
         ctx.beginPath();
-        ctx.arc(item.x, item.y, item.r * 0.65, 0, Math.PI * 2);
+        ctx.ellipse(x, clampY, 5.5, 4, -0.25, 0, Math.PI * 2);
         ctx.fill();
-        ctx.fillStyle = '#cbd5e1';
-        ctx.font = '9.5px sans-serif';
-        ctx.fillText(item.node.id.replace('motif_', '').slice(0, 16), item.x + 8, item.y + 3);
+
+        // Stem
+        ctx.strokeStyle = col;
+        ctx.lineWidth = 1.3;
+        ctx.beginPath();
+        if (n.diatonic_step > refStep + 4) { ctx.moveTo(x - 5, clampY); ctx.lineTo(x - 5, clampY + 24); }
+        else { ctx.moveTo(x + 5, clampY); ctx.lineTo(x + 5, clampY - 24); }
+        ctx.stroke();
+
+        // Accidental
+        if (n.accidental) {
+          ctx.fillStyle = '#f8fafc';
+          ctx.font = '12px sans-serif';
+          ctx.fillText(n.accidental, x - 14, clampY + 4);
+        }
+
+        // Legato slur / Staccato dot
+        if (n.articulation === 'staccato') {
+          ctx.fillStyle = '#f43f5e';
+          ctx.beginPath(); ctx.arc(x, clampY + 10, 2.2, 0, Math.PI * 2); ctx.fill();
+        } else if (n.role === 'melody') {
+          if (prevMelX !== null && Math.abs(x - prevMelX) < 120) {
+            ctx.strokeStyle = 'rgba(251, 191, 36, 0.55)';
+            ctx.lineWidth = 1.5;
+            ctx.beginPath();
+            ctx.moveTo(prevMelX, prevMelY - 12);
+            ctx.quadraticCurveTo((prevMelX + x) * 0.5, Math.min(prevMelY, clampY) - 26, x, clampY - 12);
+            ctx.stroke();
+          }
+          prevMelX = x;
+          prevMelY = clampY;
+        }
       });
+
+      ctx.fillStyle = '#94a3b8';
+      ctx.font = 'bold 12px sans-serif';
+      ctx.fillText(`${score.title || ''}  |  ♩=${score.bpm || 82}`, leftPad, 16);
     }
 
-    document.getElementById('obsidianGraphCanvas').addEventListener('click', (ev) => {
-      const c = ev.currentTarget;
-      const rect = c.getBoundingClientRect();
-      const sx = (ev.clientX - rect.left) * (c.width / rect.width);
-      const sy = (ev.clientY - rect.top) * (c.height / rect.height);
-      const hit = obsidianNodePositions.find(p => Math.hypot(p.x - sx, p.y - sy) <= 14);
-      if (hit) loadObsidianNote(hit.node.id);
-    });
-
-    document.getElementById('directivesTextarea').addEventListener('input', () => {
-      directivesDirty = true;
-    });
-
-    async function loadObsidianNote(noteId) {
-      const res = await fetch(`/api/obsidian/note/${encodeURIComponent(noteId)}`);
-      if (!res.ok) return;
-      const data = await res.json();
-      document.getElementById('selectedObsidianNoteTitle').textContent = `📄 ${data.path}`;
-      document.getElementById('selectedObsidianNoteContent').textContent = data.markdown;
-      const playBtn = document.getElementById('btnPlaySelectedHof');
-      if (data.midi_rel) {
-        selectedHofMidiRel = data.midi_rel;
-        playBtn.style.display = 'inline-block';
-      } else {
-        selectedHofMidiRel = null;
-        playBtn.style.display = 'none';
-      }
-    }
-
-    async function playHofMidi(midiRel) {
-      if (!midiRel) return;
-      await fetch('/api/obsidian/play_hof', {
-        method: 'POST',
-        headers: {'Content-Type': 'application/json'},
-        body: JSON.stringify({ midi_rel: midiRel })
-      });
-    }
-
-    async function playSelectedHofMidi() {
-      if (selectedHofMidiRel) await playHofMidi(selectedHofMidiRel);
-    }
-
-    function appendDirectivePreset(line) {
-      const ta = document.getElementById('directivesTextarea');
-      if (!ta.value.includes(line)) {
-        ta.value = ta.value.trimEnd() + `\n- [x] ${line}\n`;
-        directivesDirty = true;
-      }
-    }
-
-    async function saveHumanDirectives() {
-      const text = document.getElementById('directivesTextarea').value;
-      directivesDirty = false;
-      await fetch('/api/obsidian/directives', {
-        method: 'POST',
-        headers: {'Content-Type': 'application/json'},
-        body: JSON.stringify({ text })
-      });
-    }
-
-    function drawOscilloscope(wave) {
-      const c = document.getElementById('oscCanvas');
-      const ctx = c.getContext('2d');
-      const W = c.width, H = c.height;
-      ctx.fillStyle = '#050811';
+    function drawEvolutionChart(history) {
+      const cv = document.getElementById('canvas-evo');
+      const ctx = cv.getContext('2d');
+      const W = cv.width, H = cv.height;
+      ctx.fillStyle = '#0b0f18';
       ctx.fillRect(0, 0, W, H);
-      ctx.strokeStyle = '#1e293b';
-      ctx.beginPath(); ctx.moveTo(0, H/2); ctx.lineTo(W, H/2); ctx.stroke();
-      if (!wave.length) return;
-      let maxAbs = 0.004;
-      for (let i = 0; i < wave.length; i++) if (Math.abs(wave[i]) > maxAbs) maxAbs = Math.abs(wave[i]);
-      const scale = (H * 0.42) / maxAbs;
-      ctx.strokeStyle = '#10b981';
-      ctx.lineWidth = 1.8;
+      if (!history || !history.length) return;
+      ctx.strokeStyle = 'rgba(148, 163, 184, 0.16)';
+      [60, 75, 90, 100].forEach(s => {
+        const y = H - 20 - ((s - 50) / 52) * (H - 40);
+        ctx.beginPath(); ctx.moveTo(35, y); ctx.lineTo(W - 15, y); ctx.stroke();
+        ctx.fillStyle = '#64748b'; ctx.font = '11px sans-serif'; ctx.fillText(`${s}`, 6, y + 4);
+      });
+      ctx.strokeStyle = '#f59e0b';
+      ctx.lineWidth = 2.6;
       ctx.beginPath();
-      for (let i = 0; i < wave.length; i++) {
-        const x = (i / (wave.length - 1)) * W;
-        const y = H / 2 - wave[i] * scale;
-        if (i === 0) ctx.moveTo(x, y); else ctx.lineTo(x, y);
-      }
+      history.forEach((pt, idx) => {
+        const x = 35 + (idx / Math.max(1, history.length - 1)) * (W - 55);
+        const y = H - 20 - ((Math.max(50, Math.min(100, pt.score || 70)) - 50) / 52) * (H - 40);
+        if (idx === 0) ctx.moveTo(x, y); else ctx.lineTo(x, y);
+      });
       ctx.stroke();
     }
 
-    function drawCqtSpectrogram(cleanBins) {
-      const c = document.getElementById('cqtCanvas');
-      const ctx = c.getContext('2d');
-      const W = c.width, H = c.height;
-      ctx.fillStyle = '#050811';
-      ctx.fillRect(0, 0, W, H);
-      if (!cleanBins.length) return;
-      const n = cleanBins.length, bw = W / n;
-      for (let i = 0; i < n; i++) {
-        const norm = Math.max(0.04, Math.min(1.0, (cleanBins[i] + 82) / 58));
-        const bh = norm * (H - 6);
-        const hue = 195 - norm * 145;
-        ctx.fillStyle = `hsl(${hue}, 88%, 54%)`;
-        ctx.fillRect(i * bw + 1, H - bh, Math.max(2, bw - 1.5), bh);
-      }
-    }
+    // -----------------------------------------------------------------------
+    // Telemetry Update Renderers
+    // -----------------------------------------------------------------------
+    function renderVirtuoso(v) {
+      if (!v) return;
+      document.getElementById('live-story-subtitle').textContent = v.live_story_subtitle_ja || '';
+      document.getElementById('pianist-thought-bubble').textContent = `💬 ${v.pianist_thought_bubble_ja || ''}`;
 
-    function isBlackKey(midi) {
-      const m = midi % 12;
-      return m === 1 || m === 3 || m === 6 || m === 8 || m === 10;
-    }
-
-    function draw88KeyPiano(activeKeys) {
-      const c = document.getElementById('pianoCanvas');
-      const ctx = c.getContext('2d');
-      const W = c.width, H = c.height;
-      ctx.fillStyle = '#050811';
-      ctx.fillRect(0, 0, W, H);
-
-      const vdlBarH = 16; // Top strip showing per-key VDL prelay ms (25..160ms)
-      const keyTop = vdlBarH + 2;
-      const keyH = H - keyTop - 2;
-
-      const whiteCount = 52;
-      const ww = W / whiteCount;
-      let whiteIdx = 0;
-      let activeCount = 0;
-      let avgVdl = 0;
-
-      for (let m = 21; m <= 108; m++) {
-        if (!isBlackKey(m)) {
-          const x = whiteIdx * ww;
-          const info = activeKeys[String(m)];
-          if (info) {
-            activeCount++;
-            avgVdl += (info.vdl_ms || 55);
-            const tag = info.source_tag || '';
-            if (tag.includes('human')) ctx.fillStyle = '#38bdf8';
-            else if (tag.includes('cello')) ctx.fillStyle = '#fbbf24';
-            else if (info.sympathetic || info.velocity === 1) ctx.fillStyle = '#a855f7';
-            else ctx.fillStyle = '#10b981';
-
-            // VDL prelay indicator bar above active key
-            const vdlH = Math.min(vdlBarH, Math.max(4, ((info.vdl_ms || 60) / 160) * vdlBarH));
-            ctx.fillRect(x + 1, vdlBarH - vdlH, ww - 2, vdlH);
-          } else {
-            ctx.fillStyle = '#e2e8f0';
-          }
-          ctx.fillRect(x + 0.5, keyTop, ww - 1, keyH);
-          whiteIdx++;
-        }
+      const gen = v.current_generation || 1;
+      document.getElementById('gen-count-badge').textContent = `第${gen}世代`;
+      document.getElementById('scrubber-cur').textContent = `現在 第${gen}世代`;
+      genScrubber.max = Math.max(gen, 20);
+      genScrubber.style.setProperty('--attr-max', genScrubber.max);
+      if (document.activeElement !== genScrubber) {
+        genScrubber.value = gen;
+        genScrubber.style.setProperty('--control-value', gen);
       }
 
-      whiteIdx = 0;
-      for (let m = 21; m <= 108; m++) {
-        if (!isBlackKey(m)) {
-          whiteIdx++;
+      if (v.hardware_accel) {
+        document.getElementById('hw-accel-badge').textContent =
+          `⚡ ${v.hardware_accel.cpu_cores}コア ${v.hardware_accel.backend_label}`;
+      }
+      if (v.preflight) {
+        document.getElementById('preflight-badge').textContent =
+          `🛡️ 安全監査 ${v.preflight.elapsed_ms ?? 0.01}ms (${v.preflight.passed ? '合格' : '自動保護'})`;
+      }
+
+      renderWorkspaceTabs(v.workspace);
+
+      // Emergent Inspiration Source Meters
+      const insp = v.inspiration || {};
+      const weights = insp.weights || [];
+      const inspBox = document.getElementById('inspiration-bars');
+      inspBox.innerHTML = '';
+      weights.forEach(w => {
+        const row = document.createElement('div');
+        row.className = 'meter-row';
+        row.innerHTML = `
+          <div class="meter-hd"><span>${w.label_ja}</span><span>${w.pct}%</span></div>
+          <div class="meter-track"><div class="meter-fill" style="width:${w.pct}%"></div></div>
+        `;
+        inspBox.appendChild(row);
+      });
+      if (weights.length) {
+        document.getElementById('inspiration-top').textContent = `${weights[0].label_ja} ${weights[0].pct}%`;
+      }
+      document.getElementById('inspiration-comment').textContent = insp.summary_ja || '';
+
+      // 4 Human Scores
+      const hs = v.human_scores || {};
+      document.getElementById('hs-legato').textContent = `${hs.legato_smoothness_100 ?? '--'}点`;
+      document.getElementById('hs-vivace').textContent = `${hs.vivace_energy_100 ?? '--'}点`;
+      document.getElementById('hs-story').textContent = `${hs.melody_beauty_100 ?? '--'}点`;
+      document.getElementById('hs-safety').textContent = `${hs.hardware_kindness_100 ?? '--'}点`;
+
+      drawEvolutionChart(v.evolution_history);
+
+      // Candidate Branches
+      const bBox = document.getElementById('branch-list');
+      bBox.innerHTML = '';
+      (v.branches || []).slice(0, 5).forEach(b => {
+        const el = document.createElement('div');
+        el.style.cssText = 'display:flex; justify-content:space-between; align-items:center; padding:6px 10px; border-radius:8px; background:#0d1320; border:1px solid ' + (b.winner ? '#f59e0b' : '#28344d');
+        el.innerHTML = `<span>${b.winner ? '🏆 ' : ''}${b.name_ja || b.name}</span><strong>${b.score}点</strong>`;
+        bBox.appendChild(el);
+      });
+      const logsEl = document.getElementById('critic-logs');
+      logsEl.innerHTML = (v.critic_logs || []).slice().reverse().map(l => `<div>• ${l}</div>`).join('');
+
+      refreshSheetMusic();
+    }
+
+    function renderFrame(frame) {
+      if (frame.banner) {
+        const b = frame.banner;
+        document.getElementById('banner-msg').textContent = b.message || '';
+        document.getElementById('banner-sub').textContent = b.sub_message || '';
+        const pill = document.getElementById('banner-pill');
+        pill.className = 'status-banner ' + (b.code === 'SOUND_COUNTDOWN' ? 'countdown' : (b.code === 'ACTION_NEEDED' ? 'action' : 'ready'));
+      }
+      if (frame.safety) {
+        document.getElementById('badge-voices').textContent = `保持 ${frame.safety.active_voices_count || 0}/20音`;
+        document.getElementById('badge-nps').textContent = `速度 ${frame.safety.notes_per_sec || 0}音/秒 (上限28)`;
+        const rawKeys = frame.safety.active_keys || {};
+        const keyVelMap = {};
+        Object.entries(rawKeys).forEach(([k, info]) => {
+          const vel = (typeof info === 'number') ? info : ((info && info.velocity) || 64);
+          keyVelMap[k] = vel;
+          if (Math.random() < 0.22) spawnRipple(Number(k), vel);
+        });
+        draw88Piano(keyVelMap);
+        const pedalVal = Number(frame.safety.pedal_cc64 || (frame.twin && frame.twin.physics && frame.twin.physics.effective_cc64) || 0);
+        drawRipples(pedalVal);
+        document.getElementById('badge-pedal').textContent = `右ペダル ${Math.round(pedalVal)}`;
+      }
+      if (frame.twin) {
+        document.getElementById('btn-sound-toggle').textContent = frame.twin.virtual_sound_enabled ? '🔊 ピアノ音出し中' : '🔇 消音中 (押して鳴らす)';
+      }
+      if (frame.audio) {
+        const a = frame.audio;
+        const notes = (a.detected_note_names && a.detected_note_names.length) ? a.detected_note_names.join(', ') : (a.detected_note || '');
+        const listening = Boolean(a.active || (a.rms_dbfs !== undefined && a.rms_dbfs > -90));
+        document.getElementById('mic-badge').textContent = listening ? `🎤 ${a.device_name || '聴き取り中'}` : 'マイク待機中';
+        document.getElementById('cello-live-readout').textContent =
+          notes ? `検出中のチェロ音高: ${notes} (BPM ${Math.round(a.estimated_bpm || 72)})` : '検出中の音高: 待機中';
+      }
+      if (frame.virtuoso) renderVirtuoso(frame.virtuoso);
+    }
+
+    // WebSocket Live Stream with Auto-Reconnect
+    function connectWs() {
+      const proto = location.protocol === 'https:' ? 'wss:' : 'ws:';
+      const ws = new WebSocket(`${proto}//${location.host}/ws`);
+      ws.onmessage = (ev) => { try { renderFrame(JSON.parse(ev.data)); } catch (_) {} };
+      ws.onclose = () => setTimeout(connectWs, 1500);
+    }
+    connectWs();
+
+    // -----------------------------------------------------------------------
+    // 100-Feature Explorer, System Doctor, QR Modal, IMSLP & Obsidian Helpers
+    // -----------------------------------------------------------------------
+    let allFeatures = [];
+    let selectedCategory = 'ALL';
+    async function loadFeatureCatalog() {
+      const res = await fetch('/api/features/catalog');
+      const data = await res.json();
+      allFeatures = data.features || [];
+      const pills = document.getElementById('feat-cat-pills');
+      pills.innerHTML = '';
+      const allBtn = document.createElement('button');
+      allBtn.className = 'btn btn-gold';
+      allBtn.textContent = `すべて (${allFeatures.length})`;
+      allBtn.onclick = () => { selectedCategory = 'ALL'; renderFeatureGrid(); };
+      pills.appendChild(allBtn);
+
+      (data.categories || []).forEach(c => {
+        const b = document.createElement('button');
+        b.className = 'btn';
+        b.textContent = `${c.id}: ${c.name_ja} (${c.count})`;
+        b.onclick = () => { selectedCategory = c.id; renderFeatureGrid(); };
+        pills.appendChild(b);
+      });
+      renderFeatureGrid();
+    }
+
+    function renderFeatureGrid() {
+      const q = (document.getElementById('feat-search').value || '').toLowerCase();
+      const grid = document.getElementById('feature-grid');
+      grid.innerHTML = '';
+      const filtered = allFeatures.filter(f => {
+        if (selectedCategory !== 'ALL' && f.category !== selectedCategory) return false;
+        if (q && !`${f.id} ${f.title_ja} ${f.desc_ja}`.toLowerCase().includes(q)) return false;
+        return true;
+      });
+      document.getElementById('feat-count-badge').textContent = `表示中 ${filtered.length} / ${allFeatures.length}機能`;
+      filtered.forEach(f => {
+        const card = document.createElement('div');
+        card.className = 'feat-card';
+        card.innerHTML = `
+          <div>
+            <div class="feat-top">
+              <span class="badge badge-gold">#${f.number} (${f.id})</span>
+              <span class="badge badge-ok">実装済</span>
+            </div>
+            <div class="feat-title" style="margin-top:6px;">${f.title_ja}</div>
+            <div class="feat-desc" style="margin-top:3px;">${f.desc_ja}</div>
+          </div>
+          <div style="display:flex; justify-content:space-between; align-items:center;">
+            <span style="font-size:0.72rem; color:var(--text-dim);">${f.module}</span>
+            <button class="btn" onclick="invokeFeatureById('${f.id}')">▶ お試し・確認</button>
+          </div>
+        `;
+        grid.appendChild(card);
+      });
+    }
+    document.getElementById('feat-search').addEventListener('input', renderFeatureGrid);
+
+    async function invokeFeatureById(fid) {
+      const res = await postAction('/api/features/invoke', { feature_id: fid });
+      if (res && res.message_ja) showToast(res.message_ja);
+    }
+
+    async function runSystemDoctor() {
+      const res = await fetch('/api/system/doctor');
+      const doc = await res.json();
+      document.getElementById('doctor-summary').textContent = doc.summary_ja;
+      const box = document.getElementById('doctor-checks');
+      box.innerHTML = '';
+      (doc.checks || []).forEach(c => {
+        const el = document.createElement('div');
+        el.style.cssText = 'padding:10px; border-radius:10px; background:#0d1320; border:1px solid ' + (c.ok ? '#10b981' : '#ef4444');
+        el.innerHTML = `<div style="font-weight:800;">${c.ok ? '✅' : '⚠️'} ${c.name_ja}</div><div style="font-size:0.8rem; color:#9aa7c0;">${c.detail_ja}</div>`;
+        box.appendChild(el);
+      });
+    }
+
+    async function openQrModal() {
+      const res = await fetch('/api/remote/info');
+      const info = await res.json();
+      document.getElementById('qr-svg-box').innerHTML = info.qr_svg;
+      document.getElementById('qr-url-text').textContent = info.remote_url;
+      document.getElementById('qr-dialog').showModal();
+    }
+
+    async function loadImslpList() {
+      const res = await fetch('/api/imslp/list');
+      const data = await res.json();
+      const box = document.getElementById('imslp-list');
+      box.innerHTML = '';
+      (data.items || []).slice(0, 6).forEach(it => {
+        const row = document.createElement('div');
+        row.style.cssText = 'display:flex; justify-content:space-between; align-items:center; padding:8px 10px; background:#0d1320; border:1px solid #28344d; border-radius:10px;';
+        row.innerHTML = `<span><strong>${it.title || it.piece_id}</strong> (${it.composer || ''})</span>`;
+        const b = document.createElement('button');
+        b.className = 'btn btn-blue';
+        b.textContent = '▶ 安全試聴';
+        b.onclick = () => postAction('/api/midi/play_optimized', { piece_id: it.piece_id || it.id });
+        row.appendChild(b);
+        box.appendChild(row);
+      });
+    }
+
+    async function saveDirectives() {
+      const txt = document.getElementById('directives-input').value;
+      await postAction('/api/obsidian/directives', { text: txt });
+      showToast('💌 AIピアニストへリクエストを届けました！');
+    }
+
+    async function loadObsidianGraph() {
+      const res = await fetch('/api/obsidian/graph');
+      const g = await res.json();
+      const cv = document.getElementById('canvas-graph');
+      const ctx = cv.getContext('2d');
+      ctx.fillStyle = '#0b0f18';
+      ctx.fillRect(0, 0, cv.width, cv.height);
+      const nodes = (g.nodes || []).slice(0, 18);
+      nodes.forEach((n, i) => {
+        const ang = (i / Math.max(1, nodes.length)) * Math.PI * 2;
+        const rx = cv.width * 0.5 + Math.cos(ang) * (cv.width * 0.34);
+        const ry = cv.height * 0.5 + Math.sin(ang) * (cv.height * 0.34);
+        n._x = rx; n._y = ry;
+      });
+      ctx.strokeStyle = 'rgba(148, 163, 184, 0.28)';
+      (g.edges || []).forEach(e => {
+        const a = nodes.find(x => x.id === e.source);
+        const b = nodes.find(x => x.id === e.target);
+        if (a && b) { ctx.beginPath(); ctx.moveTo(a._x, a._y); ctx.lineTo(b._x, b._y); ctx.stroke(); }
+      });
+      nodes.forEach(n => {
+        ctx.fillStyle = n.category === 'hall_of_fame' ? '#fbbf24' : '#38bdf8';
+        ctx.beginPath(); ctx.arc(n._x, n._y, 6, 0, Math.PI * 2); ctx.fill();
+        ctx.fillStyle = '#e2e8f0'; ctx.font = '11px sans-serif'; ctx.fillText(String(n.title || n.id).slice(0, 14), n._x + 8, n._y + 4);
+      });
+
+      const dirInput = document.getElementById('directives-input');
+      if (dirInput && !dirInput.value && g.directives_raw) {
+        dirInput.value = g.directives_raw;
+      }
+
+      const hofBox = document.getElementById('hof-list');
+      hofBox.innerHTML = '';
+      const hofItems = g.hof_leaderboard || (g.nodes || []).filter(n => n.category === 'hall_of_fame' && n.midi_rel);
+      hofItems.slice(0, 5).forEach(h => {
+        const row = document.createElement('div');
+        row.style.cssText = 'display:flex; justify-content:space-between; align-items:center; padding:6px 10px; background:#0d1320; border:1px solid #28344d; border-radius:8px;';
+        row.innerHTML = `<span>🏆 ${h.title || h.midi_rel || h.id} (${h.score ?? ''}点)</span>`;
+        const b = document.createElement('button');
+        b.className = 'btn'; b.textContent = '▶ 再生';
+        if (h.midi_rel) {
+          b.onclick = () => postAction('/api/obsidian/play_hof', { midi_rel: h.midi_rel });
         } else {
-          const x = (whiteIdx - 0.35) * ww;
-          const bw = ww * 0.68;
-          const bh = keyH * 0.60;
-          const info = activeKeys[String(m)];
-          if (info) {
-            activeCount++;
-            avgVdl += (info.vdl_ms || 55);
-            const tag = info.source_tag || '';
-            if (tag.includes('human')) ctx.fillStyle = '#60a5fa';
-            else if (tag.includes('cello')) ctx.fillStyle = '#f59e0b';
-            else if (info.sympathetic || info.velocity === 1) ctx.fillStyle = '#c084fc';
-            else ctx.fillStyle = '#34d399';
-            ctx.fillRect(x, 2, bw, 12);
-          } else {
-            ctx.fillStyle = '#0f172a';
-          }
-          ctx.fillRect(x, keyTop, bw, bh);
+          b.disabled = true;
         }
-      }
-      const vdlStr = activeCount > 0 ? `${(avgVdl / activeCount).toFixed(0)} ms` : '-- ms';
-      document.getElementById('pianoActiveSummary').textContent = `Active Keys: ${activeCount} | VDL Prelay: ${vdlStr}`;
-    }
-
-    function renderAgentTelemetry(agent, studio) {
-      if (agent.terminal_logs) {
-        const term = document.getElementById('terminalStreamBox');
-        if (term) { term.textContent = agent.terminal_logs.join('\n'); term.scrollTop = term.scrollHeight; }
-      }
-      if (agent.git_commits) {
-        const gc = document.getElementById('gitCommitsContainer');
-        if (gc) {
-          gc.innerHTML = agent.git_commits.map(c =>
-            `<div style="background:#162032;padding:4px 8px;border-radius:5px;"><code>${c.hash}</code> <span style="color:#9ca3af;">[${c.time}]</span> ${c.message}</div>`
-          ).join('');
-        }
-      }
-      if (studio) {
-        if (studio.imslp_library && studio.imslp_library.length > 0) {
-          document.getElementById('imslpLibraryTbody').innerHTML = studio.imslp_library.map(item =>
-            `<tr><td><strong>${item.title}</strong></td><td>${item.composer}</td><td>${item.note_count} (${item.key})</td>
-            <td><button class="btn btn-green" style="padding:4px 10px;" onclick="playOptimizedMidi('${item.id}')">▶️</button></td></tr>`
-          ).join('');
-        }
-        if (studio.current_composed_piece) {
-          const cp = studio.current_composed_piece;
-          if (cp.events) drawComposerPianoRoll(cp.events);
-          document.getElementById('composedPieceInfo').innerHTML = `<strong>${cp.title}</strong>`;
-        }
-        if (studio.rehearsal_takes && studio.rehearsal_takes.length > 0) {
-          document.getElementById('rehearsalTakesTbody').innerHTML = studio.rehearsal_takes.map(t =>
-            `<tr><td><code>${t.id}</code></td><td>${t.title}</td><td>${t.features}</td><td>Ready</td></tr>`
-          ).join('');
-        }
-        if (studio.rehearsal_comparisons && studio.rehearsal_comparisons.length > 0) {
-          document.getElementById('timeMachineComparisonTbody').innerHTML = studio.rehearsal_comparisons.map(c =>
-            `<tr><td><strong>${c.style}</strong></td><td>${c.roughness}</td><td>${c.melody_lead_ms} ms</td><td>${c.consonance_score}/100</td></tr>`
-          ).join('');
-        }
-      }
-    }
-
-    function drawComposerPianoRoll(events) {
-      const c = document.getElementById('composerPianoRollCanvas');
-      if (!c || !events.length) return;
-      const ctx = c.getContext('2d');
-      const W = c.width, H = c.height;
-      ctx.fillStyle = '#050811'; ctx.fillRect(0, 0, W, H);
-      const maxT = Math.max(8.0, ...events.map(e => (e.time_offset_s || 0) + (e.duration_s || 0.5)));
-      events.forEach(e => {
-        if (!e.note || e.note <= 0) return;
-        const x = ((e.time_offset_s || 0) / maxT) * (W - 20) + 10;
-        const w = Math.max(4, ((e.duration_s || 0.5) / maxT) * (W - 20));
-        const y = H - 12 - ((e.note - 36) / 60) * (H - 24);
-        ctx.fillStyle = e.voice === 'cello_motif' ? '#fbbf24' : '#10b981';
-        ctx.fillRect(x, y, w, 4);
+        row.appendChild(b);
+        hofBox.appendChild(row);
       });
     }
 
-    async function toggleContinuousStream() {
-      await fetch('/api/virtuoso/toggle_stream', { method: 'POST', headers: {'Content-Type': 'application/json'}, body: '{}' });
-    }
-    async function toggleVirtualSound() {
-      const cur = document.getElementById('btnVirtualSound').classList.contains('active-toggle');
-      await fetch('/api/twin/config', { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({ virtual_sound_enabled: !cur }) });
-    }
-    async function toggleHardwareOutput() {
-      const cur = document.getElementById('btnHardwareOut').classList.contains('active-toggle');
-      await fetch('/api/twin/config', { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({ hardware_output_enabled: !cur }) });
-    }
-    async function runHyperEvolution(gens, speedX) {
-      document.getElementById('hyperTrainingBadge').textContent = `Running ${gens} gens @ ${speedX}x...`;
-      await fetch('/api/virtuoso/hyper_evolve', { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({ generations: gens, speed_multiplier: speedX }) });
-    }
-    async function injectLiveMotif(notes, source) {
-      await fetch('/api/virtuoso/inject_motif', { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({ notes, source }) });
-    }
-    async function triggerPanic() { await fetch('/api/panic', { method: 'POST' }); }
-    async function startHumanTurn() { await fetch('/api/dialogue/your_turn', { method: 'POST' }); }
-    async function injectSampleMotif(notes) {
-      await fetch('/api/dialogue/inject_notes', { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({ notes }) });
-    }
-    async function listenAndComposeMotif() {
-      await fetch('/api/composer/listen_and_compose', {
-        method: 'POST', headers: {'Content-Type': 'application/json'},
-        body: JSON.stringify({
-          development_mode: document.getElementById('compStyleSelect').value,
-          target_duration_s: parseFloat(document.getElementById('compDurationSlider').value),
-          density: parseInt(document.getElementById('compDensitySlider').value, 10),
-          pedal_cc64: parseInt(document.getElementById('compPedalSlider').value, 10),
-          legato_overlap_pct: parseFloat(document.getElementById('compLegatoSlider').value)
-        })
-      });
-    }
-    async function exportComposedMidi() { await fetch('/api/composer/export_midi', { method: 'POST' }); }
-    async function playOptimizedMidi(pieceId) {
-      await fetch('/api/midi/play_optimized', { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({ piece_id: pieceId }) });
-    }
-    async function runAutoProxySessionDemo() { await fetch('/api/session/proxy_demo', { method: 'POST' }); }
-    async function recordNewRehearsalTake() { await fetch('/api/rehearsal/record_proxy_take', { method: 'POST' }); }
-    async function replayTakeWithStyle(style) {
-      await fetch('/api/rehearsal/replay_style', { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({ style }) });
-    }
-
-    connectWebSocket();
+    // Initial bootstrap
+    fetch('/api/virtuoso/status').then(r => r.json()).then(d => renderVirtuoso(d.virtuoso)).catch(() => {});
+    refreshSheetMusic(true);
+    loadFeatureCatalog();
+    loadImslpList();
+    loadObsidianGraph();
+    runSystemDoctor();
+    draw88Piano({});
+    drawRipples(0);
   </script>
 </body>
 </html>
