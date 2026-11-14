@@ -712,6 +712,13 @@ class MultiObjectiveCritic:
             expression_y=expression_y,
             bar_idx=int(prev_bar_state.get("bar_index", 0)),
         )
+        radar_6axis = HumanReferenceTeacher.evaluate_6axis_radar_100(
+            events=events,
+            genome_dict=genome_dict,
+            human_scores=human_scores,
+            physics_report=phys,
+        )
+
         commentary_ja, subtitle_ja, thought_ja = self._build_japanese_narratives(
             total_score=total_score,
             gen_num=gen_num,
@@ -737,6 +744,7 @@ class MultiObjectiveCritic:
                 "physical_playability": playability_score,
             },
             "human_scores": human_scores,
+            "radar_6axis": radar_6axis,
             "inspiration": inspiration,
             "contrary_motion_ratio": round(contrary_ratio, 2),
             "physics_report": phys,
@@ -765,16 +773,27 @@ class MultiObjectiveCritic:
         second = inspiration["sources"][1]
         arc_id, arc_label, _ = story_arc_stage
 
+        comp_name_ja = {
+            "tchaikovsky": "チャイコフスキー作品",
+            "rachmaninoff": "ラフマニノフ作品",
+            "debussy": "ドビュッシー作品",
+            "chopin": "ショパン作品",
+            "bach": "バッハ作品",
+        }.get(str(lead.get("id", "tchaikovsky")).lower(), "クラシック名曲")
+
         if gen_num <= 2:
-            stage_desc = "素朴な原石から最初のメロディが芽生えています"
+            stage_desc = "素朴な原石から最初のカンタービレ旋律が芽生えています"
+            revision_ja = "荒削りな主題スケッチを提示し、旋律の骨格と基本和声を設定しました"
         elif gen_num <= 6:
-            stage_desc = "和声の響きと内声のかけあいが豊かに育ってきました"
+            stage_desc = "ロマン派の和声とチェロ音域の対旋律が豊かに育ってきました"
+            revision_ja = f"IMSLPの{comp_name_ja}から着想を得て、中間部の旋律を6度跳躍の歌うレガートに変更し、左手に半音階で動く対旋律を追加しました"
         else:
-            stage_desc = "巨匠のような歌うレガートと表情豊かな呼吸が花開いています"
+            stage_desc = "巨匠のような歌うレガートとDisklavierならではの4手対位法・結晶パッセージが開花しています"
+            revision_ja = f"IMSLPの{comp_name_ja}の書法を統合し、主旋律を+{mel_lead_ms:.0f}ms先行・音重ね+{legato_ms:.0f}msの極上レガートへ磨き上げ、対旋律と倍音共鳴を加えました"
 
         if expression_x > 0.15:
             mood_phrase = "テンポ感よく活発に跳ねるスケルツォの推進力で"
-            tech_phrase = f"35〜48msの歯切れよいスタッカートと鮮明な強弱コントラスト"
+            tech_phrase = "35〜48msの歯切れよいスタッカートと鮮明な強弱コントラスト"
         else:
             mood_phrase = "しっとりと歌い上げる極上のレガートで"
             tech_phrase = f"音と音の重なり+{legato_ms:.0f}ms・主旋律+{mel_lead_ms:.0f}ms先行・右ペダル-{preroll_ms:.0f}ms先読み(CC#64={p_val})"
@@ -784,11 +803,10 @@ class MultiObjectiveCritic:
             f"と{second['short_ja']}（{second['pct']}%）の響きが自然に溶け合っています — {stage_desc}。"
         )
         thought_ja = (
-            f"💭 AIピアニストの狙い: 今は「{chord_label}」へ向かう流れの中で、{tech_phrase}を意識して弾いています。"
+            f"💭 第{gen_num}世代（{total_score:.1f}点）推敲ノート：{revision_ja}。（和声進行：{chord_label} / {tech_phrase}）"
         )
         commentary_ja = (
-            f"[第{gen_num}世代 | {total_score:.1f}点] {lead['short_ja']}{lead['pct']}%着想・{chord_label}。"
-            f"{tech_phrase}。"
+            f"第{gen_num}世代（{total_score:.1f}点）：{revision_ja}。"
         )
         return commentary_ja, subtitle_ja, thought_ja
 

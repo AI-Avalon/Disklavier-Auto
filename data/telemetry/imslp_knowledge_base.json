@@ -79,6 +79,36 @@
       "note_count": 27,
       "midi_path": "data/imslp_midi/mendelssohn_op109.mid",
       "voice_leading_pattern": "Romantic Cantabile Melody + Sustained Broken Triads"
+    },
+    {
+      "id": "tchaikovsky_1893_pathetique_cantabile",
+      "title": "Cantabile Pathétique (Tchaikovsky Concerto & Symphony Motif, Op. 74)",
+      "composer": "Pyotr Ilyich Tchaikovsky",
+      "key": "B Minor",
+      "tempo_bpm": 58,
+      "note_count": 35,
+      "midi_path": "data/imslp_midi/tchaikovsky_1893_pathetique_cantabile.mid",
+      "voice_leading_pattern": "Passionate 6th/8th Cantabile Leaps + Chromatic Inner Obligato"
+    },
+    {
+      "id": "rachmaninoff_1901_prelude_g_minor_bells",
+      "title": "Cathedral Bell Counterpoint (Prelude Motif, Op. 23 in G Minor)",
+      "composer": "Sergei Rachmaninoff",
+      "key": "G Minor",
+      "tempo_bpm": 62,
+      "note_count": 39,
+      "midi_path": "data/imslp_midi/rachmaninoff_1901_prelude_g_minor_bells.mid",
+      "voice_leading_pattern": "Wide Bell Resonance + Singing Tenor Obligato + Romantic Climax"
+    },
+    {
+      "id": "liszt_1850_liebestraum_campanella_cascade",
+      "title": "Liebestraum & Crystal Campanella Cascade (Op. 62 in A-flat Major)",
+      "composer": "Franz Liszt",
+      "key": "A-flat Major",
+      "tempo_bpm": 64,
+      "note_count": 42,
+      "midi_path": "data/imslp_midi/liszt_1850_liebestraum_campanella_cascade.mid",
+      "voice_leading_pattern": "Singing Tenor Theme + Sparkling Upper Pearl Ornament & Cadenza Cascade"
     }
   ],
   "knowledge_base_patterns": [
@@ -161,6 +191,392 @@
         52,
         72
       ]
+    },
+    {
+      "composer": "Pyotr Ilyich Tchaikovsky",
+      "work": "Cantabile Pathétique (Tchaikovsky Concerto & Symphony Motif, Op. 74)",
+      "key": "B Minor",
+      "pattern": "Passionate 6th/8th Cantabile Leaps + Chromatic Inner Obligato",
+      "recommended_cc64_range": [
+        52,
+        72
+      ]
+    },
+    {
+      "composer": "Sergei Rachmaninoff",
+      "work": "Cathedral Bell Counterpoint (Prelude Motif, Op. 23 in G Minor)",
+      "key": "G Minor",
+      "pattern": "Wide Bell Resonance + Singing Tenor Obligato + Romantic Climax",
+      "recommended_cc64_range": [
+        52,
+        72
+      ]
+    },
+    {
+      "composer": "Franz Liszt",
+      "work": "Liebestraum & Crystal Campanella Cascade (Op. 62 in A-flat Major)",
+      "key": "A-flat Major",
+      "pattern": "Singing Tenor Theme + Sparkling Upper Pearl Ornament & Cadenza Cascade",
+      "recommended_cc64_range": [
+        52,
+        72
+      ]
     }
-  ]
+  ],
+  "deep_dna": {
+    "total_masterworks": 11,
+    "global_laws": {
+      "target_stepwise_ratio": 0.369,
+      "target_passionate_leap_6th_8th_ratio": 0.082,
+      "target_contrary_motion_ratio": 0.363,
+      "golden_climax_position_ratio": 0.701,
+      "recommended_cc64_range": [
+        48,
+        72
+      ]
+    },
+    "masterwork_dna_profiles": [
+      {
+        "piece_id": "debussy_clair_sonata",
+        "composer": "Claude Debussy",
+        "title": "Clair de Lune (Suite bergamasque, L. 75 — Full Legato Edition)",
+        "key": "D-flat Major",
+        "melody_contour": {
+          "stepwise_ratio": 0.29,
+          "passionate_leap_6th_8th_ratio": 0.0,
+          "climax_position_ratio": 0.784,
+          "climax_pitch": 80,
+          "motivic_repetition_score": 0.75
+        },
+        "harmony_and_bass": {
+          "tension_resolution_curve": [
+            0.714,
+            0.762,
+            0.74,
+            0.827,
+            0.777,
+            0.751
+          ],
+          "contrary_motion_ratio": 0.611,
+          "chromatic_voice_leading_ratio": 0.032
+        },
+        "pianistic_ecriture": {
+          "arpeggio_span_semitones": 60,
+          "inner_obligato_density": 0.356,
+          "cadenza_cascade_detected": true,
+          "composer_signature_summary_ja": "9/8 Finger-Pedaled Harmonic Planing + Syncopated CC#64 Sustain"
+        }
+      },
+      {
+        "piece_id": "saint_saens_swan",
+        "composer": "Camille Saint-Saëns",
+        "title": "Le Cygne (The Swan) — Carnaval des Animaux",
+        "key": "G Major",
+        "melody_contour": {
+          "stepwise_ratio": 0.667,
+          "passionate_leap_6th_8th_ratio": 0.0,
+          "climax_position_ratio": 0.824,
+          "climax_pitch": 79,
+          "motivic_repetition_score": 0.713
+        },
+        "harmony_and_bass": {
+          "tension_resolution_curve": [
+            0.543,
+            0.533,
+            0.573,
+            0.594,
+            0.627,
+            0.448
+          ],
+          "contrary_motion_ratio": 0.0,
+          "chromatic_voice_leading_ratio": 0.111
+        },
+        "pianistic_ecriture": {
+          "arpeggio_span_semitones": 43,
+          "inner_obligato_density": 0.818,
+          "cadenza_cascade_detected": false,
+          "composer_signature_summary_ja": "Overlapping Harp Sextuplets + Legato Cantabile Melody"
+        }
+      },
+      {
+        "piece_id": "faure_elegie_op24",
+        "composer": "Gabriel Fauré",
+        "title": "Élégie in C Minor, Op. 24",
+        "key": "C Minor",
+        "melody_contour": {
+          "stepwise_ratio": 0.667,
+          "passionate_leap_6th_8th_ratio": 0.0,
+          "climax_position_ratio": 0.819,
+          "climax_pitch": 72,
+          "motivic_repetition_score": 0.656
+        },
+        "harmony_and_bass": {
+          "tension_resolution_curve": [
+            0.592,
+            0.599,
+            0.573,
+            0.579,
+            0.632,
+            0.469
+          ],
+          "contrary_motion_ratio": 0.5,
+          "chromatic_voice_leading_ratio": 0.333
+        },
+        "pianistic_ecriture": {
+          "arpeggio_span_semitones": 41,
+          "inner_obligato_density": 0.0,
+          "cadenza_cascade_detected": false,
+          "composer_signature_summary_ja": "Sustained Bass Tetrachord + Legato Pulsating Chords"
+        }
+      },
+      {
+        "piece_id": "faure_sicilienne_op78",
+        "composer": "Gabriel Fauré",
+        "title": "Sicilienne in G Minor, Op. 78",
+        "key": "G Minor",
+        "melody_contour": {
+          "stepwise_ratio": 0.636,
+          "passionate_leap_6th_8th_ratio": 0.0,
+          "climax_position_ratio": 0.122,
+          "climax_pitch": 70,
+          "motivic_repetition_score": 0.6
+        },
+        "harmony_and_bass": {
+          "tension_resolution_curve": [
+            0.559,
+            0.569,
+            0.406,
+            0.524,
+            0.535,
+            0.446
+          ],
+          "contrary_motion_ratio": 0.333,
+          "chromatic_voice_leading_ratio": 0.364
+        },
+        "pianistic_ecriture": {
+          "arpeggio_span_semitones": 32,
+          "inner_obligato_density": 0.6,
+          "cadenza_cascade_detected": false,
+          "composer_signature_summary_ja": "6/8 Aeolian Harp Legato Arpeggio + Dorian Cantabile"
+        }
+      },
+      {
+        "piece_id": "bach_suite1_bwv1007",
+        "composer": "J.S. Bach",
+        "title": "Cello Suite No. 1 in G Major, BWV 1007 (Prelude)",
+        "key": "G Major",
+        "melody_contour": {
+          "stepwise_ratio": 0.222,
+          "passionate_leap_6th_8th_ratio": 0.349,
+          "climax_position_ratio": 0.952,
+          "climax_pitch": 71,
+          "motivic_repetition_score": 0.818
+        },
+        "harmony_and_bass": {
+          "tension_resolution_curve": [
+            0.533,
+            0.547,
+            0.454,
+            0.58,
+            0.594,
+            0.557
+          ],
+          "contrary_motion_ratio": 0.211,
+          "chromatic_voice_leading_ratio": 0.127
+        },
+        "pianistic_ecriture": {
+          "arpeggio_span_semitones": 31,
+          "inner_obligato_density": 0.0,
+          "cadenza_cascade_detected": false,
+          "composer_signature_summary_ja": "主旋律とバスが反行する厳格かつ美しい対位法書法"
+        }
+      },
+      {
+        "piece_id": "chopin_nocturne_sonata",
+        "composer": "Frédéric Chopin",
+        "title": "Nocturne in E-flat Major, Op. 9 No. 2 (Bel Canto Legato)",
+        "key": "E-flat Major",
+        "melody_contour": {
+          "stepwise_ratio": 0.5,
+          "passionate_leap_6th_8th_ratio": 0.125,
+          "climax_position_ratio": 0.943,
+          "climax_pitch": 72,
+          "motivic_repetition_score": 0.664
+        },
+        "harmony_and_bass": {
+          "tension_resolution_curve": [
+            0.571,
+            0.542,
+            0.352,
+            0.589,
+            0.554,
+            0.489
+          ],
+          "contrary_motion_ratio": 0.333,
+          "chromatic_voice_leading_ratio": 0.0
+        },
+        "pianistic_ecriture": {
+          "arpeggio_span_semitones": 33,
+          "inner_obligato_density": 0.0,
+          "cadenza_cascade_detected": false,
+          "composer_signature_summary_ja": "ルバートを伴う繊細なノクターン装飾と半音階的解決"
+        }
+      },
+      {
+        "piece_id": "brahms_sonata1_op38",
+        "composer": "Johannes Brahms",
+        "title": "Cello Sonata No. 1 in E Minor, Op. 38",
+        "key": "E Minor",
+        "melody_contour": {
+          "stepwise_ratio": 0.167,
+          "passionate_leap_6th_8th_ratio": 0.0,
+          "climax_position_ratio": 0.399,
+          "climax_pitch": 64,
+          "motivic_repetition_score": 0.69
+        },
+        "harmony_and_bass": {
+          "tension_resolution_curve": [
+            0.52,
+            0.545,
+            0.44,
+            0.52,
+            0.661,
+            0.456
+          ],
+          "contrary_motion_ratio": 0.333,
+          "chromatic_voice_leading_ratio": 0.0
+        },
+        "pianistic_ecriture": {
+          "arpeggio_span_semitones": 32,
+          "inner_obligato_density": 0.0,
+          "cadenza_cascade_detected": false,
+          "composer_signature_summary_ja": "Sonorous Low Bass + Warm Sixths Legato Counterpoint"
+        }
+      },
+      {
+        "piece_id": "mendelssohn_op109",
+        "composer": "Felix Mendelssohn",
+        "title": "Lied ohne Worte (Song Without Words), Op. 109 in D Major",
+        "key": "D Major",
+        "melody_contour": {
+          "stepwise_ratio": 0.333,
+          "passionate_leap_6th_8th_ratio": 0.0,
+          "climax_position_ratio": 0.543,
+          "climax_pitch": 71,
+          "motivic_repetition_score": 0.69
+        },
+        "harmony_and_bass": {
+          "tension_resolution_curve": [
+            0.614,
+            0.585,
+            0.397,
+            0.642,
+            0.582,
+            0.353
+          ],
+          "contrary_motion_ratio": 0.667,
+          "chromatic_voice_leading_ratio": 0.0
+        },
+        "pianistic_ecriture": {
+          "arpeggio_span_semitones": 36,
+          "inner_obligato_density": 0.593,
+          "cadenza_cascade_detected": false,
+          "composer_signature_summary_ja": "Romantic Cantabile Melody + Sustained Broken Triads"
+        }
+      },
+      {
+        "piece_id": "tchaikovsky_1893_pathetique_cantabile",
+        "composer": "Pyotr Ilyich Tchaikovsky",
+        "title": "Cantabile Pathétique (Tchaikovsky Concerto & Symphony Motif, Op. 74)",
+        "key": "B Minor",
+        "melody_contour": {
+          "stepwise_ratio": 0.286,
+          "passionate_leap_6th_8th_ratio": 0.071,
+          "climax_position_ratio": 0.685,
+          "climax_pitch": 79,
+          "motivic_repetition_score": 0.6
+        },
+        "harmony_and_bass": {
+          "tension_resolution_curve": [
+            0.714,
+            0.695,
+            0.521,
+            0.717,
+            0.826,
+            0.601
+          ],
+          "contrary_motion_ratio": 0.667,
+          "chromatic_voice_leading_ratio": 0.143
+        },
+        "pianistic_ecriture": {
+          "arpeggio_span_semitones": 49,
+          "inner_obligato_density": 0.457,
+          "cadenza_cascade_detected": false,
+          "composer_signature_summary_ja": "情熱的な6度・8度跳躍とチェロ的カンタービレ旋律＋半音階内声"
+        }
+      },
+      {
+        "piece_id": "rachmaninoff_1901_prelude_g_minor_bells",
+        "composer": "Sergei Rachmaninoff",
+        "title": "Cathedral Bell Counterpoint (Prelude Motif, Op. 23 in G Minor)",
+        "key": "G Minor",
+        "melody_contour": {
+          "stepwise_ratio": 0.286,
+          "passionate_leap_6th_8th_ratio": 0.0,
+          "climax_position_ratio": 0.644,
+          "climax_pitch": 79,
+          "motivic_repetition_score": 0.635
+        },
+        "harmony_and_bass": {
+          "tension_resolution_curve": [
+            0.738,
+            0.824,
+            0.545,
+            0.862,
+            0.749,
+            0.551
+          ],
+          "contrary_motion_ratio": 0.333,
+          "chromatic_voice_leading_ratio": 0.071
+        },
+        "pianistic_ecriture": {
+          "arpeggio_span_semitones": 52,
+          "inner_obligato_density": 0.513,
+          "cadenza_cascade_detected": false,
+          "composer_signature_summary_ja": "大聖堂の鐘を思わせる広域重低音と歌うテノール対旋律"
+        }
+      },
+      {
+        "piece_id": "liszt_1850_liebestraum_campanella_cascade",
+        "composer": "Franz Liszt",
+        "title": "Liebestraum & Crystal Campanella Cascade (Op. 62 in A-flat Major)",
+        "key": "A-flat Major",
+        "melody_contour": {
+          "stepwise_ratio": 0.0,
+          "passionate_leap_6th_8th_ratio": 0.353,
+          "climax_position_ratio": 1.0,
+          "climax_pitch": 103,
+          "motivic_repetition_score": 0.825
+        },
+        "harmony_and_bass": {
+          "tension_resolution_curve": [
+            0.697,
+            0.563,
+            0.644,
+            0.678,
+            0.608,
+            0.687
+          ],
+          "contrary_motion_ratio": 0.0,
+          "chromatic_voice_leading_ratio": 0.0
+        },
+        "pianistic_ecriture": {
+          "arpeggio_span_semitones": 71,
+          "inner_obligato_density": 0.786,
+          "cadenza_cascade_detected": true,
+          "composer_signature_summary_ja": "真珠のような高音装飾カスケードと華麗なハープ・アルペジオ"
+        }
+      }
+    ]
+  }
 }

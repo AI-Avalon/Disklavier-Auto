@@ -1,7 +1,10 @@
 # 🎹 Disklavier-Auto 全100実装機能マトリクス (`FEATURES_100.md`)
 
-- **総実装機能数**: **100 / 100 機能**（全10カテゴリ・各10機能）
-- **アーキテクチャ方針**: 人間のお手本に基づく本物のレガート＆Vivace表現・完全オリジナル自発作曲・ローカル完結0.1秒未満安全監査・Apple Silicon高速並列進化・専門用語ゼロ日本語スタジオUI
+- **総実装機能数**: **100 / 100 機能**（全10カテゴリ・各10機能）＋ **IMSLP深層DNA・Meta-AI Director・Living Score・イン・アプリ知識グラフ統合**
+- **アーキテクチャ方針**: IMSLP 11大名曲（チャイコフスキー／ラフマニノフ／リスト／ショパン／ドビュッシー／バッハ／サン＝サーンス／フォーレ／ブラームス／メンデルスゾーン）の深層音楽DNA解析に基づく1からの本格作曲・Meta-AI Director（詩的日本語＆欧文タイトル＋5楽式構想）・6軸100点満点レーダー自己進化・Disklavier超人間的ヴィルトゥオーゾ表現4技・双方向パッセージ対話3モード・`sakurai-virtuoso-direction` 演出統合・イン・アプリ知識グラフ＆進化ノート・`validate_system_integrity.py` ローカル全数安全監査
+
+> [!NOTE]
+> 上位スタジオ統合機能（IMSLP Deep DNA `/api/imslp/dna`、双方向パッセージ返奏 `/api/dialogue/passage_reply`、4手立体交差・88鍵カスケード・Vel 1倍音共鳴・オクターブ連打 `/api/studio/virtuoso_expression`、3幕舞台進行 `/api/studio/stage_act`、イン・アプリ知識グラフ `/api/obsidian/explorer`）は、本100機能カタログの各カテゴリと密結合して動作します。
 
 | カテゴリ | 内容 | 機能番号 |
 |---|---|---|
@@ -27,10 +30,10 @@
 | 3 | `A3` | **歌うメロディの先行発音（Melody Lead）** | 主旋律を内声より+15〜+25ms早く、+12〜+20強く弾いて立体的に歌わせます。 | `human_reference_teacher.py` | `/api/virtuoso/expression_pad` |
 | 4 | `A4` | **活発なVivace/Scherzando歯切れ表現** | 35〜50msの安全スタッカートと速い離鍵(65〜90)で生命力ある跳躍を生みます。 | `human_reference_teacher.py` | `/api/virtuoso/expression_pad` |
 | 5 | `A5` | **12〜15Hz同音連打ガード＆オクターブ分散** | 物理限界を超える連打を自動的にオクターブや分散和音へ華麗に逃がします。 | `human_reference_teacher.py` | `/api/virtuoso/status` |
-| 6 | `A6` | **チャイコフスキー語法ベクトル融合** | 情熱的な6度跳躍と半音階的対旋律の語法を曲調に応じて自然にブレンドします。 | `human_reference_teacher.py` | `/api/virtuoso/character_preset` |
-| 7 | `A7` | **ラフマニノフ語法ベクトル融合** | 重厚な鐘の低音と息の長いロマン派内声の厚みを自発的に生成します。 | `human_reference_teacher.py` | `/api/virtuoso/character_preset` |
-| 8 | `A8` | **ドビュッシー／ショパン／バッハ語法ブレンド** | 印象派の平行和音、繊細なルバート、緻密な対位法を確率重みで調和させます。 | `human_reference_teacher.py` | `/api/virtuoso/status` |
-| 9 | `A9` | **「今のひらめきの源泉」パーセント自動算出** | 生成された音楽の特性から各作曲家語法の影響度をリアルタイムに%表示します。 | `human_reference_teacher.py` | `/api/virtuoso/status` |
+| 6 | `A6` | **チャイコフスキー＆ラフマニノフ深層DNAベクトル融合** | 情熱的な6度・8度跳躍、反行バス、重厚な鐘の響きをIMSLP深層DNA解析から再現します。 | `imslp_library.py` / `human_reference_teacher.py` | `/api/imslp/dna` |
+| 7 | `A7` | **リスト超絶技巧＆Meta-AI Director 1曲丸ごと構想** | 詩的日本語＆欧文タイトル・調性・Op番号（例：*変ロ短調 Op.14*）と5段楽式を一から生成します。 | `human_reference_teacher.py` | `/api/state` |
+| 8 | `A8` | **ドビュッシー／ショパン／バッハ等 11名曲語法ブレンド** | 11作品の旋律輪郭・和声・対位法・アルペジオ法則を確率重みで調和させます。 | `imslp_library.py` | `/api/imslp/dna` |
+| 9 | `A9` | **4手立体交差・88鍵カスケード・オクターブ連打表現** | 人間の10度限界を超える4声独立アーティキュレーションと1〜2ms分散88鍵カスケードを生成します。 | `human_reference_teacher.py` / `continuous_virtuoso.py` | `/api/studio/virtuoso_expression` |
 | 10 | `A10` | **機械的ベタ打ちMIDIの人間化リペア機能** | 外部の硬いMIDIデータを自動検出し、ルバート・ペダル・レガートを付与します。 | `human_reference_teacher.py` | `/api/features/invoke` |
 
 ## カテゴリ B: AI自己進化エンジン＆高速並列探索 (10機能)
@@ -43,7 +46,7 @@
 | 12 | `B2` | **8〜16候補の並列世代探索エンジン** | 1回の作曲サイクルで複数候補を同時評価し最良の音楽だけを採用します。 | `actor_critic.py` | `/api/virtuoso/status` |
 | 13 | `B3` | **Apple Silicon マルチコアProcessPoolExecutor** | Macの複数CPUコアを使って候補評価を高速並列化します。 | `actor_critic.py` | `/api/virtuoso/hyper_evolve` |
 | 14 | `B4` | **Apple Accelerate SIMD / MPS 数値計算** | NumPyベクトル演算（および利用可能時MPS）で評価スコアを高速算出します。 | `human_reference_teacher.py` | `/api/virtuoso/status` |
-| 15 | `B5` | **4軸の人間品質採点（歌心・キレ・物語性・優しさ）** | 誰が見てもわかりやすい4指標(0-100点)で音楽品質を可視化します。 | `human_reference_teacher.py` | `/api/virtuoso/status` |
+| 15 | `B5` | **6軸100点満点レーダー＆4指標人間採点 + 日本語推敲ログ** | 旋律・和声・対位法・自然さ・超絶技巧・実機優しさの6軸レーダーと理由解説を表示します。 | `human_reference_teacher.py` / `actor_critic.py` | `/api/state` |
 | 16 | `B6` | **裏での超高速まとめて進化（50世代ブースター）** | 数秒の裏計算で50世代分の進化を一気に進めて頭脳を鍛え上げます。 | `continuous_virtuoso.py` | `/api/virtuoso/hyper_evolve` |
 | 17 | `B7` | **途切れない先読みノンストップストリーミング** | 次の4〜8小節をバックグラウンドで先読み生成し無音空白をゼロにします。 | `continuous_virtuoso.py` | `/api/virtuoso/toggle_stream` |
 | 18 | `B8` | **「👍 今のフレーズいいね！」即時報酬フィードバック** | 人間の好感を即座にAIの嗜好ベクトルと進化スコアへ反映します。 | `continuous_virtuoso.py` | `/api/virtuoso/like` |
@@ -90,7 +93,7 @@
 
 | # | ID | 機能名 | 内容 | 主な実装モジュール | API / 操作入口 |
 |---|---|---|---|---|---|
-| 41 | `E1` | **リアルタイム五線譜（ピアノ大譜表）ビュー** | ト音記号＋ヘ音記号の二段五線譜上に今のフレーズを綺麗に描画します。 | `feature_matrix_100.py` | `/api/score/current` |
+| 41 | `E1` | **Living Score 五線譜（変更音符ハイライト＆強弱記号）** | ト音＋ヘ音大譜表で世代間の書き換わり音符をハイライトし推敲理由と強弱(pp〜ff)を表示します。 | `feature_matrix_100.py` | `/api/score/current` & `/api/features/sheet_music` |
 | 42 | `E2` | **チェロ声部パート譜同時マッピング** | チェロ音域の歌うラインや伴奏対象を低音部譜表に対応付けます。 | `feature_matrix_100.py` | `/api/score/current` |
 | 43 | `E3` | **スラー（レガート）＆スタッカート奏法記号表示** | 楽譜上にレガート弧線とスタッカート記号を自動計算して表示します。 | `feature_matrix_100.py` | `/api/score/current` |
 | 44 | `E4` | **拍子・小節線・臨時記号（♯/♭）インテリジェント表示** | MIDIノートを調性コンテキストに合わせて見やすい譜面座標へ変換します。 | `feature_matrix_100.py` | `/api/score/current` |
@@ -110,7 +113,7 @@
 | 51 | `F1` | **🎻 チェロ開放弦(C-G-D-A)共鳴＆88鍵ウェーブ起動儀式** | チェロのC2/G2/D3/A3共鳴和音と全88鍵盤をなぞる美しい起動テスト演奏を行います。 | `feature_matrix_100.py` | `/api/cello/warmup_wave` |
 | 52 | `F2` | **リアルタイム・マイク音声ピッチ検出 (YIN)** | 生のチェロ演奏音をマイクで聴き取り瞬時に音程を推定します。 | `audio_monitor.py` | `/api/audio/toggle` |
 | 53 | `F3` | **チェロ音域対応 動的伴奏ジェネレーター** | チェロの現在音高に合わせて衝突しないピアノボイシングを生成します。 | `accompaniment_engine.py` | `/api/session/proxy_cello` |
-| 54 | `F4` | **コール＆レスポンス対話作曲モード** | 人間が弾いたフレーズの余白を聴き取りAIが続きを応えるセッション機能。 | `ai_classical_composer.py` | `/api/dialogue/generate` |
+| 54 | `F4` | **双方向ヴィルトゥオーゾ・パッセージ対話（3モード返奏）** | ピアノ/チェロ演奏に対し「対位法応答 / リスト変奏 / 第1主題から大曲進化」で返奏します。 | `ai_classical_composer.py` / `continuous_virtuoso.py` | `/api/dialogue/passage_reply` |
 | 55 | `F5` | **代理チェロテスト演奏（マイク不要リハ）** | 実チェロが手元になくても仮想チェロ音源で共演テストができます。 | `accompaniment_engine.py` | `/api/session/proxy_cello` |
 | 56 | `F6` | **IMSLP巨匠レパートリー5段階最適化プレイリスト** | バッハ・ショパン・ドビュッシーの名曲分析データを実機安全版で試聴できます。 | `imslp_library.py` | `/api/imslp/list` |
 | 57 | `F7` | **チェロ音域との声部干渉回避フィルター** | チェロのメロディと同じ音域でピアノ内声が濁らないよう自動調整します。 | `accompaniment_engine.py` | `/api/session/toggle` |
@@ -159,9 +162,9 @@
 | # | ID | 機能名 | 内容 | 主な実装モジュール | API / 操作入口 |
 |---|---|---|---|---|---|
 | 81 | `I1` | **Obsidian Vault 自動成長日記マークダウン出力** | AIが各世代で学んだ発見やスコア推移をObsidianノートへ自動追記します。 | `obsidian_brain.py` | `/api/obsidian/snapshot` |
-| 82 | `I2` | **作曲家影響度・知識グラフ（ナレッジグラフ）可視化** | 曲・作曲家語法・世代の関係性を対話型ネットワークとして閲覧できます。 | `obsidian_brain.py` | `/api/obsidian/snapshot` |
+| 82 | `I2` | **イン・アプリ音楽知識グラフ＆進化系統樹・思考ノートビューア** | 外部Obsidian不要で系統樹・知識ネットワーク・採用理由・思考文字ノートをアプリ内閲覧できます。 | `obsidian_brain.py` | `/api/obsidian/explorer` |
 | 83 | `I3` | **人間からの演奏リクエストノート双方向編集** | UIまたはObsidianのテキスト指令をAIピアニストの創作指針へ即反映します。 | `obsidian_brain.py` | `/api/obsidian/directives` |
-| 84 | `I4` | **<0.1秒 ローカル完全完結型セーフティ・プリフライト監査** | クラウドCIを使わずローカルPythonだけで毎回のMIDI出力を0.1秒未満で全数監査します。 | `preflight_checker.py` | `/api/virtuoso/status` |
+| 84 | `I4` | **<0.1秒 ローカルプリフライト監査 ＆ 統合整合性テスト** | `LocalPreflightChecker` による0.1s未満保護に加え `validate_system_integrity.py` で全7スイートを検証します。 | `preflight_checker.py` / `validate_system_integrity.py` | `/api/state` |
 | 85 | `I5` | **自動違反修復リペア（Auto-Repair Gate & Velocity）** | 万が一30ms未満の短音や禁止CCが含まれても発音前に自動修復します。 | `preflight_checker.py` | `/api/features/invoke` |
 | 86 | `I6` | **パブリックドメイン名演特徴量コーパス (6名演プロファイル)** | Tchaikovsky/Rachmaninoff/Debussy/Chopin/Bach/Scherzandoの統計モデルを内包します。 | `human_reference_teacher.py` | `/api/virtuoso/status` |
 | 87 | `I7` | **ローカルSVG/JSONによる軽量・高速統計ログ** | 外部ネットワーク不要で履歴・学習成果をすべてローカルディスクに保持します。 | `song_workspace.py` | `/api/tabs` |

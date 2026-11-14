@@ -722,3 +722,430 @@ class HumanReferenceTeacher:
             "hardware_safety_100": safety_score,
             "human_likeness_100": human_likeness,
         }
+
+    # =========================================================================
+    # Disklavier-Exclusive Super-Virtuoso Expression & 6-Axis Radar & Meta-AI
+    # =========================================================================
+
+    @classmethod
+    def evaluate_6axis_radar_100(
+        cls,
+        events: List[Dict[str, Any]],
+        genome_dict: Optional[Dict[str, Any]] = None,
+        human_scores: Optional[Dict[str, float]] = None,
+        physics_report: Optional[Dict[str, Any]] = None,
+    ) -> Dict[str, Any]:
+        """
+        Computes the 6-Axis 100-Point Radar Chart scores:
+          1. melody_beauty (旋律の美しさ)
+          2. harmonic_drama (和声のドラマ)
+          3. counterpoint (対位法)
+          4. human_realism (人間らしい自然さ)
+          5. virtuoso_brilliance (派手さ・超絶技巧)
+          6. disklavier_safety (Disklavier物理適性)
+        """
+        g = genome_dict or {}
+        hs = human_scores or cls.score_against_human_teacher(events, g)
+        note_evs = [e for e in events if int(e.get("note", 0)) > 0]
+        audit = LocalPreflightChecker.audit_events(events)
+
+        mel_evs = [e for e in note_evs if e.get("voice") in ("melody", "cello_motif")]
+        mel_pitches = [int(e["note"]) for e in mel_evs]
+        leaps_6_8 = 0
+        if len(mel_pitches) >= 2:
+            diffs = [abs(mel_pitches[i + 1] - mel_pitches[i]) for i in range(len(mel_pitches) - 1)]
+            leaps_6_8 = sum(1 for d in diffs if d in (7, 8, 9, 12))
+
+        melody_beauty = round(
+            min(99.5, max(45.0, float(hs.get("melodic_story_100", 72.0)) * 0.88 + leaps_6_8 * 3.5 + 8.0)),
+            1,
+        )
+
+        # Harmonic Drama: pitch-class richness + tension dynamic range
+        pcs = set(int(e["note"]) % 12 for e in note_evs if not e.get("sympathetic_halo"))
+        vels = [int(e.get("velocity", 60)) for e in note_evs if not e.get("sympathetic_halo")] or [60]
+        vel_span = max(vels) - min(vels)
+        harmonic_drama = round(
+            min(99.5, max(42.0, 40.0 + len(pcs) * 5.2 + min(22.0, vel_span * 0.45) + float(g.get("chromatic_tension", 0.35)) * 14.0)),
+            1,
+        )
+
+        # Counterpoint: number of independent voices & bass separation
+        voices = set(str(e.get("voice", "melody")) for e in note_evs if not e.get("sympathetic_halo"))
+        has_counter = any(
+            v in voices for v in ("counter_melody", "counter_cello_1", "counter_cello_2", "cello_motif")
+        )
+        cp_density = float(g.get("counterpoint_density", 0.55))
+        contrary_w = float(g.get("contrary_motion_weight", 0.65))
+        counterpoint = round(
+            min(
+                99.5,
+                max(
+                    38.0,
+                    36.0 + len(voices) * 10.5 + (14.0 if has_counter else 0.0) + cp_density * 14.0 + contrary_w * 12.0,
+                ),
+            ),
+            1,
+        )
+
+        # Human Realism: Legato overlap, soft note-off, Melody Lead, breathing rubato
+        human_realism = round(
+            min(
+                99.5,
+                max(
+                    45.0,
+                    0.55 * float(hs.get("legato_smoothness_100", 72.0))
+                    + 0.45 * float(hs.get("human_likeness_100", 74.0)),
+                ),
+            ),
+            1,
+        )
+
+        # Virtuoso Brilliance: 4-hand spread, pearl ornaments, crystal cascade, octave range, vel-1 halos
+        pitches = [int(e["note"]) for e in note_evs] or [60]
+        pitch_span = max(pitches) - min(pitches)
+        has_halo = any(bool(e.get("sympathetic_halo")) for e in note_evs)
+        has_pearl = any(e.get("voice") in ("pearl_ornament", "crystal_cascade") for e in note_evs)
+        virtuoso_brilliance = round(
+            min(
+                99.8,
+                max(
+                    35.0,
+                    30.0
+                    + min(38.0, pitch_span * 0.65)
+                    + (14.0 if has_pearl else 0.0)
+                    + (10.0 if has_halo else 0.0)
+                    + float(hs.get("rhythmic_vivacity_100", 70.0)) * 0.14,
+                ),
+            ),
+            1,
+        )
+
+        # Disklavier Safety: 100 pts if zero preflight violations
+        phys_score = float(physics_report.get("physics_score_20", 20.0)) * 5.0 if physics_report else float(hs.get("hardware_safety_100", 100.0))
+        penalty = len(audit["violations"]) * 15.0
+        disklavier_safety = round(max(0.0, min(100.0, phys_score - penalty)), 1)
+
+        total_100 = round(
+            0.20 * melody_beauty
+            + 0.17 * harmonic_drama
+            + 0.17 * counterpoint
+            + 0.18 * human_realism
+            + 0.14 * virtuoso_brilliance
+            + 0.14 * disklavier_safety,
+            1,
+        )
+        return {
+            "melody_beauty": melody_beauty,
+            "harmonic_drama": harmonic_drama,
+            "counterpoint": counterpoint,
+            "human_realism": human_realism,
+            "virtuoso_brilliance": virtuoso_brilliance,
+            "disklavier_safety": disklavier_safety,
+            "total_score_100": total_100,
+        }
+
+    @classmethod
+    def generate_4hand_virtuoso_layering(
+        cls,
+        root_pitch: int = 46,
+        start_time_s: float = 0.0,
+        duration_s: float = 4.2,
+    ) -> List[Dict[str, Any]]:
+        """
+        Generates a 4-Hand Super-Human Disklavier Layering texture (>10th span simultaneously):
+          1. Deep resonant Cathedral Bass (voice="bass")
+          2. Singing Cello Counter-Melody 1 (voice="counter_cello_1")
+          3. Inner Obligato Counter-Melody 2 (voice="counter_cello_2")
+          4. Cantabile Soprano Melody (+18 vel, +18ms lead, voice="melody")
+          5. Sparkling High Pearl Ornament (voice="pearl_ornament")
+        """
+        events: List[Dict[str, Any]] = []
+        bass_root = max(24, min(42, root_pitch - 12))
+        cello_base = max(44, min(58, root_pitch + 2))
+        mel_base = max(62, min(78, root_pitch + 24))
+        high_base = max(79, min(96, root_pitch + 43))
+
+        beats = 6
+        step = round(duration_s / beats, 3)
+
+        # Syncopated half-pedal
+        events.append(
+            {
+                "time_offset_s": max(0.0, round(start_time_s - 0.036, 4)),
+                "note": 0,
+                "velocity": 0,
+                "duration_s": 0.04,
+                "pedal_cc64": 20,
+                "voice": "pedal",
+            }
+        )
+        events.append(
+            {
+                "time_offset_s": round(start_time_s + 0.02, 4),
+                "note": 0,
+                "velocity": 0,
+                "duration_s": round(duration_s - 0.05, 3),
+                "pedal_cc64": 68,
+                "voice": "pedal",
+            }
+        )
+
+        mel_steps = [0, 2, 7, 9, 12, 7]
+        c1_steps = [0, 3, 5, 3, 2, 0]
+        c2_steps = [7, 5, 3, 5, 7, 10]
+        pearl_steps = [0, 4, 7, 12, 7, 4]
+
+        for b in range(beats):
+            t_beat = round(start_time_s + b * step, 4)
+            # Layer 4 (Melodic Cantabile leads slightly ahead + higher velocity)
+            events.append(
+                {
+                    "time_offset_s": max(0.0, round(t_beat - 0.018, 4)),
+                    "note": min(100, mel_base + mel_steps[b % len(mel_steps)]),
+                    "velocity": min(98, 78 + (b % 3) * 5),
+                    "duration_s": round(step * 1.12, 4),
+                    "release_velocity": 18,
+                    "voice": "melody",
+                    "articulation": "legato",
+                    "source_tag": "virtuoso:4hand_melody_lead",
+                }
+            )
+            # Layer 1 (Deep Bass on downbeats)
+            if b % 2 == 0:
+                events.append(
+                    {
+                        "time_offset_s": round(t_beat + 0.004, 4),
+                        "note": bass_root + (0 if b == 0 else (5 if b == 2 else 7)),
+                        "velocity": 66,
+                        "duration_s": round(step * 1.85, 4),
+                        "release_velocity": 20,
+                        "voice": "bass",
+                        "source_tag": "virtuoso:4hand_bass",
+                    }
+                )
+            # Layer 2 (Cello Counter-Melody 1 — contrary motion)
+            events.append(
+                {
+                    "time_offset_s": round(t_beat + 0.022, 4),
+                    "note": cello_base + c1_steps[-(b % len(c1_steps)) - 1],
+                    "velocity": 56,
+                    "duration_s": round(step * 1.05, 4),
+                    "release_velocity": 22,
+                    "voice": "counter_cello_1",
+                    "source_tag": "virtuoso:4hand_cello_counter",
+                }
+            )
+            # Layer 3 (Inner Cello Obligato 2)
+            events.append(
+                {
+                    "time_offset_s": round(t_beat + 0.045, 4),
+                    "note": cello_base + 7 + c2_steps[b % len(c2_steps)],
+                    "velocity": 46,
+                    "duration_s": round(step * 0.90, 4),
+                    "release_velocity": 24,
+                    "voice": "counter_cello_2",
+                    "source_tag": "virtuoso:4hand_inner_obligato",
+                }
+            )
+            # Layer 5 (Sparkling Upper Pearl Ornament)
+            events.append(
+                {
+                    "time_offset_s": round(t_beat + step * 0.45, 4),
+                    "note": min(105, high_base + pearl_steps[b % len(pearl_steps)]),
+                    "velocity": 50 + (b % 4) * 4,
+                    "duration_s": round(max(0.08, step * 0.48), 4),
+                    "release_velocity": 22,
+                    "voice": "pearl_ornament",
+                    "source_tag": "virtuoso:4hand_pearl",
+                }
+            )
+
+        repaired, _ = LocalPreflightChecker.audit_and_repair(events)
+        return repaired
+
+    @classmethod
+    def generate_88key_crystal_cascade(
+        cls,
+        root_pitch: int = 34,
+        start_time_s: float = 0.0,
+        duration_s: float = 3.2,
+        ascending: bool = True,
+    ) -> List[Dict[str, Any]]:
+        """
+        Generates a sweeping 88-Key Crystal Cascade micro-staggered to obey the
+        <= 16 simultaneous Note-Ons and <= 24 notes/sec power safety ceilings,
+        framed with silent Velocity 1 sympathetic overtone keys.
+        """
+        events: List[Dict[str, Any]] = []
+        # Silent Velocity 1 fundamental & 5th/octave overtone halo (no hammer attack)
+        halo_notes = [29, 36, 41, 48, 89, 96]
+        for idx_h, hn in enumerate(halo_notes):
+            events.append(
+                {
+                    "time_offset_s": round(start_time_s + idx_h * 0.006, 4),
+                    "note": hn,
+                    "velocity": 1,
+                    "duration_s": round(duration_s, 3),
+                    "release_velocity": 18,
+                    "sympathetic_halo": True,
+                    "voice": "sympathetic_halo",
+                    "source_tag": "virtuoso:vel1_overtone_halo",
+                }
+            )
+
+        # Open damper half-pedal right before the crystal sweep (-38ms pre-roll)
+        events.append(
+            {
+                "time_offset_s": max(0.0, round(start_time_s + 0.025, 4)),
+                "note": 0,
+                "velocity": 0,
+                "duration_s": round(duration_s, 3),
+                "pedal_cc64": 70,
+                "voice": "pedal",
+            }
+        )
+
+        # Select luminous Romantic-Lydian crystal pitches across 88 keys (A0=21..C8=108)
+        scale_pcs = [0, 2, 4, 7, 9, 11]
+        root_pc = root_pitch % 12
+        cascade_pitches = [
+            p for p in range(24, 106) if ((p - root_pc) % 12) in scale_pcs
+        ]
+        # Sample up to 34 evenly distributed crystal tones so <= 14 notes/sec (well below 28 limit)
+        step_pick = max(1, len(cascade_pitches) // 32)
+        chosen = cascade_pitches[::step_pick][:32]
+        if not ascending:
+            chosen = list(reversed(chosen))
+
+        n_c = max(1, len(chosen))
+        sweep_span = max(1.6, duration_s - 0.35)
+        for i, p in enumerate(chosen):
+            frac = i / max(1, n_c - 1)
+            # Subtle micro-stagger rubato curve (zero mechanical quantization)
+            t_on = round(start_time_s + 0.06 + frac * sweep_span + (0.002 * (i % 3)), 4)
+            vel = int(round(46 + 44 * math.sin(math.pi * (0.15 + 0.7 * frac))))
+            vel = max(32, min(98, vel))
+            events.append(
+                {
+                    "time_offset_s": t_on,
+                    "note": p,
+                    "velocity": vel,
+                    "duration_s": round(0.26 + 0.16 * (1.0 - frac), 4),
+                    "release_velocity": 20,
+                    "voice": "crystal_cascade" if p >= 72 else ("melody" if p >= 56 else "bass"),
+                    "articulation": "legato",
+                    "source_tag": "virtuoso:88key_crystal_cascade",
+                }
+            )
+
+        repaired, _ = LocalPreflightChecker.audit_and_repair(events)
+        return repaired
+
+    @classmethod
+    def generate_octave_alternating_tremolo(
+        cls,
+        center_pitch: int = 70,
+        start_time_s: float = 0.0,
+        duration_s: float = 2.0,
+        velocity: int = 78,
+    ) -> List[Dict[str, Any]]:
+        """
+        Super-fast trembling passage distributed across [pitch, pitch+7, pitch+12, pitch+7]
+        so every individual physical key repeats at <= 13 Hz (>= 76ms), zero key jam risk.
+        """
+        events: List[Dict[str, Any]] = []
+        pattern = [
+            max(36, min(94, center_pitch)),
+            max(43, min(101, center_pitch + 7)),
+            max(48, min(106, center_pitch + 12)),
+            max(43, min(101, center_pitch + 7)),
+        ]
+        # 52ms between composite attacks -> each pitch fires every >=104ms..208ms (<= 9.6 Hz)
+        dt = 0.052
+        count = max(8, int(duration_s / dt))
+        for i in range(count):
+            p = pattern[i % len(pattern)]
+            swelled_vel = max(28, min(98, int(velocity + 10 * math.sin(math.pi * i / count))))
+            events.append(
+                {
+                    "time_offset_s": round(start_time_s + i * dt, 4),
+                    "note": p,
+                    "velocity": swelled_vel,
+                    "duration_s": 0.044,
+                    "release_velocity": 72,
+                    "voice": "pearl_ornament" if p >= 76 else "melody",
+                    "articulation": "staccato",
+                    "source_tag": "virtuoso:octave_alternating_tremolo",
+                }
+            )
+        repaired, _ = LocalPreflightChecker.audit_and_repair(events)
+        return repaired
+
+    @classmethod
+    def generate_meta_director_work_plan(
+        cls,
+        tab_index: int = 0,
+        mood_preset: str = "romantic",
+        composer_weights: Optional[Dict[str, float]] = None,
+        seed_pitches: Optional[List[int]] = None,
+    ) -> Dict[str, Any]:
+        """
+        Meta-AI Director: Synthesizes poetic Japanese + European titles, subtitle,
+        tonality, Opus number, and 5-stage formal architecture from scratch.
+        """
+        catalog = [
+            {
+                "short_ja": "蒼き星の奔流",
+                "title_ja": "『幻想曲 変ロ短調「蒼き星の奔流」Op.14』",
+                "title_eu": "Fantaisie en si bémol mineur « Torrent de l'Étoile Azurée », Op. 14",
+                "key_ja": "変ロ短調 (B-flat minor)",
+                "opus": "Op. 14",
+            },
+            {
+                "short_ja": "華麗なる円舞曲",
+                "title_ja": "『交響的ワルツ ニ長調「月影と鐘の円舞曲」Op.21』",
+                "title_eu": "Valse Symphonique en ré majeur « Cloches et Ombre Lunaire », Op. 21",
+                "key_ja": "ニ長調 (D major)",
+                "opus": "Op. 21",
+            },
+            {
+                "short_ja": "夜想の銀雫",
+                "title_ja": "『ノクターン 嬰ハ短調「静寂の銀雫」Op.9』",
+                "title_eu": "Nocturne en ut dièse mineur « Gouttes d'Argent du Silence », Op. 9",
+                "key_ja": "嬰ハ短調 (C-sharp minor)",
+                "opus": "Op. 9",
+            },
+            {
+                "short_ja": "黎明のカスケード",
+                "title_ja": "『超絶技巧練習曲 変イ長調「黎明のクリスタル・カスケード」Op.28』",
+                "title_eu": "Étude Transcendante en la bémol majeur « Cascade de Cristal », Op. 28",
+                "key_ja": "変イ長調 (A-flat major)",
+                "opus": "Op. 28",
+            },
+        ]
+        # Pick tailored title based on preset or tab_index
+        if "scherz" in str(mood_preset) or "vivace" in str(mood_preset):
+            work = dict(catalog[1])
+        elif "nocturne" in str(mood_preset) or "debussy" in str(mood_preset):
+            work = dict(catalog[2])
+        elif seed_pitches:
+            work = dict(catalog[3])
+        else:
+            work = dict(catalog[abs(tab_index) % len(catalog)])
+
+        if tab_index >= 4:
+            op_num = 30 + tab_index * 2
+            work["opus"] = f"Op. {op_num}"
+            work["title_ja"] = f"『バラード「星霜の対話 #{tab_index + 1}」{work['opus']}』"
+            work["title_eu"] = f"Ballade Concertante No. {tab_index + 1} « Dialogue Astral », {work['opus']}"
+            work["short_ja"] = f"星霜の対話 {work['opus']}"
+
+        work["formal_sections"] = [
+            {"id": "intro", "label_ja": "Ⅰ. 静謐な序奏", "desc_ja": "Velocity 1倍音共鳴と柔らかなバスの呼吸"},
+            {"id": "theme", "label_ja": "Ⅱ. 主題提示", "desc_ja": "歌うカンタービレ旋律（+18dB/+18msリード）"},
+            {"id": "counterpoint", "label_ja": "Ⅲ. 対位法的展開", "desc_ja": "チェロ音域の2声対旋律と反行バス"},
+            {"id": "climax", "label_ja": "Ⅳ. 超絶技巧クライマックス", "desc_ja": "4手立体交差と88鍵クリスタル・カスケード"},
+            {"id": "coda", "label_ja": "Ⅴ. 余韻のコーダ", "desc_ja": "減衰ノートの透明な倍音フェード"},
+        ]
+        return work

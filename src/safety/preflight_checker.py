@@ -178,7 +178,7 @@ class LocalPreflightChecker:
         # Enforce 1.8ms simultaneous burst stagger (<= 12 soft / <= 16 hard) & 28 nps cap
         placed_1ms: List[float] = []
         win_1s: deque = deque()
-        active_holds: List[Tuple[int, float]] = []
+        active_holds: List[List[Any]] = []
 
         cleaned_notes: List[Dict[str, Any]] = []
         for ev in note_events:
@@ -211,17 +211,41 @@ class LocalPreflightChecker:
                     win_1s.popleft()
 
             # Cap simultaneous held voices below 20 (well under 30 crash threshold)
-            active_holds = [(hn, end_t) for (hn, end_t) in active_holds if end_t > t]
-            if len(active_holds) >= cls.MAX_HELD_VOICES:
-                # Shorten oldest non-bass hold rather than overflowing 20 voices
-                active_holds.pop(0)
+            active_holds = [
+                [h_ev, float(h_ev["time_offset_s"]) + float(h_ev["duration_s"])]
+                for h_ev, _ in active_holds
+                if float(h_ev["time_offset_s"]) + float(h_ev["duration_s"]) > t
+            ]
+            while len(active_holds) >= cls.MAX_HELD_VOICES:
+                pick_idx = next(
+                    (
+                        idx
+                        for idx, (h_ev, _) in enumerate(active_holds)
+                        if not h_ev.get("sympathetic_halo") and h_ev.get("voice") != "bass"
+                    ),
+                    0,
+                )
+                old_ev, _ = active_holds.pop(pick_idx)
+                old_start = float(old_ev["time_offset_s"])
+                old_ev["duration_s"] = round(
+                    max(cls.MIN_GATE_S, t - old_start - 0.004), 4
+                )
+                old_end = old_start + float(old_ev["duration_s"])
+                if old_end >= t:
+                    t = round(old_end + 0.004, 4)
+                    ev["time_offset_s"] = t
+                    active_holds = [
+                        [h_ev, float(h_ev["time_offset_s"]) + float(h_ev["duration_s"])]
+                        for h_ev, _ in active_holds
+                        if float(h_ev["time_offset_s"]) + float(h_ev["duration_s"]) > t
+                    ]
 
             last_on[n] = t
             placed_1ms.append(t)
             if len(placed_1ms) > 40:
                 placed_1ms = [pt for pt in placed_1ms if abs(t - pt) <= 0.05]
             win_1s.append(t)
-            active_holds.append((n, t + ev["duration_s"]))
+            active_holds.append([ev, t + ev["duration_s"]])
             cleaned_notes.append(ev)
 
         repaired = sorted(pedal_events + cleaned_notes, key=lambda x: float(x.get("time_offset_s", 0.0)))

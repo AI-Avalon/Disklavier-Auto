@@ -552,52 +552,152 @@ def _diatonic_step_index(midi: int) -> Tuple[int, str]:
     return octave * 7 + deg, acc
 
 
+def _velocity_to_dynamic(vel: int, is_halo: bool = False) -> str:
+    if is_halo or vel <= 1:
+        return "halo"
+    if vel < 36:
+        return "pp"
+    if vel < 50:
+        return "p"
+    if vel < 64:
+        return "mp"
+    if vel < 78:
+        return "mf"
+    if vel < 92:
+        return "f"
+    return "ff"
+
+
+def _infer_mutation_reason_ja(role: str, is_halo: bool, vel: int, prev_pitch: Optional[int], cur_pitch: int) -> str:
+    if is_halo or vel <= 1:
+        return "Velocity 1 サイレント打鍵による倍音共鳴を追加"
+    if role == "crystal_cascade":
+        return "88鍵クリスタル・カスケード分散音型を展開"
+    if role in ("counter_cello_1", "counter_cello_2", "counter_melody", "cello_motif"):
+        return "チェロ音域の歌う対旋律を追加・推敲"
+    if role == "pearl_ornament":
+        return "高音域の真珠のような装飾パッセージを追加"
+    if prev_pitch is not None and abs(cur_pitch - prev_pitch) in (7, 8, 9, 12):
+        return "情熱的な6度〜8度跳躍のカンタービレ旋律へ変更"
+    if role == "melody" and vel >= 80:
+        return "主旋律リード(+18dB/+18ms)と歌うレガートへ推敲"
+    return "和声と声部進行を洗練させ音符を書き換え"
+
+
 def build_sheet_music_payload(
     events: List[Dict[str, Any]],
     title: str = "今のオリジナル曲",
     bpm: float = 82.0,
+    prev_events: Optional[List[Dict[str, Any]]] = None,
+    work_metadata: Optional[Dict[str, Any]] = None,
 ) -> Dict[str, Any]:
-    """Convert live MIDI events into lightweight Canvas Grand Staff coordinates."""
+    """
+    Convert live MIDI events into lightweight Canvas Grand Staff coordinates
+    with Living Score mutation highlights, dynamic markings (pp..ff), cello counterpoint tags,
+    and poetic work header metadata.
+    """
     norm = _normalize_events_canonical(events)
     note_events = sorted([e for e in norm if int(e.get("note", 0)) > 0], key=lambda x: float(x.get("time_offset_s", 0.0)))
     if not note_events:
-        return {"title": title, "bpm": bpm, "duration_s": 4.0, "notes": [], "pedal_spans": []}
+        return {
+            "title": title,
+            "bpm": bpm,
+            "duration_s": 4.0,
+            "notes": [],
+            "pedal_spans": [],
+            "mutated_count": 0,
+            "work_metadata": work_metadata or {},
+            "dynamic_markings": [],
+        }
+
+    prev_notes_sorted: List[Dict[str, Any]] = []
+    if prev_events:
+        prev_norm = _normalize_events_canonical(prev_events)
+        prev_notes_sorted = sorted(
+            [e for e in prev_norm if int(e.get("note", 0)) > 0],
+            key=lambda x: float(x.get("time_offset_s", 0.0)),
+        )[-64:]
 
     min_t = min(float(e.get("time_offset_s", 0.0)) for e in note_events)
     max_t = max(float(e.get("time_offset_s", 0.0)) + float(e.get("duration_s", 0.4)) for e in note_events)
     span = max(2.0, max_t - min_t)
 
     rendered_notes = []
-    # Keep last window up to 64 notes for crisp legibility
+    dynamic_markings = []
+    mutated_count = 0
     slice_notes = note_events[-64:]
     min_s = min(float(e.get("time_offset_s", 0.0)) for e in slice_notes)
     max_s = max(float(e.get("time_offset_s", 0.0)) + float(e.get("duration_s", 0.3)) for e in slice_notes)
     window_dur = max(2.5, max_s - min_s)
+    last_dyn = None
 
     for idx, ev in enumerate(slice_notes):
         pitch = max(21, min(108, int(ev.get("note", 60))))
         t_rel = float(ev.get("time_offset_s", 0.0)) - min_s
         dur = float(ev.get("duration_s", 0.35))
         vel = int(ev.get("velocity", 60))
+        is_halo = bool(ev.get("sympathetic_halo", False)) or vel <= 1
         d_step, acc = _diatonic_step_index(pitch)
         staff = "treble" if pitch >= 60 else "bass"
-        # E4 = 4*7+2 = 30 (bottom treble line), G2 = 2*7+4 = 18 (bottom bass line)
-        note_name = f"{_NOTE_NAMES_SHARP[pitch % 12]}{(pitch // 12) - 1}"
         role = str(ev.get("voice", "inner"))
-        articulation = "staccato" if (ev.get("articulation") == "staccato" or dur < 0.12) else ("legato" if role == "melody" or dur >= 0.35 else "normal")
+        if role in ("cello_motif", "counter_cello_1", "counter_cello_2", "counter_melody"):
+            staff_layer = "cello_counter"
+        else:
+            staff_layer = staff
+
+        note_name = f"{_NOTE_NAMES_SHARP[pitch % 12]}{(pitch // 12) - 1}"
+        articulation = (
+            "halo"
+            if is_halo
+            else (
+                "staccato"
+                if (ev.get("articulation") == "staccato" or dur < 0.12)
+                else ("legato" if role in ("melody", "cello_motif", "counter_cello_1") or dur >= 0.35 else "normal")
+            )
+        )
+        dyn = _velocity_to_dynamic(vel, is_halo=is_halo)
+        x_norm = round(t_rel / window_dur, 4)
+        if dyn != last_dyn and dyn != "halo":
+            dynamic_markings.append({"x_norm": x_norm, "label": dyn})
+            last_dyn = dyn
+
+        # Detect generation mutation vs prev_events
+        mutated = False
+        mutation_reason_ja = ""
+        prev_pitch: Optional[int] = None
+        if prev_notes_sorted:
+            if idx >= len(prev_notes_sorted):
+                mutated = True
+            else:
+                pe = prev_notes_sorted[idx]
+                prev_pitch = int(pe.get("note", pitch))
+                if prev_pitch != pitch or abs(int(pe.get("velocity", vel)) - vel) >= 8 or str(pe.get("voice", "")) != role:
+                    mutated = True
+        else:
+            if is_halo or role in ("crystal_cascade", "pearl_ornament", "counter_cello_1", "counter_cello_2", "cello_motif") or vel >= 80:
+                mutated = True
+
+        if mutated:
+            mutated_count += 1
+            mutation_reason_ja = _infer_mutation_reason_ja(role, is_halo, vel, prev_pitch, pitch)
+
         rendered_notes.append(
             {
                 "id": idx,
-                "x_norm": round(t_rel / window_dur, 4),
+                "x_norm": x_norm,
                 "dur_norm": round(dur / window_dur, 4),
                 "pitch": pitch,
                 "note_name": note_name,
                 "diatonic_step": d_step,
                 "accidental": acc,
                 "staff": staff,
+                "staff_layer": staff_layer,
                 "vel": vel,
+                "dynamic": dyn,
                 "role": role,
                 "articulation": articulation,
+                "mutated": mutated,
+                "mutation_reason_ja": mutation_reason_ja,
             }
         )
 
@@ -607,6 +707,9 @@ def build_sheet_music_payload(
         "duration_s": round(span, 2),
         "window_dur_s": round(window_dur, 2),
         "notes": rendered_notes,
+        "dynamic_markings": dynamic_markings[-12:],
+        "mutated_count": mutated_count,
+        "work_metadata": work_metadata or {},
         "pedal_count": sum(1 for e in norm if e.get("pedal_cc64") is not None),
     }
 

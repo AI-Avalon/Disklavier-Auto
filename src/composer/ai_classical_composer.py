@@ -535,3 +535,219 @@ async def listen_and_compose_live(
         f"[DIALOGUE COMPOSER] Performing {piece['target_duration_s']}s piece ({len(piece['events'])} events) from {capture_source}"
     )
     return {"ok": True, "piece": piece, "metrics": metrics}
+
+
+def reply_to_passage_virtuoso(
+    user_notes: List[Any],
+    reply_mode: str = "liszt_rachmaninoff_virtuoso",
+    source: str = "piano_midi",
+) -> Dict[str, Any]:
+    """
+    Takes a passage played by a human on Disklavier (MIDI In), Cello (C519ML Audio In),
+    or Interactive UI Keyboard, analyzes its contour/rhythm/articulation, and returns
+    a Disklavier-safe Virtuoso Passage Reply in 3 selectable modes:
+      1. `contrapuntal_reply`: Singing cello & soprano contrapuntal answer with contrary bass
+      2. `liszt_rachmaninoff_virtuoso`: 4-hand bell chords + upper pearl ornament + 88-key cascade
+      3. `evolve_symphonic_masterwork`: Expands the passage as Subject I into a 5-stage masterwork
+    """
+    from src.evolution.human_reference_teacher import HumanReferenceTeacher
+    from src.safety.preflight_checker import LocalPreflightChecker
+
+    # Normalize flexible note inputs (either list[int] or list[dict])
+    normalized: List[Dict[str, Any]] = []
+    t_cursor = 0.0
+    for idx, item in enumerate(user_notes or []):
+        if isinstance(item, dict):
+            note_val = int(item.get("note", 62))
+            vel_val = max(28, min(100, int(item.get("velocity", 72))))
+            dur_val = max(0.045, float(item.get("duration_s", 0.42)))
+            t_val = float(item.get("time_offset_s", t_cursor))
+        else:
+            note_val = int(item)
+            vel_val = 74
+            dur_val = 0.42
+            t_val = t_cursor
+        note_val = max(24, min(105, note_val))
+        normalized.append(
+            {
+                "time_offset_s": round(t_val, 4),
+                "note": note_val,
+                "velocity": vel_val,
+                "duration_s": round(dur_val, 4),
+                "voice": "cello_motif" if source == "cello_c519ml" else "melody",
+            }
+        )
+        t_cursor += max(0.28, dur_val * 0.85)
+
+    if not normalized:
+        seed_pitches = [62, 65, 69, 74, 72, 69, 65]
+        normalized = [
+            {
+                "time_offset_s": round(i * 0.36, 4),
+                "note": p,
+                "velocity": 74,
+                "duration_s": 0.42,
+                "voice": "cello_motif" if source == "cello_c519ml" else "melody",
+            }
+            for i, p in enumerate(seed_pitches)
+        ]
+
+    pitches = [n["note"] for n in normalized]
+    root_note = pitches[0]
+    root_pc = root_note % 12
+    intervals = [p - root_note for p in pitches]
+    avg_dur = sum(float(n["duration_s"]) for n in normalized) / len(normalized)
+    artic_ja = "歯切れよいスタッカート系" if avg_dur < 0.18 else "歌うレガート・カンタービレ系"
+    has_minor_3rd = any(((p - root_note) % 12) == 3 for p in pitches)
+    detected_harmony_ja = (
+        f"{midi_to_name(root_note)} を中心とする抒情的な{'短調' if has_minor_3rd else '長調'}パッセージ"
+    )
+
+    events: List[Dict[str, Any]] = []
+    # Preserve brief echo of human seed phrase in soft singing voice
+    for n in normalized[:8]:
+        events.append(
+            {
+                "time_offset_s": round(float(n["time_offset_s"]), 4),
+                "note": n["note"],
+                "velocity": max(48, min(86, n["velocity"])),
+                "duration_s": round(float(n["duration_s"]) * 1.08, 4),
+                "release_velocity": 20,
+                "voice": "cello_motif" if source == "cello_c519ml" else "melody",
+                "articulation": "legato",
+                "source_tag": f"human_passage:{source}",
+            }
+        )
+
+    reply_start = round(max((float(n["time_offset_s"]) + float(n["duration_s"]) for n in normalized), default=2.2) + 0.15, 4)
+
+    if reply_mode == "contrapuntal_reply":
+        # Mode 1: Inverted & answering counterpoint + singing cello voice + contrary bass
+        events.append({"time_offset_s": max(0.0, round(reply_start - 0.04, 4)), "note": 0, "velocity": 0, "duration_s": 0.04, "pedal_cc64": 22, "voice": "pedal"})
+        events.append({"time_offset_s": round(reply_start + 0.02, 4), "note": 0, "velocity": 0, "duration_s": 3.4, "pedal_cc64": 60, "voice": "pedal"})
+        for i, iv in enumerate(intervals[:8]):
+            t_ev = round(reply_start + i * 0.42, 4)
+            # Soprano answer up a 5th/octave
+            sop = max(55, min(94, root_note + 12 - iv // 2))
+            events.append(
+                {
+                    "time_offset_s": max(0.0, round(t_ev - 0.018, 4)),
+                    "note": sop,
+                    "velocity": 76 + (i % 3) * 5,
+                    "duration_s": 0.48,
+                    "release_velocity": 18,
+                    "voice": "melody",
+                    "articulation": "legato",
+                    "source_tag": "passage_reply:contrapuntal_soprano",
+                }
+            )
+            # Singing cello counter-melody answering in contrary motion
+            cello_ans = max(40, min(67, root_note - 12 + iv))
+            events.append(
+                {
+                    "time_offset_s": round(t_ev + 0.022, 4),
+                    "note": cello_ans,
+                    "velocity": 60,
+                    "duration_s": 0.52,
+                    "release_velocity": 20,
+                    "voice": "counter_cello_1",
+                    "articulation": "legato",
+                    "source_tag": "passage_reply:contrapuntal_cello",
+                }
+            )
+            if i % 2 == 0:
+                bass_ans = max(26, min(46, root_note - 24 - (iv % 7)))
+                events.append(
+                    {
+                        "time_offset_s": round(t_ev + 0.008, 4),
+                        "note": bass_ans,
+                        "velocity": 56,
+                        "duration_s": 0.90,
+                        "release_velocity": 22,
+                        "voice": "bass",
+                        "source_tag": "passage_reply:contrapuntal_bass",
+                    }
+                )
+        reply_expl_ja = (
+            f"人間が奏でた{len(normalized)}音の{artic_ja}パッセージを反行・転回し、"
+            f"チェロ音域の対旋律とソプラノが掛け合う美しい対位法的アンサーを生成しました。"
+        )
+    elif reply_mode == "evolve_symphonic_masterwork":
+        # Mode 3: Build a 5-stage symphonic expansion from user passage as Subject I
+        base_events, _ = compose_expanded_dialogue_piece(
+            captured_notes=normalized,
+            target_duration_s=14.0,
+            development_mode="dramatic_crescendo" if has_minor_3rd else "faure_chopin_lyric",
+            density=4,
+            base_pedal_cc64=66,
+            legato_overlap_pct=112.0,
+            iteration_tuning=3,
+        )
+        events = list(base_events["events"])
+        cascade = HumanReferenceTeacher.generate_88key_crystal_cascade(
+            root_pitch=36 + root_pc,
+            start_time_s=round(max((float(e.get("time_offset_s", 0.0)) for e in events), default=10.0) + 0.15, 4),
+            duration_s=2.8,
+            ascending=True,
+        )
+        events.extend(cascade)
+        reply_expl_ja = (
+            f"人間のパッセージ（{[midi_to_name(p) for p in pitches[:5]]}）を「第1主題」に据え、"
+            f"静謐な序奏〜対位法的展開〜88鍵クリスタル・クライマックスまでの大曲楽章構造を一から構築しました。"
+        )
+    else:
+        # Mode 2 (default): Liszt / Rachmaninoff 4-hand virtuoso variation + 88-key crystal cascade
+        layer4 = HumanReferenceTeacher.generate_4hand_virtuoso_layering(
+            root_pitch=max(36, root_note - 12),
+            start_time_s=reply_start,
+            duration_s=3.4,
+        )
+        events.extend(layer4)
+        trem = HumanReferenceTeacher.generate_octave_alternating_tremolo(
+            center_pitch=min(82, root_note + 12),
+            start_time_s=round(reply_start + 3.45, 4),
+            duration_s=1.4,
+            velocity=76,
+        )
+        events.extend(trem)
+        cascade = HumanReferenceTeacher.generate_88key_crystal_cascade(
+            root_pitch=max(28, root_note - 24),
+            start_time_s=round(reply_start + 4.9, 4),
+            duration_s=2.6,
+            ascending=True,
+        )
+        events.extend(cascade)
+        reply_expl_ja = (
+            "パッセージをリスト／ラフマニノフ風の超絶技巧へ昇華：重厚な鐘の低音＋チェロ2声の対旋律＋高音パール装飾による4手立体ポリフォニーから、"
+            "安全なオクターブ分散連打と88鍵クリスタル・カスケードで応答しました。"
+        )
+
+    repaired_events, preflight_proof = LocalPreflightChecker.audit_and_repair(events)
+    human_scores = HumanReferenceTeacher.score_against_human_teacher(repaired_events, {})
+    radar_6axis = HumanReferenceTeacher.evaluate_6axis_radar_100(
+        events=repaired_events,
+        genome_dict={"counterpoint_density": 0.85, "contrary_motion_weight": 0.85},
+        human_scores=human_scores,
+    )
+    work_meta = HumanReferenceTeacher.generate_meta_director_work_plan(
+        tab_index=3,
+        mood_preset=reply_mode,
+        seed_pitches=pitches,
+    )
+
+    return {
+        "ok": True,
+        "source": source,
+        "reply_mode": reply_mode,
+        "captured_pitches": pitches,
+        "captured_names": [midi_to_name(p) for p in pitches[:10]],
+        "interval_contour": intervals[:10],
+        "detected_articulation_ja": artic_ja,
+        "detected_harmony_ja": detected_harmony_ja,
+        "reply_explanation_ja": reply_expl_ja,
+        "work_metadata": work_meta,
+        "human_scores": human_scores,
+        "radar_6axis": radar_6axis,
+        "preflight_proof": preflight_proof,
+        "events": repaired_events,
+    }

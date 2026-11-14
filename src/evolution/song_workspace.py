@@ -18,10 +18,23 @@ from pathlib import Path
 from typing import Any, Dict, List, Optional
 
 from src.evolution.actor_critic import MusicalGenome
+from src.evolution.human_reference_teacher import HumanReferenceTeacher
 from src.telemetry.telemetry_store import TELEMETRY_DIR
 
 
 WORKSPACE_SNAPSHOT_PATH = TELEMETRY_DIR / "workspace_snapshot.json"
+
+
+def _default_radar_6axis() -> Dict[str, float]:
+    return {
+        "melody_beauty": 74.0,
+        "harmonic_drama": 71.0,
+        "counterpoint": 69.0,
+        "human_realism": 73.0,
+        "virtuoso_brilliance": 68.0,
+        "disklavier_safety": 100.0,
+        "total_score_100": 75.0,
+    }
 
 
 @dataclass
@@ -63,10 +76,16 @@ class SongTabState:
             "human_likeness_100": 74.0,
         }
     )
+    latest_radar_6axis: Dict[str, float] = field(default_factory=_default_radar_6axis)
+    work_metadata: Dict[str, Any] = field(
+        default_factory=lambda: HumanReferenceTeacher.generate_meta_director_work_plan(0, "romantic")
+    )
+    revision_log: List[Dict[str, Any]] = field(default_factory=list)
     latest_inspiration: Dict[str, Any] = field(default_factory=dict)
     live_story_subtitle_ja: str = "しっとりと歌うような序奏から、新しい物語が始まります…"
     pianist_thought_bubble_ja: str = "💭 AIピアニストの狙い: 最初のモチーフを歌わせながら、和声の色彩を探しています。"
     latest_events: List[Dict[str, Any]] = field(default_factory=list)
+    prev_generation_events: List[Dict[str, Any]] = field(default_factory=list)
     generation_snapshots: Dict[int, Dict[str, Any]] = field(default_factory=dict)
     undo_stack: List[Dict[str, Any]] = field(default_factory=list)
     redo_stack: List[Dict[str, Any]] = field(default_factory=list)
@@ -89,10 +108,13 @@ class SongTabState:
             "latest_score": float(self.latest_score),
             "latest_axes": dict(self.latest_axes),
             "latest_human_scores": dict(self.latest_human_scores),
+            "latest_radar_6axis": dict(self.latest_radar_6axis),
+            "work_metadata": copy.deepcopy(self.work_metadata),
             "latest_inspiration": copy.deepcopy(self.latest_inspiration),
             "live_story_subtitle_ja": self.live_story_subtitle_ja,
             "pianist_thought_bubble_ja": self.pianist_thought_bubble_ja,
             "events": copy.deepcopy(self.latest_events),
+            "prev_events": copy.deepcopy(self.prev_generation_events),
             "timestamp": time.time(),
         }
 
@@ -113,12 +135,18 @@ class SongTabState:
             self.latest_axes = dict(snap["latest_axes"])
         if snap.get("latest_human_scores"):
             self.latest_human_scores = dict(snap["latest_human_scores"])
+        if snap.get("latest_radar_6axis"):
+            self.latest_radar_6axis = dict(snap["latest_radar_6axis"])
+        if snap.get("work_metadata"):
+            self.work_metadata = copy.deepcopy(snap["work_metadata"])
         if snap.get("latest_inspiration"):
             self.latest_inspiration = copy.deepcopy(snap["latest_inspiration"])
         self.live_story_subtitle_ja = snap.get("live_story_subtitle_ja", self.live_story_subtitle_ja)
         self.pianist_thought_bubble_ja = snap.get("pianist_thought_bubble_ja", self.pianist_thought_bubble_ja)
         if snap.get("events"):
             self.latest_events = copy.deepcopy(snap["events"])
+        if "prev_events" in snap:
+            self.prev_generation_events = copy.deepcopy(snap.get("prev_events") or [])
 
 
 class MultiSongWorkspaceManager:
@@ -141,31 +169,32 @@ class MultiSongWorkspaceManager:
         defaults = [
             (
                 "tab_1",
-                "🎵 曲1: 情熱のロマン派カンタービレ",
+                "🎵 曲1: 蒼き星の奔流 Op.14",
                 "tchaikovsky_passion",
-                62,
+                58,
                 -0.52,
                 0.76,
             ),
             (
                 "tab_2",
-                "🎵 曲2: 活発に跳ねるスケルツォ",
+                "🎵 曲2: 華麗なる円舞曲 Op.21",
                 "vivace_scherzando",
-                67,
+                62,
                 0.76,
                 0.80,
             ),
             (
                 "tab_3",
-                "🎵 曲3: 静かな夜の透明なレガート",
+                "🎵 曲3: 夜想の銀雫 Op.9",
                 "night_nocturne",
                 61,
                 -0.82,
                 0.38,
             ),
         ]
-        for tid, title, char_tag, tonic, ex, ey in defaults:
+        for idx, (tid, title, char_tag, tonic, ex, ey) in enumerate(defaults):
             g = MusicalGenome(generation=1, expression_x=ex, expression_y=ey)
+            work_meta = HumanReferenceTeacher.generate_meta_director_work_plan(idx, char_tag)
             tab = SongTabState(
                 tab_id=tid,
                 title=title,
@@ -174,6 +203,7 @@ class MultiSongWorkspaceManager:
                 expression_x=ex,
                 expression_y=ey,
                 elite_genome=g.to_dict(),
+                work_metadata=work_meta,
                 prev_bar_state={
                     "bar_index": 0,
                     "last_melody_note": tonic + 12,
@@ -208,7 +238,8 @@ class MultiSongWorkspaceManager:
     ) -> SongTabState:
         num = len(self.tabs) + len(self.closed_tabs_history) + 1
         tid = f"tab_{uuid.uuid4().hex[:6]}"
-        clean_title = title or f"🎵 曲{num}: 新しいオリジナル曲"
+        work_meta = HumanReferenceTeacher.generate_meta_director_work_plan(num - 1, character_tag)
+        clean_title = title or f"🎵 曲{num}: {work_meta['short_ja']} {work_meta['opus']}"
         g_dict = copy.deepcopy(elite_genome_dict) if elite_genome_dict else MusicalGenome(
             generation=1, expression_x=expression_x, expression_y=expression_y
         ).to_dict()
@@ -222,6 +253,7 @@ class MultiSongWorkspaceManager:
             pinned=pinned,
             pinned_events=copy.deepcopy(pinned_events) if pinned_events else None,
             elite_genome=g_dict,
+            work_metadata=work_meta,
             prev_bar_state={
                 "bar_index": 0,
                 "last_melody_note": tonic_midi + 12,
@@ -262,14 +294,18 @@ class MultiSongWorkspaceManager:
         tab: SongTabState,
         chunk_res: Dict[str, Any],
     ) -> None:
-        """Records undo point, generation scrubber snapshot, and updates A/B states."""
-        # Save previous state onto Undo stack before applying new generation
+        """Records undo point, generation scrubber snapshot, note diffs, and A/B states."""
         prev_snap = tab.make_snapshot_payload()
         if not tab.undo_stack or tab.undo_stack[-1]["generation"] != prev_snap["generation"]:
             tab.undo_stack.append(prev_snap)
             if len(tab.undo_stack) > self.MAX_UNDO:
                 tab.undo_stack = tab.undo_stack[-self.MAX_UNDO:]
             tab.redo_stack.clear()
+
+        prev_score = float(tab.latest_score)
+        prev_gen = int(tab.current_generation)
+        if tab.latest_events:
+            tab.prev_generation_events = copy.deepcopy(tab.latest_events)
 
         winner = chunk_res["winner"]
         gen = int(chunk_res["generation"])
@@ -282,10 +318,26 @@ class MultiSongWorkspaceManager:
         tab.best_score_ever = max(tab.best_score_ever, tab.latest_score)
         tab.latest_axes = dict(eval_res["axes"])
         tab.latest_human_scores = dict(eval_res.get("human_scores", tab.latest_human_scores))
+        if eval_res.get("radar_6axis"):
+            tab.latest_radar_6axis = dict(eval_res["radar_6axis"])
         tab.latest_inspiration = copy.deepcopy(eval_res.get("inspiration", {}))
         tab.live_story_subtitle_ja = eval_res.get("live_story_subtitle_ja", tab.live_story_subtitle_ja)
         tab.pianist_thought_bubble_ja = eval_res.get("pianist_thought_bubble_ja", tab.pianist_thought_bubble_ja)
         tab.latest_events = copy.deepcopy(winner["events"])
+
+        commentary = eval_res.get("commentary_ja", "")
+        if prev_gen != gen or not tab.revision_log:
+            tab.revision_log.append(
+                {
+                    "from_gen": prev_gen,
+                    "to_gen": gen,
+                    "from_score": round(prev_score, 1),
+                    "to_score": round(tab.latest_score, 1),
+                    "note_ja": commentary or tab.pianist_thought_bubble_ja,
+                    "timestamp": time.time(),
+                }
+            )
+            tab.revision_log = tab.revision_log[-24:]
 
         new_snap = tab.make_snapshot_payload()
         tab.generation_snapshots[gen] = new_snap
@@ -348,11 +400,12 @@ class MultiSongWorkspaceManager:
         try:
             raw = json.loads(src.read_text(encoding="utf-8"))
             loaded_tabs: Dict[str, SongTabState] = {}
+            valid_fields = set(SongTabState.__dataclass_fields__.keys())
             for tid, td in raw.get("tabs", {}).items():
-                # Convert string keys in generation_snapshots back to int
                 gs = {int(k): v for k, v in td.get("generation_snapshots", {}).items()}
                 td["generation_snapshots"] = gs
-                loaded_tabs[tid] = SongTabState(**td)
+                clean_td = {k: v for k, v in td.items() if k in valid_fields}
+                loaded_tabs[tid] = SongTabState(**clean_td)
             if loaded_tabs:
                 self.tabs = loaded_tabs
                 self.tab_order = [tid for tid in raw.get("tab_order", []) if tid in loaded_tabs]
@@ -367,10 +420,15 @@ class MultiSongWorkspaceManager:
         gens = sorted(active.generation_snapshots.keys()) or [active.current_generation]
         return {
             "active_tab_id": active.tab_id,
+            "work_metadata": copy.deepcopy(active.work_metadata),
+            "latest_radar_6axis": dict(active.latest_radar_6axis),
+            "revision_log": list(active.revision_log[-10:]),
             "tabs": [
                 {
                     "tab_id": self.tabs[tid].tab_id,
                     "title": self.tabs[tid].title,
+                    "work_title_ja": self.tabs[tid].work_metadata.get("title_ja", self.tabs[tid].title),
+                    "opus": self.tabs[tid].work_metadata.get("opus", ""),
                     "character_tag": self.tabs[tid].character_tag,
                     "pinned": self.tabs[tid].pinned,
                     "generation": self.tabs[tid].current_generation,

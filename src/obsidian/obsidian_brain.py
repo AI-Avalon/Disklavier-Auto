@@ -575,5 +575,56 @@ class ObsidianMusicalBrain:
                 else "",
             }
 
+    def get_in_app_knowledge_explorer(self) -> Dict[str, Any]:
+        """
+        In-App Musical Knowledge Graph & Evolution Note Explorer:
+        Returns the knowledge graph, phylogenetic evolution lineage, and full rendered
+        Markdown notes so the user never needs to leave the app to open Obsidian.
+        """
+        graph = self.get_knowledge_graph_snapshot()
+        recent_notes_full: List[Dict[str, Any]] = []
+        # Prioritize Hall of Fame, Dashboard, Discovery, then Motifs
+        ordered_nodes = sorted(
+            graph["nodes"],
+            key=lambda n: (
+                0 if n["category"] == "hall_of_fame" else (1 if n["category"] == "dashboard" else (2 if n["category"] == "discovery" else 3)),
+                -(n.get("score") or 0.0),
+            ),
+        )
+        for n in ordered_nodes[:16]:
+            note_obj = self.get_note_content(n["id"])
+            if note_obj:
+                recent_notes_full.append(
+                    {
+                        "id": n["id"],
+                        "title": n["title"],
+                        "category": n["category"],
+                        "score": n.get("score"),
+                        "midi_rel": note_obj.get("midi_rel"),
+                        "links": n.get("links", []),
+                        "markdown": note_obj["markdown"],
+                    }
+                )
+
+        # Build phylogenetic evolution tree summarizing progression across Hall of Fame & Motifs
+        phylo_tree: List[Dict[str, Any]] = []
+        for idx, rec in enumerate(list(self._hof_records[:12])):
+            phylo_tree.append(
+                {
+                    "rank": idx + 1,
+                    "generation": rec.get("generation", idx + 1),
+                    "score": rec.get("score", 85.0),
+                    "note_id": rec.get("note_id", ""),
+                    "title": rec.get("title", f"Generation {rec.get('generation', idx + 1)}"),
+                    "midi_rel": rec.get("midi_rel"),
+                }
+            )
+
+        return {
+            "graph": graph,
+            "phylogenetic_tree": phylo_tree,
+            "recent_notes_full": recent_notes_full,
+        }
+
     def close(self) -> None:
         self._running = False

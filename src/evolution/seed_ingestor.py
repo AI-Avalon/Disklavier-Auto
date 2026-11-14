@@ -128,6 +128,19 @@ class SeedMemoryPool:
     into an initial evolutionary seed memory pool (`seed_genome_pool.json`).
     """
 
+    ALL_COMPOSERS = (
+        "chopin",
+        "debussy",
+        "rachmaninoff",
+        "tchaikovsky",
+        "liszt",
+        "bach",
+        "faure",
+        "saint_saens",
+        "brahms",
+        "mendelssohn",
+    )
+
     def __init__(self, auto_ingest: bool = True) -> None:
         self.motifs: List[Dict[str, Any]] = []
         self.kb_metadata: Dict[str, Any] = {}

@@ -1,5 +1,5 @@
 {
-  "total_motifs": 11,
+  "total_motifs": 14,
   "motifs": [
     {
       "motif_id": "motif_bach_suite1_bwv1007",
@@ -358,6 +358,62 @@
       ]
     },
     {
+      "motif_id": "motif_liszt_1850_liebestraum_campanella_cascade",
+      "title": "Liebestraum & Crystal Campanella Cascade (Op. 62 in A-flat Major)",
+      "composer": "Franz Liszt",
+      "key": "A-flat Major",
+      "tonic_midi": 60,
+      "scale_intervals": [
+        0,
+        2,
+        3,
+        5,
+        7,
+        8,
+        10
+      ],
+      "melody_pitches": [
+        60,
+        63,
+        65,
+        68,
+        70,
+        67
+      ],
+      "interval_vector": [
+        0,
+        3,
+        5,
+        8,
+        10,
+        7
+      ],
+      "rhythm_ratios": [
+        8.1,
+        2.37,
+        2.39,
+        2.12,
+        1.0,
+        2.88,
+        2.61,
+        2.64
+      ],
+      "contrary_motion_ratio": 0.45,
+      "half_pedal_profile": {
+        "mean_cc64": 67,
+        "min_cc64": 18,
+        "max_cc64": 68
+      },
+      "voicing_spread": 71,
+      "voice_leading_pattern": "Singing Tenor Theme + Sparkling Upper Pearl Ornament & Cadenza Cascade",
+      "source_file": "data/imslp_midi/liszt_1850_liebestraum_campanella_cascade.mid",
+      "tags": [
+        "imslp",
+        "seed_memory",
+        "liszt"
+      ]
+    },
+    {
       "motif_id": "motif_mendelssohn_op109",
       "title": "Lied ohne Worte (Song Without Words), Op. 109 in D Major",
       "composer": "Felix Mendelssohn",
@@ -413,6 +469,66 @@
         "imslp",
         "seed_memory",
         "mendelssohn"
+      ]
+    },
+    {
+      "motif_id": "motif_rachmaninoff_1901_prelude_g_minor_bells",
+      "title": "Cathedral Bell Counterpoint (Prelude Motif, Op. 23 in G Minor)",
+      "composer": "Sergei Rachmaninoff",
+      "key": "G Minor",
+      "tonic_midi": 50,
+      "scale_intervals": [
+        0,
+        2,
+        3,
+        5,
+        7,
+        8,
+        10
+      ],
+      "melody_pitches": [
+        38,
+        70,
+        72,
+        74,
+        36,
+        77,
+        75,
+        74
+      ],
+      "interval_vector": [
+        0,
+        32,
+        34,
+        36,
+        -2,
+        39,
+        37,
+        36
+      ],
+      "rhythm_ratios": [
+        7.94,
+        3.58,
+        3.36,
+        1.0,
+        7.94,
+        7.94,
+        3.58,
+        3.36
+      ],
+      "contrary_motion_ratio": 0.55,
+      "half_pedal_profile": {
+        "mean_cc64": 66,
+        "min_cc64": 18,
+        "max_cc64": 68
+      },
+      "voicing_spread": 52,
+      "voice_leading_pattern": "Wide Bell Resonance + Singing Tenor Obligato + Romantic Climax",
+      "source_file": "data/imslp_midi/rachmaninoff_1901_prelude_g_minor_bells.mid",
+      "tags": [
+        "imslp",
+        "seed_memory",
+        "rachmaninoff"
       ]
     },
     {
@@ -473,6 +589,66 @@
         "imslp",
         "seed_memory",
         "saint"
+      ]
+    },
+    {
+      "motif_id": "motif_tchaikovsky_1893_pathetique_cantabile",
+      "title": "Cantabile Pathétique (Tchaikovsky Concerto & Symphony Motif, Op. 74)",
+      "composer": "Pyotr Ilyich Tchaikovsky",
+      "key": "B Minor",
+      "tonic_midi": 59,
+      "scale_intervals": [
+        0,
+        2,
+        3,
+        5,
+        7,
+        8,
+        10
+      ],
+      "melody_pitches": [
+        47,
+        66,
+        67,
+        74,
+        45,
+        73,
+        71,
+        69
+      ],
+      "interval_vector": [
+        0,
+        19,
+        20,
+        27,
+        -2,
+        26,
+        24,
+        22
+      ],
+      "rhythm_ratios": [
+        7.19,
+        6.64,
+        4.86,
+        10.05,
+        8.84,
+        8.86,
+        1.0,
+        10.05
+      ],
+      "contrary_motion_ratio": 0.45,
+      "half_pedal_profile": {
+        "mean_cc64": 64,
+        "min_cc64": 18,
+        "max_cc64": 66
+      },
+      "voicing_spread": 49,
+      "voice_leading_pattern": "Passionate 6th/8th Cantabile Leaps + Chromatic Inner Obligato",
+      "source_file": "data/imslp_midi/tchaikovsky_1893_pathetique_cantabile.mid",
+      "tags": [
+        "imslp",
+        "seed_memory",
+        "tchaikovsky"
       ]
     },
     {

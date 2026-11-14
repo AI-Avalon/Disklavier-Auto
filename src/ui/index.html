@@ -477,17 +477,81 @@
       font-size: 0.88rem;
     }
 
-    dialog#qr-dialog {
+    dialog#qr-dialog, dialog#explorer-dialog {
       background: var(--bg-elevated);
       color: var(--text);
       border: 1px solid var(--accent);
       border-radius: 18px;
       padding: 20px;
-      max-width: 420px;
-      text-align: center;
-      box-shadow: 0 24px 64px rgba(0, 0, 0, 0.75);
+      max-width: 960px;
+      width: 92vw;
+      box-shadow: 0 24px 64px rgba(0, 0, 0, 0.78);
     }
-    dialog#qr-dialog::backdrop { background: rgba(0, 0, 0, 0.72); }
+    dialog#qr-dialog { max-width: 420px; text-align: center; }
+    dialog:modal { overscroll-behavior: contain; }
+    dialog::backdrop {
+      background: rgba(0, 0, 0, 0.74);
+      overflow: hidden;
+      overscroll-behavior: contain;
+    }
+
+    .work-banner {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      flex-wrap: wrap;
+      gap: 10px;
+      padding: 10px 14px;
+      background: linear-gradient(135deg, rgba(167, 139, 250, 0.14), rgba(245, 158, 11, 0.10));
+      border: 1px solid rgba(245, 158, 11, 0.38);
+      border-radius: 12px;
+      margin-bottom: 10px;
+    }
+    .work-title-ja { font-size: 1.06rem; font-weight: 800; color: #fef3c7; }
+    .work-title-eu { font-size: 0.78rem; color: var(--text-dim); font-style: italic; }
+    .form-pills { display: flex; flex-wrap: wrap; gap: 5px; }
+    .form-pill {
+      padding: 3px 8px;
+      border-radius: 999px;
+      font-size: 0.74rem;
+      font-weight: 700;
+      background: var(--surface);
+      border: 1px solid var(--border-strong);
+      color: var(--text-dim);
+    }
+    .form-pill.active {
+      background: var(--accent-soft);
+      border-color: var(--accent);
+      color: #fde68a;
+    }
+    .mutation-caption {
+      margin-top: 8px;
+      padding: 7px 10px;
+      border-radius: 9px;
+      background: rgba(245, 158, 11, 0.10);
+      border: 1px solid rgba(245, 158, 11, 0.35);
+      font-size: 0.81rem;
+      color: #fef3c7;
+    }
+    .stage-act-strip {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 6px;
+      align-items: center;
+      margin-top: 8px;
+    }
+    .md-viewer-box {
+      background: #0a0f18;
+      border: 1px solid var(--border-strong);
+      border-radius: 10px;
+      padding: 12px;
+      font-size: 0.82rem;
+      line-height: 1.55;
+      white-space: pre-wrap;
+      max-height: 360px;
+      overflow: auto;
+      color: #e2e8f0;
+    }
 
     .toast {
       position: fixed;
@@ -530,6 +594,7 @@
       <div class="action-cluster">
         <button class="btn btn-primary" id="btn-stream-toggle" onclick="postAction('/api/virtuoso/toggle_stream', {})">⏯️ 自動演奏 ON/OFF</button>
         <button class="btn" id="btn-sound-toggle" onclick="postAction('/api/sound/enable', {})">🔊 ピアノ音出し</button>
+        <button class="btn btn-gold" onclick="openExplorerModal()">🧠 イン・アプリ知識グラフ</button>
         <button class="btn btn-gold" onclick="postAction('/api/timemachine/rescue_30s', {})">⏪ 今の30秒前を救出！</button>
         <button class="btn" onclick="postAction('/api/virtuoso/mood_change', {})">✨ 雰囲気チェンジ</button>
         <button class="btn" onclick="postAction('/api/virtuoso/spark', {})">⚡ ひらめきスパーク</button>
@@ -564,20 +629,41 @@
 
     <!-- MAIN VIEW TABS (SINGLE ROW, MANDATORY INITIAL ARIA-SELECTED & HIDDEN PANELS) -->
     <nav class="main-tablist" role="tablist" aria-label="スタジオ切り替え" focusgroup="tablist nomemory">
-      <button id="vtab-stage" class="main-tab" role="tab" aria-selected="true" aria-controls="vpanel-stage" focusgroupstart>🎹 ライブ演奏＆五線譜</button>
-      <button id="vtab-evolve" class="main-tab" role="tab" aria-selected="false" aria-controls="vpanel-evolve">🧬 AIの自己進化ラボ</button>
-      <button id="vtab-cello" class="main-tab" role="tab" aria-selected="false" aria-controls="vpanel-cello">🎻 チェロ共演＆名曲</button>
-      <button id="vtab-notes" class="main-tab" role="tab" aria-selected="false" aria-controls="vpanel-notes">📓 記憶ノート＆リクエスト</button>
-      <button id="vtab-features" class="main-tab" role="tab" aria-selected="false" aria-controls="vpanel-features">✨ 全100機能＆健康診断</button>
+      <button id="vtab-stage" class="main-tab" role="tab" aria-selected="true" focusgroupstart>🎹 ライブ演奏＆生きた五線譜</button>
+      <button id="vtab-evolve" class="main-tab" role="tab" aria-selected="false">🧬 AIの自己進化＆6軸レーダー</button>
+      <button id="vtab-cello" class="main-tab" role="tab" aria-selected="false">🎻 チェロ共演＆IMSLP深層解析</button>
+      <button id="vtab-notes" class="main-tab" role="tab" aria-selected="false">📓 イン・アプリ進化ノート＆知識グラフ</button>
+      <button id="vtab-features" class="main-tab" role="tab" aria-selected="false">✨ 全100機能＆健康診断</button>
     </nav>
 
     <!-- ================================================================ -->
-    <!-- PANEL 1: LIVE PERFORMANCE & GRAND STAFF STAGE                    -->
+    <!-- PANEL 1: LIVE PERFORMANCE & LIVING GRAND STAFF STAGE             -->
     <!-- ================================================================ -->
     <section id="vpanel-stage" role="tabpanel" aria-labelledby="vtab-stage">
+      <!-- Meta-AI Poetic Work Title Banner + 5 Formal Sections -->
+      <div class="work-banner">
+        <div>
+          <div id="work-title-ja" class="work-title-ja">『幻想曲 変ロ短調「蒼き星の奔流」Op.14』</div>
+          <div id="work-title-eu" class="work-title-eu">Fantaisie en si bémol mineur « Torrent de l'Étoile Azurée », Op. 14</div>
+        </div>
+        <div id="formal-sections-bar" class="form-pills">
+          <span class="form-pill active">Ⅰ. 静謐な序奏</span>
+          <span class="form-pill">Ⅱ. 主題提示</span>
+          <span class="form-pill">Ⅲ. 対位法的展開</span>
+          <span class="form-pill">Ⅳ. 超絶技巧クライマックス</span>
+          <span class="form-pill">Ⅴ. 余韻のコーダ</span>
+        </div>
+      </div>
+
       <div class="story-hero">
         <div id="live-story-subtitle" class="story-subtitle">新しいオリジナルの物語を紡ぎ始めています…</div>
         <div id="pianist-thought-bubble" class="thought-bubble">💬 AIピアニスト: レガートの響きとメロディの輪郭を探しています</div>
+        <div class="stage-act-strip">
+          <span style="font-size:0.78rem; font-weight:800; color:#fde68a;">🎬 コンサートステージ実演スクリプト:</span>
+          <button class="btn btn-gold" onclick="triggerStageAct(1)">第1幕: 原石→自己進化(A/B)</button>
+          <button class="btn btn-blue" onclick="triggerStageAct(2)">第2幕: パッセージ対話＆超絶変奏</button>
+          <button class="btn btn-primary" onclick="triggerStageAct(3)">第3幕: 88鍵カスケード＆倍音共鳴</button>
+        </div>
       </div>
 
       <div class="panel-grid-stage">
@@ -608,6 +694,28 @@
 
           <div class="card">
             <div class="card-hd">
+              <span class="card-title">🤝 双方向パッセージ対話＆超絶技巧</span>
+              <span class="badge badge-ok">MIDI In / C519ML対応</span>
+            </div>
+            <div style="font-size:0.78rem; color:var(--text-dim); margin-bottom:8px;">
+              鍵盤やチェロで弾いたフレーズを瞬時に解析し、自動演奏ピアノならではの対位法・88鍵カスケードで弾き返します。
+            </div>
+            <div style="display:flex; flex-direction:column; gap:6px; margin-bottom:10px;">
+              <button class="btn btn-blue" onclick="sendPassageReply('contrapuntal_reply')">① 美しい対位法的アンサーで返す</button>
+              <button class="btn btn-gold" onclick="sendPassageReply('liszt_rachmaninoff_virtuoso')">② リスト＆ラフマニノフ風 超絶技巧変奏</button>
+              <button class="btn btn-primary" onclick="sendPassageReply('evolve_symphonic_masterwork')">③ このパッセージを第1主題に大曲へ進化</button>
+            </div>
+            <div class="card-title" style="font-size:0.84rem; margin-bottom:6px;">🌟 自動演奏ピアノ限定の超絶表現</div>
+            <div class="preset-grid">
+              <button class="btn" onclick="triggerVirtuosoExpr('4hand_layering')">👐 4手立体ポリフォニー</button>
+              <button class="btn" onclick="triggerVirtuosoExpr('88key_cascade')">🌊 88鍵カスケード</button>
+              <button class="btn" onclick="triggerVirtuosoExpr('silent_overtone_halo')">🔔 Vel 1倍音共鳴</button>
+              <button class="btn" onclick="triggerVirtuosoExpr('octave_tremolo')">⚡ オクターブ連打</button>
+            </div>
+          </div>
+
+          <div class="card">
+            <div class="card-hd">
               <span class="card-title">✨ 今のひらめきの源泉</span>
               <span id="inspiration-top" class="badge badge-gold">自発ブレンド</span>
             </div>
@@ -616,18 +724,22 @@
           </div>
         </div>
 
-        <!-- Right Stage: Sheet Music View + 88-Key Piano + Wave & Pedal -->
+        <!-- Right Stage: Living Score View + 88-Key Piano + Wave & Pedal -->
         <div style="display:flex; flex-direction:column; gap:12px;">
           <div class="card">
             <div class="card-hd">
-              <span class="card-title">🎼 リアルタイム五線譜（楽譜ビュー）</span>
+              <span class="card-title">🎼 Living Score View（目の前で書き換わる生きた五線譜）</span>
               <div style="display:flex; gap:6px; flex-wrap:wrap;">
+                <span id="score-mutated-badge" class="badge badge-gold">変化音符 0音</span>
                 <a class="btn" href="/api/export/midi" download>💾 MIDI保存</a>
                 <a class="btn" href="/api/export/musicxml" download>🎼 楽譜(MusicXML)</a>
                 <a class="btn" href="/api/export/wav" download>🔊 高音質WAV</a>
               </div>
             </div>
-            <canvas id="canvas-score" class="stage-canvas" width="980" height="230"></canvas>
+            <canvas id="canvas-score" class="stage-canvas" width="980" height="250"></canvas>
+            <div id="score-mutation-caption" class="mutation-caption">
+              ✨ 黄金色に光る音符がこの世代で書き換え・推敲された箇所です（主旋律の浮き出し＋チェロ音域の対旋律＋強弱記号 pp〜ff）
+            </div>
           </div>
 
           <div class="card">
@@ -648,7 +760,7 @@
     </section>
 
     <!-- ================================================================ -->
-    <!-- PANEL 2: SELF-EVOLUTION LAB (4 HUMAN SCORES & PARALLEL TREE)     -->
+    <!-- PANEL 2: SELF-EVOLUTION LAB (6-AXIS RADAR & AI CRITIC STREAM)    -->
     <!-- ================================================================ -->
     <section id="vpanel-evolve" role="tabpanel" aria-labelledby="vtab-evolve" hidden>
       <div class="score-cards-4">
@@ -674,7 +786,15 @@
         </div>
       </div>
 
-      <div class="panel-grid-2">
+      <div class="panel-grid-2" style="margin-bottom:12px;">
+        <div class="card">
+          <div class="card-hd">
+            <span class="card-title">🧭 6軸・100点満点 音楽品質レーダーチャート</span>
+            <span id="radar6-total-badge" class="badge badge-gold">総合 --点</span>
+          </div>
+          <canvas id="canvas-radar6" class="stage-canvas" width="600" height="270"></canvas>
+        </div>
+
         <div class="card">
           <div class="card-hd">
             <span class="card-title">📈 世代ごとの成長グラフ</span>
@@ -683,24 +803,31 @@
               <button class="btn btn-primary" onclick="runHyperEvolve()">⚡ 裏で一気に50世代進化させる</button>
             </div>
           </div>
-          <canvas id="canvas-evo" class="stage-canvas" width="660" height="220"></canvas>
+          <canvas id="canvas-evo" class="stage-canvas" width="600" height="235"></canvas>
           <div id="hyper-summary" style="font-size:0.82rem; color:var(--text-dim); margin-top:8px;"></div>
         </div>
+      </div>
 
+      <div class="panel-grid-2">
         <div class="card">
           <div class="card-hd">
             <span class="card-title">🌿 同時生成された作曲候補たちの比較</span>
             <span id="gen-count-badge" class="badge badge-gold">第1世代</span>
           </div>
-          <div id="branch-list" style="display:flex; flex-direction:column; gap:7px; margin-bottom:10px;"></div>
-          <div class="card-title" style="font-size:0.86rem; margin-bottom:4px;">📝 AIの成長ひとりごとログ</div>
-          <div id="critic-logs" style="font-size:0.8rem; color:var(--text-dim); max-height:140px; overflow:auto; background:#0b0f18; padding:8px; border-radius:8px;"></div>
+          <div id="branch-list" style="display:flex; flex-direction:column; gap:7px;"></div>
+        </div>
+
+        <div class="card">
+          <div class="card-hd">
+            <span class="card-title">📝 AI Composer's Mind & Critic Stream（推敲とダメ出しの記録）</span>
+          </div>
+          <div id="critic-logs" style="font-size:0.83rem; color:var(--text); max-height:220px; overflow:auto; background:#0b0f18; padding:10px; border-radius:10px; display:flex; flex-direction:column; gap:6px;"></div>
         </div>
       </div>
     </section>
 
     <!-- ================================================================ -->
-    <!-- PANEL 3: CELLO DUET & IMSLP MASTERWORKS                           -->
+    <!-- PANEL 3: CELLO DUET & IMSLP DEEP DNA                             -->
     <!-- ================================================================ -->
     <section id="vpanel-cello" role="tabpanel" aria-labelledby="vtab-cello" hidden>
       <div class="panel-grid-2">
@@ -718,23 +845,25 @@
             <button class="btn" onclick="postAction('/api/session/proxy_demo', {style:'faure'})">🎼 代理チェロと自動共演テスト</button>
             <button class="btn" onclick="postAction('/api/safety/test_note', {})">🎹 確認テスト音</button>
           </div>
-          <div id="cello-live-readout" style="background:#0c111b; border:1px solid var(--border); border-radius:10px; padding:10px; font-weight:700;">
+          <div id="cello-live-readout" style="background:#0c111b; border:1px solid var(--border); border-radius:10px; padding:10px; font-weight:700; margin-bottom:10px;">
             検出中の音高: 待機中
           </div>
+          <div class="card-title" style="font-size:0.9rem; margin-bottom:6px;">🧬 IMSLP 名曲群の深層音楽学 DNA 解析結果</div>
+          <div id="imslp-dna-box" style="display:flex; flex-direction:column; gap:6px; max-height:240px; overflow:auto;"></div>
         </div>
 
         <div class="card">
           <div class="card-hd">
-            <span class="card-title">🏛️ 巨匠レパートリー安全演奏コレクション</span>
+            <span class="card-title">🏛️ 巨匠レパートリー安全演奏コレクション（全11曲）</span>
             <span class="badge badge-ok">実機保護最適化済</span>
           </div>
-          <div id="imslp-list" style="display:flex; flex-direction:column; gap:8px;"></div>
+          <div id="imslp-list" style="display:flex; flex-direction:column; gap:8px; max-height:460px; overflow:auto;"></div>
         </div>
       </div>
     </section>
 
     <!-- ================================================================ -->
-    <!-- PANEL 4: OBSIDIAN NOTES & HUMAN DIRECTIVES                       -->
+    <!-- PANEL 4: IN-APP KNOWLEDGE GRAPH, MARKDOWN VIEWER & DIRECTIVES    -->
     <!-- ================================================================ -->
     <section id="vpanel-notes" role="tabpanel" aria-labelledby="vtab-notes" hidden>
       <div class="panel-grid-2">
@@ -746,19 +875,23 @@
           <p style="font-size:0.82rem; color:var(--text-dim); margin-top:0;">
             例:「もっとレガートで歌って」「情熱的に盛り上げて」「速く駆け抜けて」「静かなペダルで」のように日本語で指示を書けます。
           </p>
-          <textarea id="directives-input" rows="5" placeholder="例: レガートを極限まで滑らかにして、ときどき情熱的に盛り上がってください"></textarea>
+          <textarea id="directives-input" rows="4" placeholder="例: レガートを極限まで滑らかにして、ときどき情熱的に盛り上がってください"></textarea>
           <div style="margin-top:12px;">
-            <div class="card-title" style="font-size:0.88rem; margin-bottom:6px;">🏆 殿堂入りベスト演奏アーカイブ</div>
+            <div class="card-title" style="font-size:0.88rem; margin-bottom:6px;">🏆 進化の系統樹 ＆ 殿堂入りアーカイブ</div>
             <div id="hof-list" style="display:flex; flex-direction:column; gap:6px;"></div>
           </div>
         </div>
 
         <div class="card">
           <div class="card-hd">
-            <span class="card-title">🕸️ 記憶ネットワーク (Obsidian 知識マップ)</span>
-            <button class="btn" onclick="loadObsidianGraph()">🔄 最新化</button>
+            <span class="card-title">🕸️ イン・アプリ音楽知識グラフ（外部Obsidian不要）</span>
+            <div style="display:flex; gap:6px;">
+              <button class="btn" onclick="loadObsidianGraph()">🔄 最新化</button>
+              <button class="btn btn-gold" onclick="openExplorerModal()">📖 全進化ノートを開く</button>
+            </div>
           </div>
-          <canvas id="canvas-graph" class="stage-canvas" width="640" height="280"></canvas>
+          <canvas id="canvas-graph" class="stage-canvas" width="640" height="240" style="margin-bottom:10px;"></canvas>
+          <div id="inline-note-preview" class="md-viewer-box" style="max-height:180px;">ノードまたは「全進化ノートを開く」を押すとAIの作曲思考ノートをここで読めます。</div>
         </div>
       </div>
     </section>
@@ -790,15 +923,36 @@
     </section>
   </div>
 
+  <!-- IN-APP MUSICAL KNOWLEDGE GRAPH & EVOLUTION NOTE VIEWER MODAL -->
+  <dialog id="explorer-dialog" aria-labelledby="obs-dlg-title">
+    <div class="card-hd" style="margin-bottom:12px;">
+      <div>
+        <h3 id="obs-dlg-title" style="margin:0; color:var(--accent-bright);">🧠 イン・アプリ音楽知識グラフ ＆ 進化思考ノートビューア</h3>
+        <div style="font-size:0.8rem; color:var(--text-dim);">obsidian_vault/ の思考ログ・進化の系統樹・採用理由を外部アプリを開かずリアルタイム閲覧できます</div>
+      </div>
+      <button class="btn" onclick="document.getElementById('explorer-dialog').close()" autofocus>✕ 閉じる</button>
+    </div>
+    <div class="panel-grid-2">
+      <div>
+        <div style="font-weight:800; margin-bottom:6px;">🌲 保存された思考ノート・系統樹一覧</div>
+        <div id="explorer-notes-list" style="display:flex; flex-direction:column; gap:6px; max-height:360px; overflow:auto;"></div>
+      </div>
+      <div>
+        <div style="font-weight:800; margin-bottom:6px;">📝 ノート本文（Markdown ビュー）</div>
+        <div id="explorer-md-body" class="md-viewer-box">左のリストからノートを選択してください。</div>
+      </div>
+    </div>
+  </dialog>
+
   <!-- QR SMARTPHONE REMOTE MODAL -->
-  <dialog id="qr-dialog">
-    <h3 style="margin-top:0; color:var(--accent-bright);">📱 スマホ・iPad ライブコントローラー</h3>
+  <dialog id="qr-dialog" aria-labelledby="qr-dlg-title">
+    <h3 id="qr-dlg-title" style="margin-top:0; color:var(--accent-bright);">📱 スマホ・iPad ライブコントローラー</h3>
     <p style="font-size:0.84rem; color:var(--text-dim);">同じWi-FiにつないだスマホやiPadのカメラで読み取ると、手元から曲の切り替えや演奏操作ができます。</p>
     <div id="qr-svg-box" style="margin:12px auto; display:flex; justify-content:center;"></div>
     <div id="qr-url-text" style="font-family:monospace; font-size:0.86rem; background:#0b0f18; padding:8px; border-radius:8px; word-break:break-all;"></div>
     <div style="margin-top:12px; display:flex; justify-content:center; gap:8px;">
       <a id="qr-open-link" class="btn btn-blue" href="/remote" target="_blank">🔗 このブラウザで開く</a>
-      <button class="btn" onclick="document.getElementById('qr-dialog').close()">閉じる</button>
+      <button class="btn" onclick="document.getElementById('qr-dialog').close()" autofocus>閉じる</button>
     </div>
   </dialog>
 
@@ -814,7 +968,8 @@
         const selected = (t === tabBtn);
         t.setAttribute('aria-selected', String(selected));
         if (selected) t.setAttribute('focusgroupstart', ''); else t.removeAttribute('focusgroupstart');
-        const panel = document.getElementById(t.getAttribute('aria-controls'));
+        const panelId = t.id.replace('vtab-', 'vpanel-');
+        const panel = document.getElementById(panelId);
         if (panel) panel.hidden = !selected;
       });
       tabBtn.scrollIntoView({ block: 'nearest', inline: 'nearest' });
@@ -834,7 +989,7 @@
       toastEl.textContent = msg;
       toastEl.classList.add('show');
       clearTimeout(toastTimer);
-      toastTimer = setTimeout(() => toastEl.classList.remove('show'), 2800);
+      toastTimer = setTimeout(() => toastEl.classList.remove('show'), 3000);
     }
 
     async function postAction(path, body = {}) {
@@ -845,15 +1000,35 @@
           body: JSON.stringify(body)
         });
         const data = await res.json();
-        if (data.message_ja || data.message || data.summary) {
-          showToast(data.message_ja || data.message || data.summary);
-        }
+        const notice = data.explanation_ja || data.reply_explanation_ja || data.summary_ja || data.message_ja || data.message || data.summary;
+        if (notice) showToast(notice);
         if (data.virtuoso) renderVirtuoso(data.virtuoso);
+        else {
+          fetch('/api/virtuoso/status').then(r => r.json()).then(d => renderVirtuoso(d.virtuoso)).catch(() => {});
+        }
         return data;
       } catch (e) {
         showToast('通信に少し時間がかかっています…');
         return null;
       }
+    }
+
+    async function sendPassageReply(replyMode) {
+      showToast('🤝 パッセージを解析してヴィルトゥオーゾ応答を生成中...');
+      await postAction('/api/dialogue/passage_reply', { reply_mode: replyMode, source: 'piano_midi', play_now: true });
+      refreshSheetMusic(true);
+    }
+
+    async function triggerVirtuosoExpr(exprMode) {
+      await postAction('/api/studio/virtuoso_expression', { mode: exprMode, play_now: true });
+      refreshSheetMusic(true);
+    }
+
+    async function triggerStageAct(actNum) {
+      showToast(`🎬 第${actNum}幕のコンサート実演を開始します...`);
+      await postAction('/api/studio/stage_act', { act: actNum, play_now: true });
+      refreshSheetMusic(true);
+      loadObsidianGraph();
     }
 
     // -----------------------------------------------------------------------
@@ -1013,7 +1188,7 @@
       try {
         const res = await fetch('/api/score/current');
         const score = await res.json();
-        const sig = `${score.notes.length}:${score.notes[0]?.pitch}:${score.notes[score.notes.length - 1]?.pitch}`;
+        const sig = `${score.notes.length}:${score.mutated_count}:${score.notes[0]?.pitch}:${score.notes[score.notes.length - 1]?.pitch}`;
         if (!force && sig === lastScoreEventsKey) return;
         lastScoreEventsKey = sig;
         drawGrandStaff(score);
@@ -1028,11 +1203,11 @@
       ctx.fillRect(0, 0, W, H);
 
       const leftPad = 68, rightPad = 24;
-      const lineGap = 11;
-      const trebleBottom = 88;  // E4 = diatonic step 30
-      const bassBottom = 188;   // G2 = diatonic step 18
+      const lineGap = 11.5;
+      const trebleBottom = 94;  // E4 = diatonic step 30
+      const bassBottom = 204;   // G2 = diatonic step 18
 
-      ctx.strokeStyle = 'rgba(148, 163, 184, 0.38)';
+      ctx.strokeStyle = 'rgba(148, 163, 184, 0.36)';
       ctx.lineWidth = 1;
       for (let i = 0; i < 5; i++) {
         const yt = trebleBottom - i * lineGap;
@@ -1041,64 +1216,94 @@
         ctx.beginPath(); ctx.moveTo(leftPad - 12, yb); ctx.lineTo(W - rightPad, yb); ctx.stroke();
       }
       // Left brace bar + clefs
-      ctx.strokeStyle = 'rgba(245, 158, 11, 0.7)';
+      ctx.strokeStyle = 'rgba(245, 158, 11, 0.72)';
       ctx.lineWidth = 2.5;
       ctx.beginPath(); ctx.moveTo(leftPad - 12, trebleBottom - 4 * lineGap); ctx.lineTo(leftPad - 12, bassBottom); ctx.stroke();
       ctx.fillStyle = '#fbbf24';
       ctx.font = 'bold 26px serif';
-      ctx.fillText('𝄞', 22, trebleBottom - 10);
+      ctx.fillText('𝄞', 20, trebleBottom - 10);
       ctx.fillStyle = '#38bdf8';
       ctx.font = 'bold 24px serif';
-      ctx.fillText('𝄢', 24, bassBottom - 14);
+      ctx.fillText('𝄢', 22, bassBottom - 14);
 
       const notes = (score && score.notes) || [];
-      const usableW = W - leftPad - rightPad - 20;
+      const usableW = W - leftPad - rightPad - 24;
       let prevMelX = null, prevMelY = null;
+      const reasons = new Set();
+
+      // Dynamic markings (pp..ff)
+      (score.dynamic_markings || []).forEach(dm => {
+        const dx = leftPad + 16 + dm.x_norm * usableW;
+        ctx.fillStyle = '#f472b6';
+        ctx.font = 'italic bold 12px serif';
+        ctx.fillText(dm.label, dx, trebleBottom + 28);
+      });
 
       notes.forEach(n => {
-        const x = leftPad + 14 + n.x_norm * usableW;
+        const x = leftPad + 16 + n.x_norm * usableW;
         const isTreble = n.staff === 'treble';
         const refStep = isTreble ? 30 : 18;
         const baseLineY = isTreble ? trebleBottom : bassBottom;
         const y = baseLineY - (n.diatonic_step - refStep) * (lineGap * 0.5);
-        const clampY = Math.max(18, Math.min(H - 18, y));
+        const clampY = Math.max(20, Math.min(H - 18, y));
 
-        // C4 middle ledger line if close
         if (Math.abs(n.diatonic_step - 28) === 0) {
           ctx.strokeStyle = 'rgba(248, 250, 252, 0.65)';
           ctx.lineWidth = 1.2;
           ctx.beginPath(); ctx.moveTo(x - 10, clampY); ctx.lineTo(x + 10, clampY); ctx.stroke();
         }
 
-        // Color by voice role
-        const col = n.role === 'melody' ? '#fbbf24' : (n.role === 'bass' ? '#38bdf8' : '#34d399');
-        ctx.fillStyle = col;
-        ctx.beginPath();
-        ctx.ellipse(x, clampY, 5.5, 4, -0.25, 0, Math.PI * 2);
-        ctx.fill();
+        const isCello = n.staff_layer === 'cello_counter';
+        const isHalo = n.articulation === 'halo';
+        const col = isHalo
+          ? '#c4b5fd'
+          : (n.role === 'melody' ? '#fbbf24' : (isCello ? '#34d399' : (n.role === 'bass' ? '#38bdf8' : '#94a3b8')));
 
-        // Stem
-        ctx.strokeStyle = col;
-        ctx.lineWidth = 1.3;
-        ctx.beginPath();
-        if (n.diatonic_step > refStep + 4) { ctx.moveTo(x - 5, clampY); ctx.lineTo(x - 5, clampY + 24); }
-        else { ctx.moveTo(x + 5, clampY); ctx.lineTo(x + 5, clampY - 24); }
-        ctx.stroke();
+        // Highlight mutated / refined notes in luminous aura
+        if (n.mutated) {
+          ctx.save();
+          ctx.strokeStyle = isCello ? 'rgba(52, 211, 153, 0.78)' : 'rgba(251, 191, 36, 0.78)';
+          ctx.lineWidth = 2;
+          ctx.beginPath();
+          ctx.arc(x, clampY, 10, 0, Math.PI * 2);
+          ctx.stroke();
+          ctx.restore();
+          if (n.mutation_reason_ja) reasons.add(n.mutation_reason_ja);
+        }
 
-        // Accidental
+        if (isHalo) {
+          // Diamond notehead for Velocity-1 silent sympathetic key
+          ctx.strokeStyle = '#c4b5fd';
+          ctx.lineWidth = 1.6;
+          ctx.beginPath();
+          ctx.moveTo(x, clampY - 5); ctx.lineTo(x + 6, clampY); ctx.lineTo(x, clampY + 5); ctx.lineTo(x - 6, clampY); ctx.closePath();
+          ctx.stroke();
+        } else {
+          ctx.fillStyle = col;
+          ctx.beginPath();
+          ctx.ellipse(x, clampY, 5.5, 4, -0.25, 0, Math.PI * 2);
+          ctx.fill();
+
+          ctx.strokeStyle = col;
+          ctx.lineWidth = 1.3;
+          ctx.beginPath();
+          if (n.diatonic_step > refStep + 4) { ctx.moveTo(x - 5, clampY); ctx.lineTo(x - 5, clampY + 24); }
+          else { ctx.moveTo(x + 5, clampY); ctx.lineTo(x + 5, clampY - 24); }
+          ctx.stroke();
+        }
+
         if (n.accidental) {
           ctx.fillStyle = '#f8fafc';
           ctx.font = '12px sans-serif';
           ctx.fillText(n.accidental, x - 14, clampY + 4);
         }
 
-        // Legato slur / Staccato dot
         if (n.articulation === 'staccato') {
           ctx.fillStyle = '#f43f5e';
           ctx.beginPath(); ctx.arc(x, clampY + 10, 2.2, 0, Math.PI * 2); ctx.fill();
         } else if (n.role === 'melody') {
           if (prevMelX !== null && Math.abs(x - prevMelX) < 120) {
-            ctx.strokeStyle = 'rgba(251, 191, 36, 0.55)';
+            ctx.strokeStyle = 'rgba(251, 191, 36, 0.58)';
             ctx.lineWidth = 1.5;
             ctx.beginPath();
             ctx.moveTo(prevMelX, prevMelY - 12);
@@ -1110,9 +1315,93 @@
         }
       });
 
-      ctx.fillStyle = '#94a3b8';
+      const titleStr = (score.work_metadata && score.work_metadata.title_ja) || score.title || '';
+      ctx.fillStyle = '#cbd5e1';
       ctx.font = 'bold 12px sans-serif';
-      ctx.fillText(`${score.title || ''}  |  ♩=${score.bpm || 82}`, leftPad, 16);
+      ctx.fillText(`${titleStr}  |  ♩=${score.bpm || 82}`, leftPad, 16);
+
+      const mutCount = Number(score.mutated_count || 0);
+      const badgeEl = document.getElementById('score-mutated-badge');
+      if (badgeEl) badgeEl.textContent = `変化ハイライト ${mutCount}音`;
+      const capEl = document.getElementById('score-mutation-caption');
+      if (capEl) {
+        const rList = Array.from(reasons);
+        capEl.textContent = rList.length
+          ? `✨ この世代の書き換え理由（${mutCount}音ハイライト）：${rList.slice(0, 3).join(' ／ ')}`
+          : '✨ 金色：主旋律（先行レガート）｜緑色：チェロ対旋律｜青色：バス｜紫◇：Velocity 1倍音共鳴';
+      }
+    }
+
+    function draw6AxisRadar(radar) {
+      const cv = document.getElementById('canvas-radar6');
+      if (!cv || !radar) return;
+      const ctx = cv.getContext('2d');
+      const W = cv.width, H = cv.height;
+      ctx.fillStyle = '#0b0f18';
+      ctx.fillRect(0, 0, W, H);
+
+      const axes = [
+        { key: 'melody_beauty', label: '旋律の美しさ' },
+        { key: 'harmonic_drama', label: '和声のドラマ' },
+        { key: 'counterpoint', label: '対位法' },
+        { key: 'human_realism', label: '人間らしい自然さ' },
+        { key: 'virtuoso_brilliance', label: '派手さ・超絶技巧' },
+        { key: 'disklavier_safety', label: 'Disklavier適性' },
+      ];
+      const cx = W * 0.5, cy = H * 0.52, R = Math.min(W, H) * 0.34;
+      const N = axes.length;
+
+      // Grid rings
+      [0.4, 0.65, 0.85, 1.0].forEach(scale => {
+        ctx.strokeStyle = 'rgba(148, 163, 184, 0.22)';
+        ctx.lineWidth = 1;
+        ctx.beginPath();
+        axes.forEach((_, i) => {
+          const ang = -Math.PI / 2 + (i * 2 * Math.PI) / N;
+          const x = cx + Math.cos(ang) * R * scale;
+          const y = cy + Math.sin(ang) * R * scale;
+          if (i === 0) ctx.moveTo(x, y); else ctx.lineTo(x, y);
+        });
+        ctx.closePath();
+        ctx.stroke();
+      });
+
+      // Radial spokes + labels
+      axes.forEach((ax, i) => {
+        const ang = -Math.PI / 2 + (i * 2 * Math.PI) / N;
+        const xEnd = cx + Math.cos(ang) * R;
+        const yEnd = cy + Math.sin(ang) * R;
+        ctx.strokeStyle = 'rgba(148, 163, 184, 0.25)';
+        ctx.beginPath(); ctx.moveTo(cx, cy); ctx.lineTo(xEnd, yEnd); ctx.stroke();
+
+        const val = Number(radar[ax.key] ?? 70);
+        const lx = cx + Math.cos(ang) * (R + 28);
+        const ly = cy + Math.sin(ang) * (R + 18);
+        ctx.fillStyle = '#e2e8f0';
+        ctx.font = 'bold 11px sans-serif';
+        ctx.textAlign = Math.cos(ang) > 0.25 ? 'left' : (Math.cos(ang) < -0.25 ? 'right' : 'center');
+        ctx.fillText(`${ax.label} ${Math.round(val)}`, lx, ly + 4);
+      });
+      ctx.textAlign = 'left';
+
+      // Score polygon
+      ctx.fillStyle = 'rgba(245, 158, 11, 0.28)';
+      ctx.strokeStyle = '#fbbf24';
+      ctx.lineWidth = 2.4;
+      ctx.beginPath();
+      axes.forEach((ax, i) => {
+        const val = Math.max(20, Math.min(100, Number(radar[ax.key] ?? 70))) / 100.0;
+        const ang = -Math.PI / 2 + (i * 2 * Math.PI) / N;
+        const x = cx + Math.cos(ang) * R * val;
+        const y = cy + Math.sin(ang) * R * val;
+        if (i === 0) ctx.moveTo(x, y); else ctx.lineTo(x, y);
+      });
+      ctx.closePath();
+      ctx.fill();
+      ctx.stroke();
+
+      const totEl = document.getElementById('radar6-total-badge');
+      if (totEl) totEl.textContent = `総合 ${radar.total_score_100 ?? '--'}点 / 100`;
     }
 
     function drawEvolutionChart(history) {
@@ -1147,6 +1436,21 @@
       if (!v) return;
       document.getElementById('live-story-subtitle').textContent = v.live_story_subtitle_ja || '';
       document.getElementById('pianist-thought-bubble').textContent = `💬 ${v.pianist_thought_bubble_ja || ''}`;
+
+      if (v.work_metadata) {
+        const wm = v.work_metadata;
+        const tJa = document.getElementById('work-title-ja');
+        const tEu = document.getElementById('work-title-eu');
+        if (tJa && wm.title_ja) tJa.textContent = `${wm.title_ja} — ${wm.key_ja || ''}`;
+        if (tEu && wm.title_eu) tEu.textContent = wm.title_eu;
+        const fBar = document.getElementById('formal-sections-bar');
+        if (fBar && Array.isArray(wm.formal_sections)) {
+          const activeSecIdx = Math.min(wm.formal_sections.length - 1, Math.floor(((v.current_generation || 1) - 1) / 2));
+          fBar.innerHTML = wm.formal_sections.map((s, idx) =>
+            `<span class="form-pill ${idx <= activeSecIdx ? 'active' : ''}">${s.label_ja}</span>`
+          ).join('');
+        }
+      }
 
       const gen = v.current_generation || 1;
       document.getElementById('gen-count-badge').textContent = `第${gen}世代`;
@@ -1188,13 +1492,14 @@
       }
       document.getElementById('inspiration-comment').textContent = insp.narrative_ja || insp.summary_ja || '';
 
-      // 4 Human Scores
+      // 4 Human Scores & 6-Axis Radar
       const hs = v.human_scores || {};
       document.getElementById('hs-legato').textContent = `${hs.legato_smoothness_100 ?? '--'}点`;
       document.getElementById('hs-vivace').textContent = `${hs.rhythmic_vivacity_100 ?? hs.vivace_energy_100 ?? '--'}点`;
       document.getElementById('hs-story').textContent = `${hs.melodic_story_100 ?? hs.melody_beauty_100 ?? '--'}点`;
       document.getElementById('hs-safety').textContent = `${hs.hardware_safety_100 ?? hs.hardware_kindness_100 ?? '--'}点`;
 
+      if (v.radar_6axis) draw6AxisRadar(v.radar_6axis);
       drawEvolutionChart(v.evolution_history);
 
       // Candidate Branches
@@ -1209,7 +1514,16 @@
         bBox.appendChild(el);
       });
       const logsEl = document.getElementById('critic-logs');
-      logsEl.innerHTML = (v.critic_logs || []).slice().reverse().map(l => `<div>• ${l}</div>`).join('');
+      const revLogs = v.revision_log || [];
+      if (revLogs.length) {
+        logsEl.innerHTML = revLogs.slice().reverse().map(r =>
+          `<div style="padding:5px 8px; background:#121a2a; border-left:3px solid #f59e0b; border-radius:6px;">
+             <strong>第${r.from_gen}世代（${r.from_score}点）→ 第${r.to_gen}世代（${r.to_score}点）</strong>：${r.note_ja}
+           </div>`
+        ).join('');
+      } else {
+        logsEl.innerHTML = (v.critic_logs || []).slice().reverse().map(l => `<div>• ${l}</div>`).join('');
+      }
 
       refreshSheetMusic();
     }
@@ -1346,12 +1660,68 @@
       document.getElementById('qr-dialog').showModal();
     }
 
+    async function openExplorerModal() {
+      document.getElementById('explorer-dialog').showModal();
+      try {
+        const res = await fetch('/api/obsidian/explorer');
+        const exp = await res.json();
+        const listEl = document.getElementById('explorer-notes-list');
+        const bodyEl = document.getElementById('explorer-md-body');
+        listEl.innerHTML = '';
+        const notes = exp.recent_notes_full || [];
+        notes.forEach((n, idx) => {
+          const item = document.createElement('div');
+          item.style.cssText = 'display:flex; justify-content:space-between; align-items:center; gap:6px; padding:7px 9px; background:#0d1320; border:1px solid #28344d; border-radius:9px; cursor:pointer;';
+          const scoreTag = n.score ? ` (${n.score}点)` : '';
+          item.innerHTML = `<div><span class="badge">${n.category}</span> <strong>${n.title}</strong>${scoreTag}</div>`;
+          item.onclick = () => {
+            bodyEl.textContent = n.markdown || '';
+            const previewEl = document.getElementById('inline-note-preview');
+            if (previewEl) previewEl.textContent = n.markdown || '';
+          };
+          if (n.midi_rel) {
+            const pBtn = document.createElement('button');
+            pBtn.className = 'btn btn-gold';
+            pBtn.textContent = '▶ 試聴';
+            pBtn.onclick = (ev) => { ev.stopPropagation(); postAction('/api/obsidian/play_hof', { midi_rel: n.midi_rel }); };
+            item.appendChild(pBtn);
+          }
+          listEl.appendChild(item);
+          if (idx === 0) bodyEl.textContent = n.markdown || '';
+        });
+      } catch (_) {}
+    }
+
+    async function loadImslpDna() {
+      try {
+        const res = await fetch('/api/imslp/dna');
+        const data = await res.json();
+        const dna = data.dna || {};
+        const box = document.getElementById('imslp-dna-box');
+        if (!box) return;
+        box.innerHTML = '';
+        (dna.masterwork_dna_profiles || []).forEach(p => {
+          const el = document.createElement('div');
+          el.style.cssText = 'padding:7px 9px; background:#0d1320; border:1px solid #28344d; border-radius:9px; font-size:0.79rem;';
+          const mc = p.melody_contour || {};
+          const hb = p.harmony_and_bass || {};
+          const pe = p.pianistic_ecriture || {};
+          el.innerHTML = `
+            <div style="font-weight:800; color:#fde68a;">${p.composer} — ${p.title}</div>
+            <div style="color:#9aa7c0;">6/8度跳躍率: ${Math.round((mc.passionate_leap_6th_8th_ratio || 0) * 100)}% | 反行対位率: ${Math.round((hb.contrary_motion_ratio || 0) * 100)}% | 音域: ${pe.arpeggio_span_semitones || 24}半音</div>
+            <div style="color:#cbd5e1;">${pe.composer_signature_summary_ja || ''}</div>
+          `;
+          box.appendChild(el);
+        });
+      } catch (_) {}
+    }
+
     async function loadImslpList() {
       const res = await fetch('/api/imslp/list');
       const data = await res.json();
       const box = document.getElementById('imslp-list');
       box.innerHTML = '';
-      (data.items || []).slice(0, 6).forEach(it => {
+      (data.items || []).forEach(it => {
         const row = document.createElement('div');
         row.style.cssText = 'display:flex; justify-content:space-between; align-items:center; padding:8px 10px; background:#0d1320; border:1px solid #28344d; border-radius:10px;';
         row.innerHTML = `<span><strong>${it.title || it.piece_id}</strong> (${it.composer || ''})</span>`;
@@ -1418,6 +1788,15 @@
         row.appendChild(b);
         hofBox.appendChild(row);
       });
+
+      // Populate inline Markdown note preview with the top note
+      try {
+        const expRes = await fetch('/api/obsidian/explorer');
+        const exp = await expRes.json();
+        const firstNote = (exp.recent_notes_full || [])[0];
+        const previewEl = document.getElementById('inline-note-preview');
+        if (previewEl && firstNote) previewEl.textContent = firstNote.markdown || '';
+      } catch (_) {}
     }
 
     // Initial bootstrap
@@ -1425,6 +1804,7 @@
     refreshSheetMusic(true);
     loadFeatureCatalog();
     loadImslpList();
+    loadImslpDna();
     loadObsidianGraph();
     runSystemDoctor();
     draw88Piano({});

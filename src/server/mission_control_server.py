@@ -944,11 +944,31 @@ async def api_virtuoso_character_preset(req: Dict[str, Any] = Body(default={})):
 
 
 @app.get("/api/score/current")
+@app.get("/api/features/sheet_music")
 async def api_score_current():
     snap = virtuoso_engine.get_telemetry_snapshot()
-    title = str(snap.get("active_motif", {}).get("title", "今のオリジナル曲"))
+    meta = snap.get("work_metadata") or {}
+    title = str(meta.get("title_ja") or snap.get("active_motif", {}).get("title", "今のオリジナル曲"))
     bpm = float(snap.get("elite_genome", {}).get("tempo_bpm", 82.0))
-    return build_sheet_music_payload(snap.get("latest_events", []), title=title, bpm=bpm)
+    return build_sheet_music_payload(
+        snap.get("latest_events", []),
+        title=title,
+        bpm=bpm,
+        prev_events=snap.get("prev_events"),
+        work_metadata=meta,
+    )
+
+
+@app.get("/api/state")
+async def api_state():
+    return {
+        "ok": True,
+        "virtuoso": virtuoso_engine.get_telemetry_snapshot(),
+        "safety": safety_guard.get_telemetry_snapshot(),
+        "twin": virtual_twin.get_telemetry_snapshot(),
+        "obsidian": obsidian_brain.get_knowledge_graph_snapshot(),
+        "studio": studio_state,
+    }
 
 
 def _get_export_dir() -> Path:
@@ -1047,9 +1067,61 @@ async def api_imslp_list():
     return {"ok": True, "items": studio_state.get("imslp_library", [])}
 
 
+@app.get("/api/imslp/dna")
+async def api_imslp_dna():
+    return {"ok": True, "dna": virtuoso_engine.imslp_dna}
+
+
+@app.post("/api/dialogue/passage_reply")
+async def api_dialogue_passage_reply(req: Dict[str, Any] = Body(default={})):
+    notes = req.get("notes")
+    if not notes:
+        # Fallback to live MIDI In buffer or C519ML Audio Monitor notes if empty
+        midi_in_phrase = safety_guard.get_human_recorded_phrase()
+        if midi_in_phrase:
+            notes = midi_in_phrase
+        else:
+            notes = [
+                {"note": 62, "velocity": 74, "duration_s": 0.44},
+                {"note": 65, "velocity": 78, "duration_s": 0.44},
+                {"note": 69, "velocity": 82, "duration_s": 0.52},
+                {"note": 74, "velocity": 86, "duration_s": 0.60},
+                {"note": 72, "velocity": 76, "duration_s": 0.48},
+            ]
+    reply_mode = str(req.get("reply_mode", "liszt_rachmaninoff_virtuoso"))
+    source = str(req.get("source", "piano_midi"))
+    play_now = bool(req.get("play_now", True))
+    return await asyncio.to_thread(
+        virtuoso_engine.apply_passage_reply,
+        notes,
+        reply_mode,
+        source,
+        play_now,
+    )
+
+
+@app.post("/api/studio/virtuoso_expression")
+async def api_studio_virtuoso_expression(req: Dict[str, Any] = Body(default={})):
+    mode = str(req.get("mode", "4hand_layering"))
+    play_now = bool(req.get("play_now", True))
+    return await asyncio.to_thread(virtuoso_engine.apply_virtuoso_expression, mode, play_now)
+
+
+@app.post("/api/studio/stage_act")
+async def api_studio_stage_act(req: Dict[str, Any] = Body(default={})):
+    act = int(req.get("act", 1))
+    play_now = bool(req.get("play_now", True))
+    return await asyncio.to_thread(virtuoso_engine.run_stage_act, act, play_now)
+
+
 @app.get("/api/obsidian/snapshot")
 async def api_obsidian_snapshot():
     return obsidian_brain.get_knowledge_graph_snapshot()
+
+
+@app.get("/api/obsidian/explorer")
+async def api_obsidian_explorer():
+    return obsidian_brain.get_in_app_knowledge_explorer()
 
 
 @app.get("/api/features/catalog")
