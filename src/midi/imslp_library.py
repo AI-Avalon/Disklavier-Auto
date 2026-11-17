@@ -1145,7 +1145,7 @@ def build_and_persist_imslp_library() -> List[Dict[str, Any]]:
                 "key": p["key"],
                 "tempo_bpm": p["tempo_bpm"],
                 "note_count": len(note_evs),
-                "midi_path": str(smf_path.relative_to(BASE_DIR)),
+                "midi_path": smf_path.relative_to(BASE_DIR).as_posix(),
                 "voice_leading_pattern": p["voice_leading_pattern"],
             }
         )

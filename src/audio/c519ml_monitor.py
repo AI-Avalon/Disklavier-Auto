@@ -129,13 +129,29 @@ class C519MLAudioMonitor:
             return None
         try:
             devices = sd.query_devices()
-            for idx, dev in enumerate(devices):
-                if (
-                    dev["max_input_channels"] > 0
-                    and self.device_keyword.lower() in dev["name"].lower()
-                ):
-                    self.device_name = dev["name"]
-                    return idx
+            hostapis = sd.query_hostapis()
+            def _hostapi_rank(hostapi_idx: int) -> int:
+                if 0 <= hostapi_idx < len(hostapis):
+                    hname = str(hostapis[hostapi_idx].get("name", "")).lower()
+                    if "wasapi" in hname:
+                        return 0
+                    if "asio" in hname:
+                        return 1
+                    if "core audio" in hname:
+                        return 0
+                return 2
+
+            matches = [
+                (idx, dev, _hostapi_rank(int(dev.get("hostapi", -1))))
+                for idx, dev in enumerate(devices)
+                if dev["max_input_channels"] > 0
+                and self.device_keyword.lower() in dev["name"].lower()
+            ]
+            if matches:
+                matches.sort(key=lambda item: item[2])
+                idx, dev, _ = matches[0]
+                self.device_name = dev["name"]
+                return idx
             # Fallback to default input device
             default_in = sd.default.device[0]
             if default_in is not None and default_in >= 0:

@@ -441,7 +441,7 @@ class VirtualDisklavierTwin:
             if out_idx is not None and out_idx >= 0:
                 self.audio_device_name = devices[out_idx]["name"]
             else:
-                self.audio_device_name = "Mac CoreAudio Default Output"
+                self.audio_device_name = "System Default Audio Output"
 
             self._stream = sd.OutputStream(
                 samplerate=self.SAMPLE_RATE,

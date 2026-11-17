@@ -24,8 +24,11 @@ Key Fixes & Capabilities:
 from __future__ import annotations
 
 import atexit
+import ctypes
 import heapq
 import math
+import os
+import sys
 import threading
 import time
 from collections import deque
@@ -235,6 +238,13 @@ class DisklavierSafetyGuard:
         self._running = True
         self._cv = threading.Condition(self._lock)
         self._jitter_samples_ms: deque = deque(maxlen=400)
+        self._win_timer_enabled = False
+        if sys.platform == "win32":
+            try:
+                ctypes.windll.winmm.timeBeginPeriod(1)
+                self._win_timer_enabled = True
+            except Exception as exc:
+                record_caught_exception("safety_guard.winmm_begin", exc)
 
         self.stats = {
             "total_notes_sent": 0,
@@ -284,13 +294,19 @@ class DisklavierSafetyGuard:
                 record_caught_exception("safety_guard.on_log", exc)
 
     def _connect_ports(self, preferred_name: Optional[str]) -> bool:
-        if not preferred_name:
+        env_port = os.environ.get("DISKLAVIER_MIDI_PORT", "").strip()
+        effective_pref = env_port or preferred_name
+        if not effective_pref:
             return False
+        candidates = [effective_pref.lower()]
+        if effective_pref.lower() == "disklavier":
+            candidates.extend(["yamaha", "usb-midi"])
         # 1. Connect MIDI Output
         try:
             available_out = mido.get_output_names()
             target_out = next(
-                (n for n in available_out if preferred_name.lower() in n.lower()), None
+                (n for cand in candidates for n in available_out if cand in n.lower()),
+                None,
             )
             if target_out:
                 self.outport = mido.open_output(target_out)
@@ -303,7 +319,8 @@ class DisklavierSafetyGuard:
         try:
             available_in = mido.get_input_names()
             target_in = next(
-                (n for n in available_in if preferred_name.lower() in n.lower()), None
+                (n for cand in candidates for n in available_in if cand in n.lower()),
+                None,
             )
             if target_in:
                 self.inport = mido.open_input(
@@ -1054,6 +1071,8 @@ class DisklavierSafetyGuard:
                         continue
                     if rem > 0.014:
                         self._cv.wait(timeout=min(0.050, rem - 0.012))
+                    elif sys.platform == "win32" and rem <= 0.0045:
+                        micro_target = next_due
                     elif rem > 0.0025:
                         self._cv.wait(timeout=0.0004)
                     else:
@@ -1061,8 +1080,13 @@ class DisklavierSafetyGuard:
                 else:
                     self._cv.wait(timeout=0.050)
             if micro_target is not None:
-                while self._running and time.perf_counter() < micro_target:
-                    time.sleep(0.0001)
+                if sys.platform == "win32":
+                    while self._running and time.perf_counter() < micro_target:
+                        if (micro_target - time.perf_counter()) > 0.0015:
+                            time.sleep(0)
+                else:
+                    while self._running and time.perf_counter() < micro_target:
+                        time.sleep(0.0001)
 
     def _run_thermal_watchdog(self, now: float) -> None:
         to_release = [
@@ -1099,7 +1123,7 @@ class DisklavierSafetyGuard:
                 )
             )
 
-    def emergency_panic(self) -> dict:
+    def emergency_panic(self, reason: str = "manual") -> dict:
         with self._lock:
             self._event_heap.clear()
             self.planned_key_off_time.clear()
@@ -1157,6 +1181,12 @@ class DisklavierSafetyGuard:
                 except Exception as exc:
                     record_caught_exception("safety_guard.close_inport", exc)
                 self.inport = None
+            if getattr(self, "_win_timer_enabled", False):
+                try:
+                    ctypes.windll.winmm.timeEndPeriod(1)
+                except Exception as exc:
+                    record_caught_exception("safety_guard.winmm_end", exc)
+                self._win_timer_enabled = False
 
     def apply_model_profile(self, profile_id: str) -> Dict[str, Any]:
         """Switch Disklavier physical safety limits to match the target hardware model profile."""

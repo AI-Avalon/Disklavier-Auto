@@ -196,7 +196,7 @@ class SeedMemoryPool:
                         "voice_leading_pattern": meta.get(
                             "voice_leading_pattern", "Classical Polyphonic Legato"
                         ),
-                        "source_file": str(midi_file.relative_to(BASE_DIR)),
+                        "source_file": midi_file.relative_to(BASE_DIR).as_posix(),
                         "tags": ["imslp", "seed_memory", piece_id.split("_")[0]],
                     }
                 )
@@ -221,7 +221,7 @@ class SeedMemoryPool:
                     "half_pedal_profile": stats["half_pedal_profile"],
                     "voicing_spread": stats["voicing_spread"],
                     "voice_leading_pattern": "Captured Dialogue & Syncopated Legato",
-                    "source_file": str(extra_mid.relative_to(BASE_DIR)),
+                    "source_file": extra_mid.relative_to(BASE_DIR).as_posix(),
                     "tags": ["archive", "telemetry_midi"],
                 }
             )

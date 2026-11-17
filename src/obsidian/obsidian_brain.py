@@ -505,14 +505,14 @@ class ObsidianMusicalBrain:
             self.discovery_dir,
             self.vault_dir,
         ):
-            rel = str((folder / f"{safe_id}.md").relative_to(self.vault_dir))
+            rel = (folder / f"{safe_id}.md").relative_to(self.vault_dir).as_posix()
             cand = resolve_safe_path(self.vault_dir, rel, (".md",))
             if cand is not None and cand.is_file():
                 txt = cand.read_text(encoding="utf-8", errors="ignore")
                 m_midi = re.search(r"midi_file:\s*\"([^\"]+)\"", txt)
                 return {
                     "id": safe_id,
-                    "path": str(cand.relative_to(BASE_DIR)),
+                    "path": cand.relative_to(BASE_DIR).as_posix(),
                     "markdown": txt,
                     "midi_rel": m_midi.group(1) if m_midi else None,
                 }
@@ -566,7 +566,7 @@ class ObsidianMusicalBrain:
                     "id": nid,
                     "title": m_title.group(1).strip() if m_title else nid,
                     "category": cat,
-                    "rel_path": str(md_path.relative_to(BASE_DIR)),
+                    "rel_path": md_path.relative_to(BASE_DIR).as_posix(),
                     "score": float(m_score.group(1)) if m_score else None,
                     "midi_rel": m_midi.group(1) if m_midi else None,
                     "links": sorted(set(links)),

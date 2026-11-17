@@ -1,3 +1,4 @@
+*.egg-info/
 .venv/
 __pycache__/
 *.py[cod]
@@ -14,3 +15,14 @@ data/telemetry/*.sqlite
 data/telemetry/*.sqlite-shm
 data/telemetry/*.sqlite-wal
 data/telemetry/*.png
+data/maestro-v3.0.0/
+data/midi/
+*.wav
+*.pt
+*.pth
+*.onnx
+*.bin
+*.gguf
+*.safetensors
+config.local.yaml
+

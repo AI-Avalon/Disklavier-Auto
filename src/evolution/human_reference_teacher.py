@@ -112,26 +112,35 @@ MASTER_LINEAGES: Dict[str, Dict[str, Any]] = {
 
 
 def compute_hardware_acceleration_info() -> Dict[str, Any]:
-    """Detects Apple Silicon CPU cores and optional Metal GPU (MPS) availability."""
+    """Detects CPU cores and GPU acceleration (CUDA / MPS / NumPy SIMD)."""
     cpu_cores = os.cpu_count() or 4
     arch = platform.machine()
     mps_available = False
-    backend_name = "Apple Accelerate SIMD (NumPy Vectorized)"
+    cuda_available = False
+    gpu_name = None
+    backend_name = "Multi-Core SIMD (NumPy Vectorized)"
     try:
         if importlib.util.find_spec("torch") is not None:
             import torch  # type: ignore
 
-            if hasattr(torch.backends, "mps") and torch.backends.mps.is_available():
+            if torch.cuda.is_available():
+                cuda_available = True
+                gpu_name = torch.cuda.get_device_name(0)
+                backend_name = f"NVIDIA CUDA ({gpu_name}) + Multi-Core CPU"
+            elif hasattr(torch.backends, "mps") and torch.backends.mps.is_available():
                 mps_available = True
                 backend_name = "Apple Metal GPU (PyTorch MPS) + Multi-Core CPU"
     except Exception as exc:
-        record_caught_exception("human_reference_teacher.mps_probe", exc)
+        record_caught_exception("human_reference_teacher.gpu_probe", exc)
         mps_available = False
+        cuda_available = False
 
     return {
         "arch": arch,
         "cpu_cores": cpu_cores,
         "worker_count": min(8, max(2, cpu_cores)),
+        "cuda_available": cuda_available,
+        "gpu_name": gpu_name,
         "mps_available": mps_available,
         "vector_backend": backend_name,
     }
@@ -318,7 +327,7 @@ class HumanReferenceTeacher:
                     "title": piece["title"],
                     "composer": piece["composer"],
                     "lineage": piece["lineage"],
-                    "midi_file": str(mid_path.relative_to(BASE_DIR)),
+                    "midi_file": mid_path.relative_to(BASE_DIR).as_posix(),
                     "stats": stats,
                 }
             )

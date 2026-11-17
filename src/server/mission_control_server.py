@@ -86,7 +86,7 @@ async def lifespan(_app: FastAPI):
     mode_label = (
         "実機Disklavier ＋ バーチャルスタジオ"
         if safety_guard.outport is not None
-        else "Mac内蔵バーチャルピアノ (安全モード)"
+        else "PC内蔵バーチャルピアノ (安全モード)"
     )
     telemetry_store.update_banner(
         code="READY",
@@ -1692,3 +1692,81 @@ async def websocket_endpoint(ws: WebSocket):
         record_caught_exception("mission_control_server.websocket_endpoint", exc)
     finally:
         ws_broadcaster.unregister(ws)
+
+
+# -------------------------------------------------------------------------
+# Stage Process Visualization HUD & 5-Layer Orchestrator Routes (/stage)
+# -------------------------------------------------------------------------
+@app.get("/stage", response_class=HTMLResponse)
+async def serve_stage_editorial_hud():
+    from src.stage.stage_server import STAGE_HUD_HTML_PATH
+
+    if STAGE_HUD_HTML_PATH.exists():
+        return HTMLResponse(STAGE_HUD_HTML_PATH.read_text(encoding="utf-8"))
+    return HTMLResponse("<h1>stage_hud.html missing</h1>", status_code=404)
+
+
+@app.get("/api/stage/state")
+async def api_stage_state_bridge():
+    from src.stage.stage_server import get_orchestrator
+
+    return JSONResponse(get_orchestrator().get_hud_state())
+
+
+@app.post("/api/stage/mode")
+async def api_stage_mode_bridge(payload: Dict[str, Any] = Body(...)):
+    from src.stage.stage_server import get_orchestrator
+
+    return JSONResponse(get_orchestrator().set_mode(str(payload.get("mode", "cello"))))
+
+
+@app.post("/api/stage/demo")
+async def api_stage_demo_bridge(payload: Dict[str, Any] = Body(...)):
+    from src.stage.stage_server import get_orchestrator
+
+    return JSONResponse(get_orchestrator().set_demo_enabled(bool(payload.get("enabled", False))))
+
+
+@app.post("/api/stage/directive")
+async def api_stage_directive_bridge(payload: Dict[str, Any] = Body(...)):
+    from src.stage.stage_server import get_orchestrator
+
+    return JSONResponse(get_orchestrator().apply_directive(str(payload.get("text", ""))))
+
+
+@app.post("/api/stage/turn")
+async def api_stage_turn_bridge():
+    from src.stage.stage_server import get_orchestrator
+
+    return JSONResponse({"ok": True, "state": get_orchestrator().execute_composition_turn(use_virtual_human=True)})
+
+
+@app.post("/api/stage/reset")
+async def api_stage_reset_bridge():
+    from src.stage.stage_server import get_orchestrator
+
+    return JSONResponse(get_orchestrator().reset_performance())
+
+
+@app.post("/api/stage/panic")
+async def api_stage_panic_bridge():
+    from src.stage.stage_server import get_orchestrator
+
+    return JSONResponse(get_orchestrator().output_layer.panic())
+
+
+@app.websocket("/ws/stage")
+async def stage_websocket_bridge(ws: WebSocket):
+    from src.stage.stage_server import get_orchestrator
+
+    await ws.accept()
+    orch = get_orchestrator()
+    try:
+        while True:
+            await ws.send_json(orch.get_hud_state())
+            await asyncio.sleep(1.0 / 60.0)
+    except WebSocketDisconnect:
+        pass
+    except Exception as exc:
+        record_caught_exception("mission_control_server.stage_websocket_bridge", exc)
+
