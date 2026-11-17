@@ -1,8 +1,13 @@
 """
-Layer 4: FastAPI Stage Server, 60fps WebSocket Broadcaster, and Virtual Showcase Demo Runner.
+Layer 4: FastAPI Stage Server, 60fps WebSocket Broadcaster, Staggered Deliberation Timeline,
+Python Direct Audio Synth, and Virtual Showcase Demo / Production Mode Orchestrator.
 
-Coordinates L1 (Perception) -> L2 (Ollama/Fallback Intent) -> L3 (symusic 4-Candidate Pruning)
--> L5 (Disklavier 30-Voice Safe Output) -> L4 (Stage Editorial Web HUD @ 60fps).
+Pipeline order per turn:
+L1 (Perception) -> L2 (Musical Policy) -> L3 (symusic 4-Candidate Generation & Scoring)
+-> L2 (Factual Performer Deliberation Trace via Ollama + MusicalLogicValidator)
+-> Staggered Audition & Rejection Timeline (Step 1 Sketch -> Step 2 Highlight/Reject -> Step 3 Adopt/Perform)
+-> L5 (Disklavier 30-Voice Safe Output) + Python LocalAudioSynthesizer (when monitor_audio=True)
+-> L4 (Stage Editorial Web HUD @ 60fps).
 """
 
 from __future__ import annotations
@@ -39,6 +44,7 @@ from src.stage.layer3_candidate_composer import (
     ZeroConfigCorpusLoader,
 )
 from src.stage.layer5_disklavier_output import DisklavierStageOutputLayer
+from src.stage.local_audio_synth import LocalAudioSynthesizer
 
 try:
     import mido
@@ -53,6 +59,41 @@ except Exception:  # pragma: no cover
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 STAGE_HUD_HTML_PATH = REPO_ROOT / "src" / "ui" / "stage_hud.html"
+
+STAGE_STYLE_PRESETS: Dict[str, Dict[str, Any]] = {
+    "baroque_counterpoint": {
+        "label_ja": "バロック対位法",
+        "directive_text": "対位法でカノン風に、乾いたタッチで",
+        "tonal_hint": "D_minor",
+        "stance_hint": "counterpoint",
+        "pedal_hint": "dry",
+        "density_delta": 0.05,
+    },
+    "impressionist_modal": {
+        "label_ja": "印象派風（ドリア旋法）",
+        "directive_text": "ドリア旋法でペダルを響かせて",
+        "tonal_hint": "D_dorian",
+        "stance_hint": "imitate",
+        "pedal_hint": "resonant",
+        "density_delta": -0.08,
+    },
+    "contemporary_provoke": {
+        "label_ja": "現代音楽的挑発",
+        "directive_text": "短調で挑発して密度を上げる",
+        "tonal_hint": "G_minor",
+        "stance_hint": "provoke",
+        "pedal_hint": "dry",
+        "density_delta": 0.18,
+    },
+    "serene_chorale": {
+        "label_ja": "静謐なコラール",
+        "directive_text": "長調で落ち着いて終止へ向かう",
+        "tonal_hint": "F_major",
+        "stance_hint": "cadence",
+        "pedal_hint": "half_clear",
+        "density_delta": -0.14,
+    },
+}
 
 
 def _load_stage_config() -> Dict[str, Any]:
@@ -74,31 +115,60 @@ class DemoToggleReq(BaseModel):
     enabled: bool
 
 
+class AudioMonitorReq(BaseModel):
+    enabled: bool
+    audition_preview: Optional[bool] = None
+
+
 class DirectiveReq(BaseModel):
     text: str
 
 
+class PresetReq(BaseModel):
+    preset: str
+
+
 class StageOrchestrator:
     """
-    Runs the full L1 -> L2 -> L3 -> L5 -> L4 pipeline in real time.
-    Supports both live MIDI/Audio hardware and zero-hardware Virtual Showcase Demo mode.
+    Runs the full L1 -> L2 Policy -> L3 4-Candidate Scoring -> L2 Deliberation Trace
+    -> Staggered Audition Timeline -> L5 + Python Audio Synth -> L4 HUD pipeline.
     """
 
     def __init__(
         self,
         demo_enabled: bool = False,
+        monitor_audio: Optional[bool] = None,
+        production_mode: bool = False,
         corpus_dirs: Optional[List[Path]] = None,
         use_ollama: Optional[bool] = None,
         open_hardware: bool = True,
+        play_audio_device: bool = True,
     ) -> None:
         cfg = _load_stage_config()
         llm_cfg = cfg.get("llm", {})
         midi_cfg = cfg.get("midi", {})
 
+        self.production_mode: bool = bool(production_mode)
         self.mode: str = "cello"  # Default Mode B ("cello") or Mode A ("piano")
-        self.demo_enabled: bool = demo_enabled
+        self.demo_enabled: bool = False if self.production_mode else bool(demo_enabled)
+        if monitor_audio is None:
+            self.monitor_audio: bool = False if self.production_mode else bool(self.demo_enabled)
+        else:
+            self.monitor_audio = False if self.production_mode else bool(monitor_audio)
+        self.play_audio_device: bool = bool(play_audio_device)
+
         self.phase: str = "listening"
+        self.deliberation_stage: str = "idle"  # idle | step1_sketch | step2_audition_reject | step3_adopt_perform
+        self.deliberation_active_reject_id: str = ""
+        self.deliberation_timeline: List[Dict[str, Any]] = []
+        self.active_preset: str = "impressionist_modal"
         self.turn_id: int = 0
+        self.calibration_status: Dict[str, Any] = {
+            "calibrated": False,
+            "vdl_base_ms": 24.0,
+            "nlms_erle_db": 0.0,
+            "timestamp": 0.0,
+        }
         self._lock = threading.RLock()
 
         # L1 Perception
@@ -120,10 +190,9 @@ class StageOrchestrator:
         self.intent_engine = MusicalIntentEngine(
             model_name=selected_model,
             use_ollama=ollama_ready,
-            timeout_s=5.0,
+            timeout_s=6.5,
         )
         if use_ollama is None and not ollama_ready:
-            # Probe Ollama asynchronously so server startup / module import is instant
             def _probe_ollama() -> None:
                 info = scan_ollama_environment()
                 if info.get("running") and info.get("selected_model"):
@@ -145,6 +214,13 @@ class StageOrchestrator:
             start_worker=True,
         )
 
+        # Python Direct Audio Synthesizer (ensures immediate sound on speakers in Demo/Monitor mode)
+        self.audio_synth = LocalAudioSynthesizer(
+            enabled=self.monitor_audio,
+            use_midi_synth_fallback=(not self.production_mode),
+        )
+        self.latest_audio_stats: Dict[str, Any] = self.audio_synth.get_status()
+
         # Optional MIDI IN listener for Mode A
         self.inport: Any = None
         if open_hardware and mido is not None:
@@ -152,9 +228,7 @@ class StageOrchestrator:
 
         # Latest state snapshots for L4 HUD
         self.latest_perception = PerceptionSnapshot(mode=self.mode, timestamp=time.perf_counter())
-        self.latest_intent = self.intent_engine._rule_based_intent(
-            self.latest_perception, [], {}
-        )
+        self.latest_intent = self.intent_engine.decide_policy(self.latest_perception, [], {})
         self.latest_candidates: List[CandidatePhrase] = []
         self.recent_strikes: List[Dict[str, Any]] = []
         self.recent_human_demo_notes: List[Dict[str, Any]] = []
@@ -234,8 +308,27 @@ class StageOrchestrator:
 
     def set_demo_enabled(self, enabled: bool) -> Dict[str, Any]:
         with self._lock:
-            self.demo_enabled = bool(enabled)
-        return {"ok": True, "demo_enabled": self.demo_enabled}
+            if self.production_mode:
+                self.demo_enabled = False
+            else:
+                self.demo_enabled = bool(enabled)
+                if self.demo_enabled and not self.monitor_audio:
+                    self.monitor_audio = True
+                    self.audio_synth.set_enabled(True)
+        return {"ok": True, "demo_enabled": self.demo_enabled, "monitor_audio": self.monitor_audio}
+
+    def set_audio_monitor(self, enabled: bool, audition_preview: Optional[bool] = None) -> Dict[str, Any]:
+        with self._lock:
+            if self.production_mode:
+                self.monitor_audio = False
+                self.audio_synth.set_enabled(False)
+            else:
+                self.monitor_audio = bool(enabled)
+                self.audio_synth.set_enabled(self.monitor_audio)
+                if audition_preview is not None:
+                    self.audio_synth.set_audition_preview(bool(audition_preview))
+            self.latest_audio_stats = self.audio_synth.get_status()
+            return {"ok": True, "monitor_audio": self.monitor_audio, **self.latest_audio_stats}
 
     def apply_directive(self, text: str) -> Dict[str, Any]:
         hints = self.directive_recognizer.parse_directive(text)
@@ -243,6 +336,46 @@ class StageOrchestrator:
             self.pending_directive_hints = hints
             self.latest_perception.verbal_directive = hints.get("raw_text", "")
         return {"ok": True, "hints": hints}
+
+    def apply_preset(self, preset_key: str) -> Dict[str, Any]:
+        preset = STAGE_STYLE_PRESETS.get(preset_key)
+        if not preset:
+            return {"ok": False, "error": f"Unknown preset: {preset_key}"}
+        hints = {
+            "raw_text": preset["directive_text"],
+            "tonal_hint": preset["tonal_hint"],
+            "stance_hint": preset["stance_hint"],
+            "pedal_hint": preset["pedal_hint"],
+            "density_delta": preset["density_delta"],
+        }
+        with self._lock:
+            self.active_preset = preset_key
+            self.pending_directive_hints = hints
+            self.latest_perception.verbal_directive = preset["directive_text"]
+        return {"ok": True, "preset": preset_key, "label_ja": preset["label_ja"], "hints": hints}
+
+    def run_calibration(self) -> Dict[str, Any]:
+        """
+        Pre-concert calibration check: verifies 2ch NLMS echo attenuation on synthetic
+        reference signal and physical VDL strike lag baseline.
+        """
+        sr = 44100
+        t = np.arange(int(sr * 0.5), dtype=np.float64) / sr
+        ref = 0.28 * np.sin(2.0 * np.pi * 293.66 * t) + 0.16 * np.sin(2.0 * np.pi * 440.0 * t)
+        mic = 0.72 * ref
+        nlms = NLMSEchoCanceller()
+        _ = nlms.process_block(mic, ref)
+        res = {
+            "ok": True,
+            "calibrated": True,
+            "vdl_base_ms": self.output_layer.offset_ms(60, 72),
+            "nlms_erle_db": nlms.last_erle_db,
+            "connected_port": self.output_layer.connected_port_name or "Virtual Disklavier",
+            "timestamp": round(time.perf_counter(), 3),
+        }
+        with self._lock:
+            self.calibration_status = res
+        return res
 
     def reset_performance(self) -> Dict[str, Any]:
         with self._lock:
@@ -253,14 +386,14 @@ class StageOrchestrator:
             self.turn_id = 0
             self.human_phrase_buffer.clear()
             self.latest_candidates = []
+            self.deliberation_stage = "idle"
+            self.deliberation_active_reject_id = ""
+            self.deliberation_timeline = []
+        self.audio_synth.stop_audio()
         self.output_layer.panic()
         return {"ok": True, "motif_nodes": 0}
 
     def _simulate_virtual_human_turn(self, step_idx: int) -> tuple[PerceptionSnapshot, List[Dict[str, Any]]]:
-        """
-        Generates authentic Virtual Cellist (Mode B) or Virtual Pianist (Mode A) performance
-        through the real L1 perception pipeline (including NLMS echo cancellation and Echo Ledger).
-        """
         now = time.perf_counter()
         rng = random.Random(step_idx + 101)
         if self.mode == "cello":
@@ -269,6 +402,7 @@ class StageOrchestrator:
                 ([55, 58, 62, 65, 63, 62], "staccato", "G_minor"),
                 ([45, 52, 57, 60, 59, 57], "legato", "D_minor"),
                 ([57, 60, 64, 67, 65, 62], "staccato", "D_dorian"),
+                ([48, 55, 58, 60, 58, 55], "legato", "G_minor"),
             ]
             pitches, target_art, _ = cello_motifs[step_idx % len(cello_motifs)]
             sr = 44100
@@ -276,7 +410,6 @@ class StageOrchestrator:
             n_samp = int(sr * 0.65)
             t = np.arange(n_samp, dtype=np.float64) / sr
 
-            # Synthesize realistic cello harmonic waveform + phase-integrated vibrato
             phase = 2.0 * np.pi * f0_main * np.cumsum(1.0 + 0.004 * np.sin(2.0 * np.pi * 5.4 * t)) / sr
             cello = (
                 0.28 * np.sin(phase)
@@ -284,7 +417,6 @@ class StageOrchestrator:
                 + 0.07 * np.sin(3.0 * phase)
             )
             if target_art == "staccato":
-                # 3 detached staccato strokes with crisp decay
                 env = np.zeros_like(t)
                 for k in range(3):
                     s = int((k * 0.21) * sr)
@@ -294,14 +426,17 @@ class StageOrchestrator:
                         env[s:e] = np.exp(-5.0 * seg_t) * np.minimum(1.0, seg_t * 14.0)
                 cello *= env
             else:
-                # Smooth legato bow envelope
                 cello *= np.minimum(1.0, t / 0.08) * (0.9 + 0.1 * np.sin(2.0 * np.pi * 1.5 * t))
 
-            # Inject synthetic Disklavier bleed (Ch2 ref) and cancel it with NLMS in L1
             piano_ref = 0.25 * np.sin(2.0 * np.pi * 329.63 * t) + 0.15 * np.sin(2.0 * np.pi * 493.88 * t)
-            mic = cello + 0.72 * piano_ref
+            bleed = 0.72 * piano_ref
+            mic = cello + bleed
 
             snap = self.cello_perception.analyze_utterance(mic, piano_ref, nlms=self.nlms)
+            # Also track NLMS pure-bleed ERLE (since total mic power includes valid cello signal)
+            pure_erle = NLMSEchoCanceller.measure_bleed_erle_db(bleed, piano_ref)
+            self.nlms.last_erle_db = pure_erle
+            snap.nlms_erle_db = pure_erle
             snap.mode = "cello"
             snap.breath_gauge = 0.92
             snap.turn_ready = True
@@ -323,14 +458,12 @@ class StageOrchestrator:
             return snap, human_notes
 
         else:
-            # Mode A: Virtual Pianist + test self-echo injection to prove EchoSuppressionLedger
             piano_motifs = [
                 [62, 65, 69, 67, 64, 62],
                 [57, 60, 64, 65, 64, 60],
                 [67, 70, 74, 72, 69, 67],
             ]
             pitches = piano_motifs[step_idx % len(piano_motifs)]
-            # Simulate an echoed self-strike caught and suppressed by L1 EchoSuppressionLedger
             echo_pitch = 72
             self.echo_ledger.register_sent_note(echo_pitch, now - 0.045)
             assert self.echo_ledger.filter_incoming_note(echo_pitch, 68, recv_ts=now) is None
@@ -372,11 +505,66 @@ class StageOrchestrator:
             )
             return snap, human_notes
 
-    def execute_composition_turn(self, use_virtual_human: bool = True) -> Dict[str, Any]:
+    @staticmethod
+    def _build_deliberation_timeline(candidates: List[CandidatePhrase], fast_mode: bool = False) -> List[Dict[str, Any]]:
+        """
+        Creates the staggered audition & rejection sequence (0.5s - 1.2s total, or accelerated in live fast mode).
+        Step 1: Sketch all 4 staves
+        Step 2: Highlight problem notes in vermilion, strike out and fade each rejected candidate one by one
+        Step 3: Lock adopted candidate in parchment off-white and trigger L5 performance
+        """
+        scale = 0.45 if fast_mode else 1.0
+        rejected = [c for c in candidates if not c.adopted]
+        adopted = next((c for c in candidates if c.adopted), None)
+
+        steps: List[Dict[str, Any]] = [
+            {
+                "stage": "step1_sketch",
+                "at_ms": 0,
+                "label_ja": "Step 1 着想: 4候補の五線譜を並列スケッチ",
+                "active_reject_id": "",
+                "rejected_so_far": [],
+                "adopted_locked": False,
+            }
+        ]
+        t_ms = int(220 * scale)
+        rejected_so_far: List[str] = []
+        for rej in rejected:
+            rejected_so_far = [*rejected_so_far, rej.candidate_id]
+            steps.append(
+                {
+                    "stage": "step2_audition_reject",
+                    "at_ms": t_ms,
+                    "label_ja": f"Step 2 推敲: 案{rej.candidate_id}を検証 → {(rej.rejection_detail or {}).get('hud_badge_ja', rej.rejection_tag_ja)}",
+                    "active_reject_id": rej.candidate_id,
+                    "rejected_so_far": list(rejected_so_far),
+                    "adopted_locked": False,
+                }
+            )
+            t_ms += int(240 * scale)
+
+        steps.append(
+            {
+                "stage": "step3_adopt_perform",
+                "at_ms": t_ms,
+                "label_ja": f"Step 3 確定実演: 案{adopted.candidate_id if adopted else 'A'}をロックし打鍵開始",
+                "active_reject_id": "",
+                "rejected_so_far": [r.candidate_id for r in rejected],
+                "adopted_locked": True,
+            }
+        )
+        return steps
+
+    def execute_composition_turn(
+        self,
+        use_virtual_human: bool = True,
+        staggered_playback: bool = False,
+    ) -> Dict[str, Any]:
         with self._lock:
             self._demo_step_idx += 1
             step_idx = self._demo_step_idx
             self.phase = "deliberating"
+            self.deliberation_stage = "step1_sketch"
 
             if use_virtual_human or not self.human_phrase_buffer:
                 snap, human_notes = self._simulate_virtual_human_turn(step_idx)
@@ -392,23 +580,59 @@ class StageOrchestrator:
             if hints.get("raw_text"):
                 snap.verbal_directive = str(hints["raw_text"])
 
-        # L2: Musical Intent (outside lock so fast WS reads never block)
-        intent = self.intent_engine.decide_intent(snap, human_notes, hints)
+        # Step 1: L2 decides musical policy (tonality, register, pedal)
+        policy_intent = self.intent_engine.decide_policy(snap, human_notes, hints)
 
-        # L3: Generate 4 candidates + score + prune
-        turn_res = self.composer.compose_turn(human_notes, intent, human_mode=snap.mode)
-
-        # L5: Schedule adopted candidate safely with VDL lookahead
+        # Step 2: L3 generates 4 candidates + scores 4 axes + isolates exact collision coordinates
+        turn_res = self.composer.compose_turn(human_notes, policy_intent, human_mode=snap.mode)
         adopted = turn_res.adopted_candidate
-        self.output_layer.schedule_phrase(adopted.events, base_sound_ts=time.perf_counter() + 0.12)
+        rejected = [c for c in turn_res.candidates if not c.adopted]
 
+        # Step 3: L2 grounds the performer deliberation memo strictly in L1 & L3 real data (and validates via MusicalLogicValidator)
+        final_intent = self.intent_engine.finalize_deliberation_monologue(
+            snap, human_notes, policy_intent, turn_res, hints
+        )
+        timeline = self._build_deliberation_timeline(
+            turn_res.candidates, fast_mode=self.production_mode
+        )
+
+        # Publish Step 1 -> Step 2 -> Step 3 intermediate deliberation states for live WebSocket observers
         with self._lock:
             self.turn_id = turn_res.turn_id
             self.latest_perception = snap
-            self.latest_intent = intent
+            self.latest_intent = final_intent
             self.latest_candidates = turn_res.candidates
-            self.phase = "performing"
+            self.deliberation_timeline = timeline
+            self.deliberation_stage = "step1_sketch"
+            self.deliberation_active_reject_id = ""
             self.pending_directive_hints = {}
+
+        if staggered_playback:
+            for item in timeline:
+                with self._lock:
+                    self.deliberation_stage = str(item["stage"])
+                    self.deliberation_active_reject_id = str(item["active_reject_id"])
+                if item["stage"] == "step2_audition_reject":
+                    time.sleep(0.08 if self.production_mode else 0.18)
+                elif item["stage"] == "step1_sketch":
+                    time.sleep(0.05 if self.production_mode else 0.14)
+
+        # Step 4: Synthesize Python direct audio (if monitor_audio or offline verification) & schedule L5 output
+        audio_stats = self.audio_synth.play_turn_audio(
+            human_notes=human_notes,
+            human_mode=snap.mode,
+            human_articulation=snap.articulation,
+            rejected_candidates=rejected,
+            adopted_events=adopted.events,
+            play_device=(self.monitor_audio and self.play_audio_device),
+        )
+        self.output_layer.schedule_phrase(adopted.events, base_sound_ts=time.perf_counter() + 0.10)
+
+        with self._lock:
+            self.deliberation_stage = "step3_adopt_perform"
+            self.deliberation_active_reject_id = ""
+            self.phase = "performing"
+            self.latest_audio_stats = audio_stats
 
             # Grow Motif Memory Graph (starts at 0 nodes at curtain rise)
             h_id = f"H{self.turn_id}"
@@ -430,17 +654,17 @@ class StageOrchestrator:
                     "id": a_id,
                     "kind": "ai",
                     "turn": self.turn_id,
-                    "label": f"AI [{adopted.candidate_id}] {intent.tonal_center}: "
+                    "label": f"AI [{adopted.candidate_id}] {final_intent.tonal_center}: "
                     + "-".join(midi_to_note_name(p) for p in a_pitches[:3]),
                     "pitches": a_pitches,
-                    "stance": intent.interaction_stance,
+                    "stance": final_intent.interaction_stance,
                 }
             )
             self.motif_edges.append(
                 {
                     "source": h_id,
                     "target": a_id,
-                    "relation": intent.interaction_stance,
+                    "relation": final_intent.interaction_stance,
                 }
             )
             if self._last_ai_node_id is not None:
@@ -453,7 +677,6 @@ class StageOrchestrator:
                 )
             self._last_human_node_id = h_id
             self._last_ai_node_id = a_id
-            # Keep last 24 nodes cleanly readable
             if len(self.motif_nodes) > 24:
                 keep_ids = {n["id"] for n in self.motif_nodes[-24:]}
                 self.motif_nodes = self.motif_nodes[-24:]
@@ -467,10 +690,10 @@ class StageOrchestrator:
         last_turn_t = 0.0
         while self._running:
             now = time.perf_counter()
-            if self.demo_enabled and (now - last_turn_t) >= 3.6:
+            if self.demo_enabled and not self.production_mode and (now - last_turn_t) >= 4.2:
                 last_turn_t = now
                 try:
-                    self.execute_composition_turn(use_virtual_human=True)
+                    self.execute_composition_turn(use_virtual_human=True, staggered_playback=True)
                 except Exception:
                     pass
             elif not self.demo_enabled and self.mode == "piano":
@@ -483,7 +706,7 @@ class StageOrchestrator:
                 if ready and has_notes:
                     last_turn_t = now
                     try:
-                        self.execute_composition_turn(use_virtual_human=False)
+                        self.execute_composition_turn(use_virtual_human=False, staggered_playback=False)
                     except Exception:
                         pass
             time.sleep(0.05)
@@ -502,19 +725,46 @@ class StageOrchestrator:
                     "events": c.events,
                     "total_score": c.total_score,
                     "subscores": c.subscores,
+                    "subscores_pct": c.subscores_pct,
                     "adopted": c.adopted,
                     "rejection_tag_ja": c.rejection_tag_ja,
                     "symusic_note_count": c.symusic_note_count,
+                    "pitch_range_str": c.pitch_range_str,
+                    "sample_notes_str": c.sample_notes_str,
+                    "problem_note_indices": c.problem_note_indices,
+                    "rejection_detail": c.rejection_detail,
                 }
                 for c in self.latest_candidates
             ]
+            hw_port = out_tel.connected_port
+            audio_status_label = (
+                f"実機MIDI出力: {hw_port}"
+                if (self.production_mode or hw_port)
+                else (
+                    "音声出力中: Python Direct Audio + WebAudio"
+                    if self.monitor_audio
+                    else "モニター消音中 (WebAudio待機)"
+                )
+            )
             return {
                 "timestamp": round(time.perf_counter(), 4),
                 "mode": self.mode,
+                "production_mode": self.production_mode,
                 "demo_enabled": self.demo_enabled,
+                "monitor_audio": self.monitor_audio,
+                "active_preset": self.active_preset,
                 "phase": self.phase,
+                "deliberation_stage": self.deliberation_stage,
+                "deliberation_active_reject_id": self.deliberation_active_reject_id,
+                "deliberation_timeline": list(self.deliberation_timeline),
                 "turn_id": self.turn_id,
                 "corpus_source": self.corpus_loader.source_mode,
+                "calibration": dict(self.calibration_status),
+                "audio_status": {
+                    **self.latest_audio_stats,
+                    "monitor_audio": self.monitor_audio,
+                    "label_ja": audio_status_label,
+                },
                 "perception": {
                     "mode": p.mode,
                     "f0_hz": p.f0_hz,
@@ -543,6 +793,7 @@ class StageOrchestrator:
                     **intent_dict,
                     "llm_source": self.intent_engine.last_source,
                     "llm_latency_ms": self.intent_engine.last_latency_ms,
+                    "validator_rewrites": self.intent_engine.last_validator_rewrites,
                 },
                 "candidates": candidates_list,
                 "output": {
@@ -580,6 +831,7 @@ class StageOrchestrator:
             except Exception:
                 pass
             self.inport = None
+        self.audio_synth.close()
         self.output_layer.close()
 
 
@@ -613,26 +865,7 @@ class StageWSBroadcaster:
                         dead.append(ws)
                 for ws in dead:
                     self.clients.discard(ws)
-            await asyncio.sleep(1.0 / 60.0)  # 60fps stream
-
-
-_GLOBAL_ORCHESTRATOR: Optional[StageOrchestrator] = None
-
-
-def get_orchestrator(
-    demo_enabled: Optional[bool] = None,
-    corpus_dirs: Optional[List[Path]] = None,
-) -> StageOrchestrator:
-    global _GLOBAL_ORCHESTRATOR
-    if _GLOBAL_ORCHESTRATOR is None:
-        env_demo = os.environ.get("DISKLAVIER_STAGE_DEMO", "0") == "1"
-        _GLOBAL_ORCHESTRATOR = StageOrchestrator(
-            demo_enabled=env_demo if demo_enabled is None else demo_enabled,
-            corpus_dirs=corpus_dirs,
-        )
-    elif demo_enabled is not None:
-        _GLOBAL_ORCHESTRATOR.set_demo_enabled(demo_enabled)
-    return _GLOBAL_ORCHESTRATOR
+            await asyncio.sleep(1.0 / 60.0)
 
 
 def build_stage_router(orch: StageOrchestrator, broadcaster: StageWSBroadcaster) -> APIRouter:
@@ -656,18 +889,33 @@ def build_stage_router(orch: StageOrchestrator, broadcaster: StageWSBroadcaster)
     @router.post("/api/stage/demo")
     async def api_stage_demo(req: DemoToggleReq) -> JSONResponse:
         res = orch.set_demo_enabled(req.enabled)
-        if req.enabled and orch.turn_id == 0:
-            orch.execute_composition_turn(use_virtual_human=True)
+        if req.enabled and not orch.production_mode and orch.turn_id == 0:
+            orch.execute_composition_turn(use_virtual_human=True, staggered_playback=False)
         return JSONResponse(res)
+
+    @router.post("/api/stage/audio_monitor")
+    async def api_stage_audio_monitor(req: AudioMonitorReq) -> JSONResponse:
+        return JSONResponse(orch.set_audio_monitor(req.enabled, req.audition_preview))
 
     @router.post("/api/stage/directive")
     async def api_stage_directive(req: DirectiveReq) -> JSONResponse:
-        res = orch.apply_directive(req.text)
-        return JSONResponse(res)
+        return JSONResponse(orch.apply_directive(req.text))
+
+    @router.post("/api/stage/preset")
+    async def api_stage_preset(req: PresetReq) -> JSONResponse:
+        res = orch.apply_preset(req.preset)
+        if res.get("ok"):
+            state = orch.execute_composition_turn(use_virtual_human=True, staggered_playback=False)
+            return JSONResponse({**res, "state": state})
+        return JSONResponse(res, status_code=400)
+
+    @router.post("/api/stage/calibrate")
+    async def api_stage_calibrate() -> JSONResponse:
+        return JSONResponse(orch.run_calibration())
 
     @router.post("/api/stage/turn")
     async def api_stage_turn(request: Request) -> JSONResponse:
-        state = orch.execute_composition_turn(use_virtual_human=True)
+        state = orch.execute_composition_turn(use_virtual_human=True, staggered_playback=False)
         return JSONResponse({"ok": True, "state": state})
 
     @router.post("/api/stage/reset")
@@ -676,6 +924,7 @@ def build_stage_router(orch: StageOrchestrator, broadcaster: StageWSBroadcaster)
 
     @router.post("/api/stage/panic")
     async def api_stage_panic() -> JSONResponse:
+        orch.audio_synth.stop_audio()
         res = orch.output_layer.panic()
         return JSONResponse(res)
 
@@ -690,8 +939,9 @@ def build_stage_router(orch: StageOrchestrator, broadcaster: StageWSBroadcaster)
             while True:
                 msg = await ws.receive_text()
                 if msg == "turn":
-                    orch.execute_composition_turn(use_virtual_human=True)
+                    orch.execute_composition_turn(use_virtual_human=True, staggered_playback=False)
                 elif msg == "panic":
+                    orch.audio_synth.stop_audio()
                     orch.output_layer.panic()
         except WebSocketDisconnect:
             pass
@@ -705,23 +955,37 @@ def build_stage_router(orch: StageOrchestrator, broadcaster: StageWSBroadcaster)
 
 def create_stage_app(
     demo_enabled: Optional[bool] = None,
+    monitor_audio: Optional[bool] = None,
+    production_mode: Optional[bool] = None,
     corpus_dirs: Optional[List[Path]] = None,
     use_ollama: Optional[bool] = None,
     open_hardware: bool = True,
+    play_audio_device: bool = True,
 ) -> FastAPI:
+    env_prod = os.environ.get("DISKLAVIER_STAGE_PRODUCTION", "0") == "1"
+    env_demo = os.environ.get("DISKLAVIER_STAGE_DEMO", "0") == "1"
+    env_mon = os.environ.get("DISKLAVIER_MONITOR_AUDIO", "0") == "1"
+
+    prod = env_prod if production_mode is None else bool(production_mode)
+    demo = False if prod else (env_demo if demo_enabled is None else bool(demo_enabled))
+    mon = False if prod else ((demo or env_mon) if monitor_audio is None else bool(monitor_audio))
+
     orch = StageOrchestrator(
-        demo_enabled=(os.environ.get("DISKLAVIER_STAGE_DEMO", "0") == "1") if demo_enabled is None else demo_enabled,
+        demo_enabled=demo,
+        monitor_audio=mon,
+        production_mode=prod,
         corpus_dirs=corpus_dirs,
         use_ollama=use_ollama,
         open_hardware=open_hardware,
+        play_audio_device=play_audio_device,
     )
     broadcaster = StageWSBroadcaster(orch)
 
     @asynccontextmanager
     async def _lifespan(_app: FastAPI):
         broadcaster.ensure_started()
-        if orch.demo_enabled and orch.turn_id == 0:
-            orch.execute_composition_turn(use_virtual_human=True)
+        if orch.demo_enabled and not orch.production_mode and orch.turn_id == 0:
+            orch.execute_composition_turn(use_virtual_human=True, staggered_playback=False)
         try:
             yield
         finally:
@@ -745,15 +1009,26 @@ def main() -> int:
     parser = argparse.ArgumentParser(description="Disklavier-Auto Stage Server")
     parser.add_argument("--host", default="127.0.0.1")
     parser.add_argument("--port", type=int, default=8000)
-    parser.add_argument("--demo", action="store_true", help="Start immediately in Virtual Showcase Demo mode")
+    parser.add_argument("--demo", action="store_true", help="Virtual Showcase Demo + Direct Audio ON")
+    parser.add_argument("--monitor-audio", action="store_true", help="Enable Python Direct Audio Synthesizer")
+    parser.add_argument("--production", action="store_true", help="Production Stage Mode (Hardware Only, Virtual Synth OFF)")
     args = parser.parse_args()
 
-    if args.demo:
+    if args.production:
+        os.environ["DISKLAVIER_STAGE_PRODUCTION"] = "1"
+        os.environ["DISKLAVIER_STAGE_DEMO"] = "0"
+        os.environ["DISKLAVIER_MONITOR_AUDIO"] = "0"
+    elif args.demo:
         os.environ["DISKLAVIER_STAGE_DEMO"] = "1"
+        os.environ["DISKLAVIER_MONITOR_AUDIO"] = "1"
 
     import uvicorn
 
-    app = create_stage_app(demo_enabled=args.demo)
+    app = create_stage_app(
+        demo_enabled=args.demo and not args.production,
+        monitor_audio=(args.monitor_audio or args.demo) and not args.production,
+        production_mode=args.production,
+    )
     uvicorn.run(app, host=args.host, port=args.port, workers=1, log_level="info")
     return 0
 

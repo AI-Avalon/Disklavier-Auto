@@ -4,7 +4,8 @@ setlocal EnableDelayedExpansion
 cd /d "%~dp0"
 
 echo ============================================================================
-echo  Disklavier-Auto 本番・リハーサル起動ランチャー (http://localhost:8000)
+echo  Disklavier-Auto 本番・リハーサル実機モード (--production)
+echo  仮想奏者・PCモニターシンセを自動OFFにし、実機DisklavierとUR22に直結します
 echo ============================================================================
 
 if not exist ".venv\Scripts\python.exe" (
@@ -15,6 +16,9 @@ if not exist ".venv\Scripts\python.exe" (
 
 call "%~dp0.venv\Scripts\activate.bat"
 set "PYTHONPATH=%~dp0"
+set "DISKLAVIER_STAGE_PRODUCTION=1"
+set "DISKLAVIER_STAGE_DEMO=0"
+set "DISKLAVIER_MONITOR_AUDIO=0"
 
 echo [1/3] Ollama ローカルLLMサーバを確認しています...
 powershell -NoProfile -Command "try { $r = Invoke-WebRequest -UseBasicParsing -TimeoutSec 2 http://127.0.0.1:11434/api/tags; exit 0 } catch { exit 1 }"
@@ -25,17 +29,17 @@ if errorlevel 1 (
         start "" /min ollama serve
         timeout /t 2 /nobreak >nul
     ) else (
-        echo [INFO] Ollama が見つからないため、ルールベース室内楽フォールバックで動作します。
+        echo [INFO] Ollama が見つからないため、事実ベースルールフォールバックで動作します。
     )
 ) else (
     echo Ollama 接続OK。
 )
 
-echo [2/3] 舞台投影Web HUD (http://localhost:8000) をブラウザで開きます...
+echo [2/3] 本番舞台投影Web HUD (http://localhost:8000) をブラウザで開きます (F10でUI完全格納)...
 start "" cmd /c "timeout /t 2 /nobreak >nul && start http://localhost:8000"
 
-echo [3/3] 舞台サーバを起動しています (終了時は Ctrl+C)...
-python -m src.stage.stage_server --host 127.0.0.1 --port 8000
+echo [3/3] 本番ステージサーバを起動しています (終了時は Ctrl+C)...
+python -m src.stage.stage_server --host 127.0.0.1 --port 8000 --production
 set "SRV_ERR=%errorlevel%"
 
 echo [CLEANUP] 全MIDIノートを安全消音 (All Notes Off) しています...

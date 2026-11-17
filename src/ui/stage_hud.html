@@ -38,10 +38,14 @@
 
     .stage-shell {
       display: grid;
-      grid-template-rows: auto 1fr;
+      grid-template-rows: auto auto 1fr;
       width: 100vw;
       height: 100vh;
       background: var(--bg-stage);
+    }
+
+    .stage-shell.projection-clean {
+      grid-template-rows: 1fr;
     }
 
     /* Top Minimal Bar (F10 toggles hidden) */
@@ -49,8 +53,8 @@
       display: flex;
       align-items: center;
       justify-content: space-between;
-      gap: 12px;
-      padding: 8px 18px;
+      gap: 10px;
+      padding: 7px 18px;
       border-bottom: 1px solid var(--rule-hairline);
       background: #08080A;
       font-family: var(--font-mono);
@@ -58,14 +62,26 @@
       letter-spacing: 0.04em;
     }
 
-    .control-bar.hidden-bar {
-      display: none;
+    .demo-deck {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+      padding: 5px 18px;
+      border-bottom: 1px solid #191815;
+      background: #070709;
+      font-family: var(--font-mono);
+      font-size: 10.5px;
+    }
+
+    .hidden-bar {
+      display: none !important;
     }
 
     .bar-group {
       display: flex;
       align-items: center;
-      gap: 8px;
+      gap: 7px;
       flex-wrap: nowrap;
     }
 
@@ -75,7 +91,7 @@
       font-weight: 600;
       letter-spacing: 0.08em;
       color: var(--ink-adopted);
-      margin-right: 10px;
+      margin-right: 6px;
       white-space: nowrap;
     }
 
@@ -83,9 +99,9 @@
       background: transparent;
       color: var(--ink-rejected);
       border: 1px solid var(--rule-hairline);
-      padding: 5px 10px;
+      padding: 4px 9px;
       font-family: var(--font-mono);
-      font-size: 11px;
+      font-size: 10.5px;
       cursor: pointer;
       transition: border-color 0.15s ease, color 0.15s ease;
       white-space: nowrap;
@@ -113,14 +129,52 @@
       color: var(--bg-stage);
     }
 
+    .audio-pill {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      padding: 3px 9px;
+      border: 1px solid var(--rule-hairline);
+      font-family: var(--font-mono);
+      font-size: 10.5px;
+      color: var(--ink-adopted);
+      white-space: nowrap;
+    }
+
+    .audio-dot {
+      width: 6px;
+      height: 6px;
+      border-radius: 50%;
+      background: var(--ink-rejected);
+    }
+
+    .audio-dot.live {
+      background: var(--ink-vermilion);
+    }
+
+    .vu-meter {
+      width: 58px;
+      height: 5px;
+      background: #161512;
+      border: 1px solid #2A2722;
+      overflow: hidden;
+    }
+
+    .vu-fill {
+      height: 100%;
+      width: 0%;
+      background: var(--ink-adopted);
+      transition: width 0.08s linear;
+    }
+
     .mc-input {
       background: var(--bg-stage);
       color: var(--ink-adopted);
       border: 1px solid var(--rule-hairline);
-      padding: 5px 10px;
+      padding: 4px 9px;
       font-family: var(--font-serif);
-      font-size: 12px;
-      width: 220px;
+      font-size: 11.5px;
+      width: 195px;
       outline: none;
     }
 
@@ -135,8 +189,8 @@
     /* 4-Zone Stage Grid */
     .stage-grid {
       display: grid;
-      grid-template-columns: 1fr 1.15fr;
-      grid-template-rows: 22% 54% 24%;
+      grid-template-columns: 1fr 1.18fr;
+      grid-template-rows: 22% 55% 23%;
       gap: 1px;
       background: var(--rule-hairline);
       width: 100%;
@@ -146,7 +200,7 @@
 
     .zone {
       background: var(--bg-stage);
-      padding: 12px 18px;
+      padding: 10px 18px;
       display: flex;
       flex-direction: column;
       min-height: 0;
@@ -155,22 +209,23 @@
 
     .zone-c {
       grid-column: 1 / 3;
-      padding: 10px 18px;
+      padding: 8px 18px;
     }
 
     .zone-d {
       grid-column: 1 / 3;
-      padding: 10px 18px;
+      padding: 8px 18px;
     }
 
     .zone-header {
       display: flex;
       justify-content: space-between;
       align-items: baseline;
-      margin-bottom: 8px;
+      margin-bottom: 6px;
       border-bottom: 1px solid #181714;
       padding-bottom: 4px;
       flex-shrink: 0;
+      gap: 12px;
     }
 
     .zone-title {
@@ -179,12 +234,27 @@
       letter-spacing: 0.12em;
       color: var(--ink-rejected);
       text-transform: uppercase;
+      white-space: nowrap;
     }
 
     .zone-meta {
       font-family: var(--font-mono);
-      font-size: 11px;
+      font-size: 10.5px;
       color: var(--ink-rejected);
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+
+    .timeline-banner {
+      font-family: var(--font-mono);
+      font-size: 10.5px;
+      color: var(--ink-adopted);
+      letter-spacing: 0.03em;
+    }
+
+    .timeline-banner.audition {
+      color: var(--ink-vermilion);
     }
 
     /* Zone A: Perception & Breath */
@@ -214,7 +284,7 @@
       flex-direction: column;
       justify-content: space-between;
       font-family: var(--font-mono);
-      font-size: 11px;
+      font-size: 10.5px;
     }
 
     .metric-row {
@@ -238,10 +308,10 @@
 
     .breath-track {
       width: 100%;
-      height: 6px;
+      height: 5px;
       background: #141311;
       border: 1px solid var(--rule-hairline);
-      margin-top: 4px;
+      margin-top: 3px;
     }
 
     .breath-fill {
@@ -258,11 +328,11 @@
     /* Zone B: Thought Trace */
     .monologue-box {
       font-family: var(--font-serif);
-      font-size: clamp(16px, 1.55vw, 22px);
-      line-height: 1.55;
+      font-size: clamp(15px, 1.45vw, 20px);
+      line-height: 1.5;
       color: var(--ink-adopted);
       letter-spacing: 0.02em;
-      margin-bottom: 8px;
+      margin-bottom: 6px;
       flex: 1;
       display: flex;
       align-items: center;
@@ -271,12 +341,12 @@
     .intent-strip {
       display: flex;
       flex-wrap: wrap;
-      gap: 14px;
+      gap: 12px;
       font-family: var(--font-mono);
-      font-size: 11px;
+      font-size: 10.5px;
       color: var(--ink-rejected);
       border-top: 1px solid #141310;
-      padding-top: 6px;
+      padding-top: 5px;
     }
 
     .intent-strip span strong {
@@ -289,7 +359,7 @@
       display: grid;
       grid-template-columns: repeat(2, 1fr);
       grid-template-rows: repeat(2, 1fr);
-      gap: 10px;
+      gap: 9px;
       flex: 1;
       min-height: 0;
     }
@@ -297,16 +367,21 @@
     .cand-card {
       border: 1px solid var(--rule-hairline);
       background: var(--bg-panel);
-      padding: 8px 12px;
+      padding: 7px 11px;
       display: flex;
       flex-direction: column;
       min-height: 0;
-      transition: border-color 0.25s ease, opacity 0.25s ease;
+      transition: border-color 0.22s ease, opacity 0.22s ease;
     }
 
     .cand-card.adopted {
       border-color: var(--ink-adopted);
       opacity: 1.0;
+    }
+
+    .cand-card.auditioning {
+      border-color: var(--ink-vermilion);
+      opacity: 0.96;
     }
 
     .cand-card.rejected {
@@ -318,14 +393,15 @@
       display: flex;
       justify-content: space-between;
       align-items: baseline;
-      margin-bottom: 4px;
+      margin-bottom: 3px;
       gap: 8px;
     }
 
     .cand-title {
       font-family: var(--font-serif);
-      font-size: 13px;
+      font-size: 12.5px;
       color: var(--ink-adopted);
+      white-space: nowrap;
     }
 
     .cand-card.rejected .cand-title {
@@ -334,9 +410,13 @@
 
     .cand-badge {
       font-family: var(--font-mono);
-      font-size: 11px;
+      font-size: 10px;
       padding: 1px 6px;
       border: 1px solid transparent;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      max-width: 68%;
     }
 
     .cand-badge.adopted {
@@ -346,14 +426,54 @@
 
     .cand-badge.rejected {
       color: var(--ink-vermilion);
-      border-color: #421C17;
+      border-color: #4A1F19;
     }
 
-    .cand-score-line {
-      font-family: var(--font-mono);
-      font-size: 10px;
+    .cand-badge.sketching {
       color: var(--ink-rejected);
+      border-color: #2A2823;
+    }
+
+    /* 4-Axis Evaluation Bars */
+    .axes-strip {
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      gap: 6px;
       margin-bottom: 4px;
+      font-family: var(--font-mono);
+      font-size: 9.5px;
+      color: var(--ink-rejected);
+    }
+
+    .axis-item {
+      display: flex;
+      flex-direction: column;
+      gap: 2px;
+    }
+
+    .axis-label {
+      display: flex;
+      justify-content: space-between;
+    }
+
+    .axis-bar-bg {
+      width: 100%;
+      height: 3px;
+      background: #161512;
+    }
+
+    .axis-bar-fill {
+      height: 100%;
+      background: var(--ink-rejected);
+      transition: width 0.25s ease;
+    }
+
+    .cand-card.adopted .axis-bar-fill {
+      background: var(--ink-adopted);
+    }
+
+    .cand-card.auditioning .axis-bar-fill {
+      background: var(--ink-vermilion);
     }
 
     .cand-staff-wrap {
@@ -364,7 +484,7 @@
 
     .f10-hint {
       position: fixed;
-      bottom: 6px;
+      bottom: 5px;
       right: 12px;
       font-family: var(--font-mono);
       font-size: 10px;
@@ -374,7 +494,7 @@
   </style>
 </head>
 <body>
-  <div class="stage-shell">
+  <div class="stage-shell" id="stage-shell">
     <!-- Minimal Top Bar (F10 Toggleable) -->
     <header class="control-bar" id="control-bar">
       <div class="bar-group">
@@ -382,22 +502,46 @@
         <button class="btn" id="btn-mode-piano" onclick="setMode('piano')">Mode A: Piano &harr; Piano</button>
         <button class="btn active" id="btn-mode-cello" onclick="setMode('cello')">Mode B: Cello &harr; Disklavier</button>
         <button class="btn" id="btn-demo" onclick="toggleDemo()">Virtual Demo: OFF</button>
-        <button class="btn" id="btn-audio" onclick="toggleAudioMonitor()">Audio Monitor: OFF</button>
+        <button class="btn" id="btn-audio" onclick="toggleAudioMonitor()">Audio Monitor: ON</button>
+        <span class="audio-pill" id="audio-status-pill">
+          <span class="audio-dot" id="audio-dot"></span>
+          <span id="audio-status-text">出力待機中</span>
+          <span class="vu-meter"><span class="vu-fill" id="vu-fill"></span></span>
+          <span id="audio-dbfs-val">-- dBFS</span>
+        </span>
       </div>
       <div class="bar-group">
         <input
           type="text"
           id="mc-input"
           class="mc-input"
-          placeholder="口頭指示 (例: 短調で発展させて)"
+          placeholder="口頭指示 (例: 短調で対位法に)"
           onkeydown="if (event.key === 'Enter') sendDirective()"
         />
         <button class="btn" onclick="sendDirective()">指示送信</button>
+        <button class="btn" id="btn-calibrate" onclick="runCalibration()">30秒物理遅延＆NLMS校正</button>
         <button class="btn" onclick="triggerTurn()">次ターン実行</button>
         <button class="btn" onclick="resetGraph()">記憶初期化</button>
         <button class="btn panic-btn" onclick="triggerPanic()">PANIC: ALL NOTES OFF</button>
       </div>
     </header>
+
+    <!-- Demo Control Deck (Visible in Demo Mode, Hidden in Production or F10) -->
+    <section class="demo-deck" id="demo-deck">
+      <div class="bar-group">
+        <span style="color: var(--ink-rejected);">DEMO DECK / 曲想切替:</span>
+        <button class="btn" id="preset-baroque_counterpoint" onclick="applyPreset('baroque_counterpoint')">バロック対位法</button>
+        <button class="btn active" id="preset-impressionist_modal" onclick="applyPreset('impressionist_modal')">印象派風</button>
+        <button class="btn" id="preset-contemporary_provoke" onclick="applyPreset('contemporary_provoke')">現代音楽的挑発</button>
+        <button class="btn" id="preset-serene_chorale" onclick="applyPreset('serene_chorale')">静謐なコラール</button>
+      </div>
+      <div class="bar-group">
+        <span style="color: var(--ink-rejected);">ダメ出しMC注入:</span>
+        <button class="btn" onclick="injectDirective('中音域が濁るので高音へ逃がしペダルは浅く')">中音濁り修正</button>
+        <button class="btn" onclick="injectDirective('ドライで鋭いスタッカート対位法で返して')">ドライ対位法</button>
+        <button class="btn active" id="btn-audition" onclick="toggleAuditionPreview()">試奏オーディション音: ON</button>
+      </div>
+    </section>
 
     <!-- 4-Zone Stage Projection Grid -->
     <main class="stage-grid">
@@ -450,11 +594,11 @@
       <!-- Zone B: Top-Right Performer Thought Trace -->
       <section class="zone zone-b" aria-label="Zone B 実演家の思考トレース">
         <div class="zone-header">
-          <span class="zone-title">Zone B — 実演家の思考トレース (L2 Intent)</span>
+          <span class="zone-title">Zone B — 実演家の思考トレース (L2 Factual Trace)</span>
           <span class="zone-meta" id="meta-intent">RULE / OLLAMA</span>
         </div>
         <div class="monologue-box" id="monologue-text">
-          チェロまたはピアノの第一音を待機中。動機を捕捉次第、調性と対位法の設計を開始する。
+          チェロまたはピアノの第一音を待機中。実音検出後に4案の採点と棄却理由を記録する。
         </div>
         <div class="intent-strip">
           <span>STANCE: <strong id="val-stance">listen</strong></span>
@@ -468,40 +612,41 @@
       <!-- Zone C: Center Main Public Pruning & Score Arena -->
       <section class="zone zone-c" aria-label="Zone C 公開推敲・楽譜アリーナ">
         <div class="zone-header">
-          <span class="zone-title">Zone C — 公開推敲・楽譜アリーナ (L3 symusic Candidates &times; L5 Strike Sync)</span>
+          <span class="zone-title">Zone C — 公開推敲・楽譜アリーナ (Staggered Audition &times; 4-Axis Scoring)</span>
+          <span class="timeline-banner" id="timeline-banner">待機中 — 人間フレーズ終止後に4候補を順次推敲する</span>
           <span class="zone-meta" id="meta-arena">TURN #0 | CORPUS: builtin_seed_dictionary</span>
         </div>
         <div class="arena-grid" id="arena-grid">
           <article class="cand-card" id="card-A">
             <div class="cand-head">
               <span class="cand-title" id="title-A">Candidate A — 対位法的反行案</span>
-              <span class="cand-badge" id="badge-A">待機</span>
+              <span class="cand-badge sketching" id="badge-A">待機</span>
             </div>
-            <div class="cand-score-line" id="score-A">score: --</div>
+            <div class="axes-strip" id="axes-A"></div>
             <div class="cand-staff-wrap"><canvas id="staff-A"></canvas></div>
           </article>
           <article class="cand-card" id="card-B">
             <div class="cand-head">
               <span class="cand-title" id="title-B">Candidate B — コーパス文脈照合案</span>
-              <span class="cand-badge" id="badge-B">待機</span>
+              <span class="cand-badge sketching" id="badge-B">待機</span>
             </div>
-            <div class="cand-score-line" id="score-B">score: --</div>
+            <div class="axes-strip" id="axes-B"></div>
             <div class="cand-staff-wrap"><canvas id="staff-B"></canvas></div>
           </article>
           <article class="cand-card" id="card-C">
             <div class="cand-head">
               <span class="cand-title" id="title-C">Candidate C — 旋法声部連結案</span>
-              <span class="cand-badge" id="badge-C">待機</span>
+              <span class="cand-badge sketching" id="badge-C">待機</span>
             </div>
-            <div class="cand-score-line" id="score-C">score: --</div>
+            <div class="axes-strip" id="axes-C"></div>
             <div class="cand-staff-wrap"><canvas id="staff-C"></canvas></div>
           </article>
           <article class="cand-card" id="card-D">
             <div class="cand-head">
               <span class="cand-title" id="title-D">Candidate D — 中音域密集対照案</span>
-              <span class="cand-badge" id="badge-D">待機</span>
+              <span class="cand-badge sketching" id="badge-D">待機</span>
             </div>
-            <div class="cand-score-line" id="score-D">score: --</div>
+            <div class="axes-strip" id="axes-D"></div>
             <div class="cand-staff-wrap"><canvas id="staff-D"></canvas></div>
           </article>
         </div>
@@ -528,16 +673,28 @@
     const COLOR_VERMILION = "#C83E2B";
 
     let latestState = null;
-    let audioEnabled = false;
+    let audioEnabled = true;
+    let auditionPreviewEnabled = true;
     let audioCtx = null;
-    let lastPlayedTurnId = -1;
-    let scheduledStrikeSet = new Set();
+    let lastAnimatedTurnId = -1;
+    let animPhaseState = {
+      turnId: -1,
+      stepIdx: 3, // 0=sketch, 1..3=rejecting, 4=locked/performing
+      rejectedIds: new Set(),
+      activeRejectId: "",
+      adoptedLocked: true,
+      bannerText: "待機中",
+      playheadFrac: 0.0,
+      turnStartPerf: 0,
+      timers: [],
+    };
 
-    // Keyboard F10 to hide/show top minimal control bar
     window.addEventListener("keydown", (ev) => {
       if (ev.key === "F10") {
         ev.preventDefault();
         document.getElementById("control-bar").classList.toggle("hidden-bar");
+        document.getElementById("demo-deck").classList.toggle("hidden-bar");
+        document.getElementById("stage-shell").classList.toggle("projection-clean");
       }
     });
 
@@ -551,23 +708,20 @@
       }
     }
 
-    function toggleAudioMonitor() {
-      audioEnabled = !audioEnabled;
-      if (audioEnabled) ensureAudioContext();
-      const btn = document.getElementById("btn-audio");
-      btn.textContent = audioEnabled ? "Audio Monitor: ON" : "Audio Monitor: OFF";
-      btn.classList.toggle("active", audioEnabled);
-    }
-
     function midiToFreq(midi) {
       return 440.0 * Math.pow(2.0, (midi - 69) / 12.0);
     }
 
-    function playMonitorPianoNote(midi, velocity, delayS, durationS) {
-      if (!audioEnabled || !audioCtx) return;
+    function playMonitorPianoNote(midi, velocity, delayS, durationS, mutedAudition = false) {
+      if (!audioEnabled) return;
+      ensureAudioContext();
+      if (!audioCtx || audioCtx.state !== "running") return;
+
       const now = audioCtx.currentTime + Math.max(0, delayS);
-      const dur = Math.max(0.12, Math.min(2.2, durationS || 0.45));
-      const gainVal = Math.max(0.02, Math.min(0.22, (velocity / 112.0) * 0.18));
+      const dur = Math.max(0.10, Math.min(2.0, durationS || 0.4));
+      const gainVal = mutedAudition
+        ? 0.032
+        : Math.max(0.025, Math.min(0.18, (velocity / 112.0) * 0.14));
 
       const osc1 = audioCtx.createOscillator();
       const osc2 = audioCtx.createOscillator();
@@ -580,16 +734,16 @@
       osc2.frequency.setValueAtTime(f0 * 2.0, now);
 
       gain.gain.setValueAtTime(0.0001, now);
-      gain.gain.linearRampToValueAtTime(gainVal, now + 0.012);
-      gain.gain.exponentialRampToValueAtTime(0.0008, now + dur + 0.25);
+      gain.gain.linearRampToValueAtTime(gainVal, now + 0.008);
+      gain.gain.exponentialRampToValueAtTime(0.0008, now + dur + (mutedAudition ? 0.08 : 0.22));
 
       osc1.connect(gain);
       osc2.connect(gain);
       gain.connect(audioCtx.destination);
       osc1.start(now);
       osc2.start(now);
-      osc1.stop(now + dur + 0.28);
-      osc2.stop(now + dur + 0.28);
+      osc1.stop(now + dur + 0.25);
+      osc2.stop(now + dur + 0.25);
     }
 
     async function postJson(url, body) {
@@ -612,10 +766,39 @@
 
     async function toggleDemo() {
       const next = !(latestState && latestState.demo_enabled);
-      if (next && !audioEnabled) {
-        toggleAudioMonitor();
+      if (next) {
+        audioEnabled = true;
+        ensureAudioContext();
       }
       await postJson("/api/stage/demo", { enabled: next });
+      fetchStateOnce();
+    }
+
+    async function toggleAudioMonitor() {
+      audioEnabled = !audioEnabled;
+      if (audioEnabled) ensureAudioContext();
+      await postJson("/api/stage/audio_monitor", { enabled: audioEnabled, audition_preview: auditionPreviewEnabled });
+      fetchStateOnce();
+    }
+
+    async function toggleAuditionPreview() {
+      auditionPreviewEnabled = !auditionPreviewEnabled;
+      const btn = document.getElementById("btn-audition");
+      btn.textContent = `試奏オーディション音: ${auditionPreviewEnabled ? "ON" : "OFF"}`;
+      btn.classList.toggle("active", auditionPreviewEnabled);
+      await postJson("/api/stage/audio_monitor", { enabled: audioEnabled, audition_preview: auditionPreviewEnabled });
+    }
+
+    async function applyPreset(preset) {
+      ensureAudioContext();
+      await postJson("/api/stage/preset", { preset });
+      fetchStateOnce();
+    }
+
+    async function injectDirective(text) {
+      ensureAudioContext();
+      await postJson("/api/stage/directive", { text });
+      await postJson("/api/stage/turn", {});
       fetchStateOnce();
     }
 
@@ -630,8 +813,17 @@
     }
 
     async function triggerTurn() {
-      if (audioEnabled) ensureAudioContext();
+      ensureAudioContext();
       await postJson("/api/stage/turn", {});
+      fetchStateOnce();
+    }
+
+    async function runCalibration() {
+      const res = await postJson("/api/stage/calibrate", {});
+      if (res && res.ok) {
+        document.getElementById("timeline-banner").textContent =
+          `校正完了: VDL=${res.vdl_base_ms}ms / NLMS ERLE=${res.nlms_erle_db}dB (${res.connected_port})`;
+      }
       fetchStateOnce();
     }
 
@@ -665,7 +857,6 @@
       ctx.fillStyle = COLOR_STAGE;
       ctx.fillRect(0, 0, w, h);
 
-      // Subtle pitch reference lines (MIDI 48, 60, 72)
       ctx.strokeStyle = "#181714";
       ctx.lineWidth = 1;
       for (const frac of [0.25, 0.5, 0.75]) {
@@ -691,7 +882,6 @@
         });
         ctx.stroke();
 
-        // Highlight latest pitch point in vermilion
         const lastHz = hist[hist.length - 1];
         const lastMidi = lastHz > 20 ? 69 + 12 * Math.log2(lastHz / 440) : 55;
         const ny = 1 - Math.max(0.08, Math.min(0.92, (lastMidi - 36) / 48));
@@ -707,10 +897,30 @@
     }
 
     function midiToStaffStep(midi) {
-      // Diatonic step relative to C4 (MIDI 60)
       const pcSteps = [0, 0, 1, 1, 2, 3, 3, 4, 4, 5, 5, 6];
       const oct = Math.floor(midi / 12) - 5;
       return oct * 7 + pcSteps[((midi % 12) + 12) % 12];
+    }
+
+    function renderAxesStrip(cand) {
+      const el = document.getElementById(`axes-${cand.candidate_id}`);
+      if (!el) return;
+      const pct = cand.subscores_pct || {};
+      const items = [
+        ["和声適合", pct.harmonic_fit ?? 0],
+        ["声部連結", pct.counterpoint_quality ?? 0],
+        ["倍音回避", pct.overtone_clearance ?? 0],
+        ["密度整合", pct.rhythm_density ?? 0],
+      ];
+      el.innerHTML = items
+        .map(
+          ([lbl, val]) =>
+            `<div class="axis-item">
+               <div class="axis-label"><span>${lbl}</span><span>${val}%</span></div>
+               <div class="axis-bar-bg"><div class="axis-bar-fill" style="width:${Math.max(0, Math.min(100, val))}%"></div></div>
+             </div>`
+        )
+        .join("");
     }
 
     function renderCandidateStaff(cand, activePitchesSet) {
@@ -718,35 +928,47 @@
       const card = document.getElementById(`card-${cid}`);
       const titleEl = document.getElementById(`title-${cid}`);
       const badgeEl = document.getElementById(`badge-${cid}`);
-      const scoreEl = document.getElementById(`score-${cid}`);
       const canvas = document.getElementById(`staff-${cid}`);
       if (!card || !canvas) return;
 
-      card.classList.toggle("adopted", !!cand.adopted);
-      card.classList.toggle("rejected", !cand.adopted);
+      const isActiveReject = animPhaseState.activeRejectId === cid;
+      const isRejectedVisible = animPhaseState.rejectedIds.has(cid);
+      const isAdoptedLocked = cand.adopted && animPhaseState.adoptedLocked;
 
-      titleEl.textContent = `Candidate ${cid} — ${cand.label_ja}`;
+      card.classList.toggle("adopted", isAdoptedLocked);
+      card.classList.toggle("auditioning", isActiveReject);
+      card.classList.toggle("rejected", !cand.adopted && isRejectedVisible && !isActiveReject);
+
+      titleEl.textContent = `Candidate ${cid} — ${cand.label_ja} (${cand.pitch_range_str || "--"} / ${cand.total_score})`;
+
       if (cand.adopted) {
-        badgeEl.textContent = "採用 ADOPTED";
-        badgeEl.className = "cand-badge adopted";
-      } else {
-        badgeEl.textContent = cand.rejection_tag_ja || "[棄却]";
+        if (isAdoptedLocked) {
+          badgeEl.textContent = "採用 LOCKED";
+          badgeEl.className = "cand-badge adopted";
+        } else {
+          badgeEl.textContent = "検証中...";
+          badgeEl.className = "cand-badge sketching";
+        }
+      } else if (isActiveReject || isRejectedVisible) {
+        const detail = cand.rejection_detail || {};
+        badgeEl.textContent = detail.hud_badge_ja || cand.rejection_tag_ja || "[× 棄却]";
         badgeEl.className = "cand-badge rejected";
+      } else {
+        badgeEl.textContent = "着想スケッチ";
+        badgeEl.className = "cand-badge sketching";
       }
 
-      const sub = cand.subscores || {};
-      scoreEl.textContent = `TOTAL ${cand.total_score} | H:${sub.harmonic_fit ?? 0} R:${sub.register_separation ?? 0} C:${sub.counterpoint_quality ?? 0} D:${sub.density_fit ?? 0}`;
+      renderAxesStrip(cand);
 
       const { ctx, w, h } = fitCanvas(canvas);
       ctx.fillStyle = "#0A0A0D";
       ctx.fillRect(0, 0, w, h);
 
       const trebleBaseY = h * 0.42;
-      const bassBaseY = h * 0.78;
-      const stepPx = Math.max(2.6, Math.min(4.0, h * 0.032));
-      const staffColor = cand.adopted ? "#3E3C37" : "#24221E";
+      const bassBaseY = h * 0.79;
+      const stepPx = Math.max(2.5, Math.min(3.8, h * 0.032));
+      const staffColor = isAdoptedLocked ? "#3E3C37" : "#24221E";
 
-      // Draw 5-line Treble & Bass Grand Staff
       ctx.strokeStyle = staffColor;
       ctx.lineWidth = 1;
       for (const baseY of [trebleBaseY, bassBaseY]) {
@@ -759,54 +981,85 @@
         }
       }
 
-      // Draw Clef markers (Treble G / Bass F)
-      ctx.fillStyle = cand.adopted ? COLOR_ADOPTED : COLOR_REJECTED;
-      ctx.font = "italic 16px 'Cormorant Garamond', Georgia, serif";
+      ctx.fillStyle = isAdoptedLocked ? COLOR_ADOPTED : COLOR_REJECTED;
+      ctx.font = "italic 15px 'Cormorant Garamond', Georgia, serif";
       ctx.fillText("G", 8, trebleBaseY - stepPx * 2);
       ctx.fillText("F", 8, bassBaseY - stepPx * 3);
 
-      // Draw noteheads synchronized with Disklavier active pitches
       const noteEvs = (cand.events || []).filter((e) => Number(e.pitch || 0) > 0);
       if (noteEvs.length === 0) return;
 
       const maxT = Math.max(1.2, ...noteEvs.map((e) => Number(e.onset_s || 0) + Number(e.duration_s || 0.2)));
-      const drawW = w - 54;
+      const drawW = w - 56;
+      const probSet = new Set(cand.problem_note_indices || []);
 
-      for (const ev of noteEvs) {
+      // Playhead bar on locked adopted staff during Step 3
+      if (isAdoptedLocked && animPhaseState.playheadFrac > 0 && animPhaseState.playheadFrac <= 1.05) {
+        const px = 36 + Math.min(1.0, animPhaseState.playheadFrac) * drawW;
+        ctx.strokeStyle = "rgba(200, 62, 43, 0.55)";
+        ctx.lineWidth = 1.5;
+        ctx.beginPath();
+        ctx.moveTo(px, 6);
+        ctx.lineTo(px, h - 6);
+        ctx.stroke();
+      }
+
+      noteEvs.forEach((ev, idx) => {
         const pitch = Number(ev.pitch);
         const onset = Number(ev.onset_s || 0);
         const x = 36 + (onset / maxT) * drawW;
 
         let y;
         if (pitch >= 60) {
-          // Treble bottom line E4 = MIDI 64 (step 2 from C4)
           const stepOffset = midiToStaffStep(pitch) - 2;
           y = trebleBaseY - stepOffset * stepPx;
         } else {
-          // Bass bottom line G2 = MIDI 43 (step -10 from C4)
           const stepOffset = midiToStaffStep(pitch) - (-10);
           y = bassBaseY - stepOffset * stepPx;
         }
         y = Math.max(8, Math.min(h - 8, y));
 
-        const isSounding = cand.adopted && activePitchesSet.has(pitch);
-        const noteColor = isSounding
+        const isProblemNote = !cand.adopted && (isActiveReject || isRejectedVisible) && probSet.has(idx);
+        const fracNote = onset / maxT;
+        const isPlayheadNote =
+          isAdoptedLocked &&
+          Math.abs(animPhaseState.playheadFrac - fracNote) < 0.12 &&
+          animPhaseState.playheadFrac > 0;
+        const isSounding = isAdoptedLocked && (activePitchesSet.has(pitch) || isPlayheadNote);
+
+        const noteColor = (isSounding || isProblemNote)
           ? COLOR_VERMILION
-          : (cand.adopted ? COLOR_ADOPTED : COLOR_REJECTED);
+          : (isAdoptedLocked ? COLOR_ADOPTED : COLOR_REJECTED);
 
         ctx.fillStyle = noteColor;
         ctx.strokeStyle = noteColor;
-        ctx.lineWidth = isSounding ? 1.8 : 1.1;
+        ctx.lineWidth = (isSounding || isProblemNote) ? 1.8 : 1.1;
 
         ctx.beginPath();
-        ctx.ellipse(x, y, 4.4, 3.1, -0.25, 0, Math.PI * 2);
+        ctx.ellipse(x, y, 4.3, 3.0, -0.25, 0, Math.PI * 2);
         ctx.fill();
 
-        // Stem
         const stemUp = pitch < 71;
         ctx.beginPath();
         ctx.moveTo(x + (stemUp ? 4 : -4), y);
-        ctx.lineTo(x + (stemUp ? 4 : -4), y + (stemUp ? -16 : 16));
+        ctx.lineTo(x + (stemUp ? 4 : -4), y + (stemUp ? -15 : 15));
+        ctx.stroke();
+
+        // Vermilion ring around conflicting note during Step 2 audition
+        if (isProblemNote) {
+          ctx.beginPath();
+          ctx.arc(x, y, 7.5, 0, Math.PI * 2);
+          ctx.stroke();
+        }
+      });
+
+      // Red strikethrough line across rejected staff once discarded
+      if (!cand.adopted && isRejectedVisible && !isActiveReject) {
+        ctx.strokeStyle = "rgba(200, 62, 43, 0.72)";
+        ctx.lineWidth = 1.6;
+        ctx.beginPath();
+        ctx.moveTo(28, h * 0.25);
+        ctx.lineTo(w - 14, h * 0.82);
         ctx.stroke();
       }
     }
@@ -822,7 +1075,6 @@
       const edges = graph.edges || [];
       document.getElementById("meta-graph").textContent = `NODES: ${nodes.length} | EDGES: ${edges.length}`;
 
-      // Timeline baseline
       ctx.strokeStyle = "#191815";
       ctx.lineWidth = 1;
       ctx.beginPath();
@@ -844,7 +1096,6 @@
         posMap[n.id] = { x, y, node: n };
       });
 
-      // Draw edges
       edges.forEach((e) => {
         const src = posMap[e.source];
         const tgt = posMap[e.target];
@@ -857,7 +1108,6 @@
         ctx.stroke();
       });
 
-      // Draw nodes
       Object.values(posMap).forEach(({ x, y, node }) => {
         const isLatest = node.turn === state.turn_id && node.kind === "ai";
         ctx.fillStyle = isLatest ? COLOR_VERMILION : (node.kind === "human" ? COLOR_ADOPTED : COLOR_STAGE);
@@ -875,16 +1125,121 @@
       });
     }
 
+    function startStaggeredTurnAnimation(state) {
+      animPhaseState.timers.forEach((t) => clearTimeout(t));
+      animPhaseState.timers = [];
+
+      const cands = state.candidates || [];
+      const timeline = state.deliberation_timeline || [];
+      if (cands.length === 0 || timeline.length === 0) return;
+
+      animPhaseState.turnId = state.turn_id;
+      animPhaseState.rejectedIds = new Set();
+      animPhaseState.activeRejectId = "";
+      animPhaseState.adoptedLocked = false;
+      animPhaseState.playheadFrac = 0.0;
+
+      timeline.forEach((step) => {
+        const tid = setTimeout(() => {
+          animPhaseState.rejectedIds = new Set(step.rejected_so_far || []);
+          animPhaseState.activeRejectId = step.active_reject_id || "";
+          animPhaseState.adoptedLocked = !!step.adopted_locked;
+          animPhaseState.bannerText = step.label_ja || "";
+
+          const banner = document.getElementById("timeline-banner");
+          if (banner) {
+            banner.textContent = animPhaseState.bannerText;
+            banner.classList.toggle("audition", step.stage === "step2_audition_reject");
+          }
+
+          // Optional WebAudio pianissimo audition fragment when discarding a rejected candidate
+          if (step.stage === "step2_audition_reject" && audioEnabled && auditionPreviewEnabled) {
+            const rejCand = cands.find((c) => c.candidate_id === step.active_reject_id);
+            if (rejCand) {
+              (rejCand.events || [])
+                .filter((e) => Number(e.pitch || 0) > 0)
+                .slice(0, 2)
+                .forEach((ev, idx) => {
+                  playMonitorPianoNote(Number(ev.pitch), 24, idx * 0.08, 0.14, true);
+                });
+            }
+          }
+
+          if (step.stage === "step3_adopt_perform") {
+            animPhaseState.turnStartPerf = performance.now();
+            const adopted = cands.find((c) => c.adopted);
+            if (adopted && audioEnabled) {
+              (adopted.events || []).forEach((ev) => {
+                if (Number(ev.pitch || 0) > 0) {
+                  playMonitorPianoNote(
+                    Number(ev.pitch),
+                    Number(ev.velocity || 64),
+                    Number(ev.onset_s || 0),
+                    Number(ev.duration_s || 0.35),
+                    false
+                  );
+                }
+              });
+            }
+          }
+          if (latestState) renderZoneC(latestState);
+        }, Number(step.at_ms || 0));
+        animPhaseState.timers.push(tid);
+      });
+    }
+
+    function renderZoneC(state) {
+      const out = state.output || {};
+      const activeSet = new Set((out.active_pitches || []).map(Number));
+      const cands = state.candidates || [];
+      if (animPhaseState.adoptedLocked && animPhaseState.turnStartPerf > 0) {
+        const elapsed = (performance.now() - animPhaseState.turnStartPerf) / 1000.0;
+        animPhaseState.playheadFrac = Math.min(1.1, elapsed / 1.8);
+      }
+      cands.forEach((cand) => renderCandidateStaff(cand, activeSet));
+    }
+
     function updateHUD(state) {
       if (!state) return;
       latestState = state;
+      audioEnabled = !!state.monitor_audio;
 
-      // Top bar buttons
       document.getElementById("btn-mode-piano").classList.toggle("active", state.mode === "piano");
       document.getElementById("btn-mode-cello").classList.toggle("active", state.mode === "cello");
       const demoBtn = document.getElementById("btn-demo");
       demoBtn.textContent = state.demo_enabled ? "Virtual Demo: ON" : "Virtual Demo: OFF";
       demoBtn.classList.toggle("active", !!state.demo_enabled);
+
+      const audioBtn = document.getElementById("btn-audio");
+      audioBtn.textContent = audioEnabled ? "Audio Monitor: ON" : "Audio Monitor: OFF";
+      audioBtn.classList.toggle("active", audioEnabled);
+
+      // Hide Demo Control Deck in Production Mode
+      const deckEl = document.getElementById("demo-deck");
+      const calBtn = document.getElementById("btn-calibrate");
+      if (state.production_mode) {
+        deckEl.classList.add("hidden-bar");
+        calBtn.style.display = "inline-block";
+      } else {
+        if (!document.getElementById("control-bar").classList.contains("hidden-bar")) {
+          deckEl.classList.remove("hidden-bar");
+        }
+        calBtn.style.display = "inline-block";
+      }
+
+      // Preset button highlight
+      document.querySelectorAll("[id^='preset-']").forEach((btn) => {
+        btn.classList.toggle("active", btn.id === `preset-${state.active_preset}`);
+      });
+
+      // Audio status pill + dBFS meter
+      const aStat = state.audio_status || {};
+      document.getElementById("audio-status-text").textContent = `[${aStat.label_ja || "待機中"}]`;
+      const dbfs = Number(aStat.dbfs ?? -72);
+      document.getElementById("audio-dbfs-val").textContent = `${dbfs.toFixed(1)} dBFS`;
+      const vuPct = Math.max(0, Math.min(100, ((dbfs + 60) / 54) * 100));
+      document.getElementById("vu-fill").style.width = `${vuPct}%`;
+      document.getElementById("audio-dot").classList.toggle("live", audioEnabled && dbfs > -55);
 
       // Zone A
       const p = state.perception || {};
@@ -924,27 +1279,11 @@
       // Zone C
       document.getElementById("meta-arena").textContent =
         `TURN #${state.turn_id || 0} | CORPUS: ${state.corpus_source || "builtin"} | PORT: ${out.connected_port || "Virtual"}`;
-      const activeSet = new Set((out.active_pitches || []).map(Number));
-      const cands = state.candidates || [];
-      cands.forEach((cand) => renderCandidateStaff(cand, activeSet));
-
-      // Audio Monitor playback for newly adopted turns
-      if (audioEnabled && state.turn_id > 0 && state.turn_id !== lastPlayedTurnId) {
-        lastPlayedTurnId = state.turn_id;
-        const adopted = cands.find((c) => c.adopted);
-        if (adopted) {
-          (adopted.events || []).forEach((ev) => {
-            if (Number(ev.pitch || 0) > 0) {
-              playMonitorPianoNote(
-                Number(ev.pitch),
-                Number(ev.velocity || 64),
-                Number(ev.onset_s || 0),
-                Number(ev.duration_s || 0.35)
-              );
-            }
-          });
-        }
+      if (state.turn_id > 0 && state.turn_id !== lastAnimatedTurnId) {
+        lastAnimatedTurnId = state.turn_id;
+        startStaggeredTurnAnimation(state);
       }
+      renderZoneC(state);
 
       // Zone D
       renderMotifGraph(state);
@@ -974,6 +1313,7 @@
       const params = new URLSearchParams(window.location.search);
       if (params.get("demo") === "1") {
         postJson("/api/stage/demo", { enabled: true });
+        postJson("/api/stage/audio_monitor", { enabled: true, audition_preview: true });
       }
       fetchStateOnce();
       connectWebSocket();

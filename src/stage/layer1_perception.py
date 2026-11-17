@@ -279,6 +279,23 @@ class NLMSEchoCanceller:
         self.last_erle_db = round(max(0.0, 10.0 * math.log10(in_pow / out_pow)), 2)
         return out.astype(np.float32)
 
+    @staticmethod
+    def measure_bleed_erle_db(
+        pure_bleed_mic: np.ndarray,
+        ref_signal: np.ndarray,
+    ) -> float:
+        """
+        Measures pure adaptive echo cancellation ERLE (dB) on a reference-only probe
+        block without altering live cello perception state.
+        """
+        probe = NLMSEchoCanceller()
+        residual = probe.process_block(pure_bleed_mic, ref_signal)
+        n = len(pure_bleed_mic)
+        tail = n // 2 if n > 16 else 0
+        in_p = float(np.mean(np.asarray(pure_bleed_mic[tail:], dtype=np.float64) ** 2)) + 1e-12
+        out_p = float(np.mean(np.asarray(residual[tail:], dtype=np.float64) ** 2)) + 1e-12
+        return round(max(0.0, 10.0 * math.log10(in_p / out_p)), 2)
+
 
 class CelloAcousticPerception:
     """

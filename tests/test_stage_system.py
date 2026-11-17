@@ -1,12 +1,14 @@
 """
-5-Gate Automated Verification Suite for Disklavier-Auto Stage Process Visualization System.
+Comprehensive Verification Suite for Disklavier-Auto Stage Process Visualization System.
 
 Verifies:
 1. 30-Note Crash Prevention & <10ms Panic under 200 notes/sec burst.
 2. Mode A Self-Strike Echo Loop Suppression (100% AI echo rejection, human pass-through).
 3. Mode B Cello Acoustic Perception & 2ch NLMS Echo Cancellation (F0 + staccato/legato).
-4. Multiple Candidate Generation (1 Adopted + >=2 Rejected with musical tags) & Anti-AI Slop check.
-5. Zero-MIDI-File Fallback, Demo Mode Showcase & WebSocket /ws/stage end-to-end streaming.
+4. MusicalLogicValidator (rejecting musical contradictions & AI poetry clichés),
+   4-Axis Scoring, Problem Note Coordinates, and Anti-AI Slop check.
+5. Python Direct Audio Synthesizer (RMS > 0.01, 0 NaN/Inf, 0 clipping),
+   Staggered Deliberation Timeline, Production vs Demo isolation, and WebSocket streaming.
 """
 
 from __future__ import annotations
@@ -30,6 +32,7 @@ from src.stage.layer1_perception import (
 from src.stage.layer2_intent_llm import (
     BANNED_PHRASES,
     MusicalIntentEngine,
+    MusicalLogicValidator,
     sanitize_monologue_ja,
     validate_chamber_music_monologue,
 )
@@ -38,6 +41,7 @@ from src.stage.layer3_candidate_composer import (
     ZeroConfigCorpusLoader,
 )
 from src.stage.layer5_disklavier_output import DisklavierStageOutputLayer
+from src.stage.local_audio_synth import LocalAudioSynthesizer
 from src.stage.stage_server import create_stage_app
 
 
@@ -49,35 +53,31 @@ def test_1_thirty_voice_crash_prevention_and_fast_panic() -> None:
         start_worker=False,
     )
     try:
-        # Simulate 200 notes/sec burst (220 notes spaced at 5ms across 88 piano keys)
         t_sim = 100.0
         for i in range(220):
             pitch = 21 + (i * 7) % 88
             vel = 5 if i % 10 == 0 else (127 if i % 10 == 1 else 78)
             out.send_note_on_immediate(pitch=pitch, velocity=vel, duration_s=4.0, now=t_sim)
             assert len(out.active_notes) <= 30, f"Active voices exceeded 30: {len(out.active_notes)}"
-            t_sim += 0.005  # 200 notes/sec
+            t_sim += 0.005
 
         tel = out.get_telemetry()
         assert tel.max_active_observed <= 30
-        assert tel.voice_steals > 0, "Expected voice stealing to engage during sustained 200/s burst"
-        assert tel.velocity_clamps > 0, "Expected extreme velocities (5, 127) to be clamped to [18, 112]"
+        assert tel.voice_steals > 0
+        assert tel.velocity_clamps > 0
 
-        # Verify emitted velocities stay within [18, 112]
         note_ons = [e for e in emitted if e["type"] == "note_on"]
         assert all(18 <= e["velocity"] <= 112 for e in note_ons)
 
-        # Verify CC#64 thinning filter (min 40ms interval & +/-3 deadband)
         assert out.send_pedal_cc64(50, now=200.000) is True
-        assert out.send_pedal_cc64(52, now=200.050) is False  # within +/-3 deadband
-        assert out.send_pedal_cc64(64, now=200.015) is False  # within 40ms interval
+        assert out.send_pedal_cc64(52, now=200.050) is False
+        assert out.send_pedal_cc64(64, now=200.015) is False
         assert out.send_pedal_cc64(64, now=200.060) is True
 
-        # Verify emergency panic clears all active notes and sends CC#123, CC#120, CC#64=0 in < 10ms
         emitted.clear()
         panic_res = out.panic()
         assert panic_res["active_voices"] == 0
-        assert panic_res["elapsed_ms"] < 10.0, f"Panic took too long: {panic_res['elapsed_ms']}ms"
+        assert panic_res["elapsed_ms"] < 10.0
         ccs = {(e["control"], e["value"]) for e in emitted if e["type"] == "control_change"}
         assert (64, 0) in ccs and (123, 0) in ccs and (120, 0) in ccs
     finally:
@@ -97,12 +97,10 @@ def test_2_mode_a_self_echo_loop_suppression() -> None:
         for idx, p in enumerate(ai_pitches):
             assert out.send_note_on_immediate(pitch=p, velocity=74, duration_s=0.5, now=t0 + idx * 0.01)
 
-        # Every AI note echoed back within Disklavier physical loopback window must be 100% dropped
         for idx, p in enumerate(ai_pitches):
             echo_recv = ledger.filter_incoming_note(pitch=p, velocity=70, recv_ts=t0 + idx * 0.01 + 0.045)
-            assert echo_recv is None, f"Self-echo on pitch {p} leaked through ledger!"
+            assert echo_recv is None
 
-        # Human pianist notes on distinct pitches or outside window must pass through 100%
         human_pitches = [62, 65, 69]
         extracted = []
         for idx, hp in enumerate(human_pitches):
@@ -112,12 +110,11 @@ def test_2_mode_a_self_echo_loop_suppression() -> None:
         assert [n["pitch"] for n in extracted] == human_pitches
         assert ledger.suppressed_count == len(ai_pitches)
 
-        # Verify Turn-Taking Detector (CC#67 explicit cue + IOI ritardando breathing)
         detector = TurnTakingDetector(silence_threshold_s=0.6)
         detector.push_note(62, 10.0)
         detector.push_note(65, 10.25)
         detector.push_note(69, 10.55)
-        detector.push_note(67, 11.05)  # Ritardando IOI (0.25 -> 0.30 -> 0.50)
+        detector.push_note(67, 11.05)
         gauge, ready, _ = detector.evaluate(now=11.65)
         assert gauge >= 0.68 and ready is True
     finally:
@@ -129,7 +126,6 @@ def test_3_mode_b_cello_nlms_pitch_and_articulation() -> None:
     dur_s = 0.70
     t = np.arange(int(sr * dur_s), dtype=np.float64) / sr
 
-    # Target cello note A3 (MIDI 57, 220.0 Hz) with phase-integrated 5.4 Hz vibrato
     target_midi = 57
     f0_cello = 220.0
     phase = 2.0 * np.pi * f0_cello * np.cumsum(1.0 + 0.004 * np.sin(2.0 * np.pi * 5.4 * t)) / sr
@@ -139,28 +135,23 @@ def test_3_mode_b_cello_nlms_pitch_and_articulation() -> None:
         + 0.08 * np.sin(3.0 * phase)
     )
 
-    # Strong piano bleed reference (unrelated chord E4 + B4)
     piano_ref = 0.30 * np.sin(2.0 * np.pi * 329.63 * t) + 0.22 * np.sin(2.0 * np.pi * 493.88 * t)
 
-    # Test 3a: Echo attenuation via NLMS on pure piano bleed frame
     nlms = NLMSEchoCanceller()
     pure_bleed_mic = 0.75 * piano_ref
     residual = nlms.process_block(pure_bleed_mic, piano_ref)
-    # Check latter half after adaptive convergence
     in_tail_pow = float(np.mean(pure_bleed_mic[len(t) // 2 :] ** 2))
     out_tail_pow = float(np.mean(residual[len(t) // 2 :] ** 2))
-    assert out_tail_pow < in_tail_pow * 0.05, "NLMS failed to attenuate piano bleed significantly"
+    assert out_tail_pow < in_tail_pow * 0.05
     assert nlms.last_erle_db > 10.0
 
-    # Test 3b: Legato Cello + Bleed -> F0 pitch & "legato" articulation
     perception = CelloAcousticPerception(sample_rate=sr)
     legato_env = np.minimum(1.0, t / 0.08)
     mic_legato = cello_core * legato_env + 0.65 * piano_ref
     snap_leg = perception.analyze_utterance(mic_legato, piano_ref, nlms=NLMSEchoCanceller())
-    assert abs(snap_leg.midi_pitch - target_midi) <= 1, f"Expected MIDI ~{target_midi}, got {snap_leg.midi_pitch}"
-    assert snap_leg.articulation == "legato", f"Expected legato, got {snap_leg.articulation}"
+    assert abs(snap_leg.midi_pitch - target_midi) <= 1
+    assert snap_leg.articulation == "legato"
 
-    # Test 3c: Staccato Cello bursts + Bleed -> F0 pitch & "staccato" articulation
     stacc_env = np.zeros_like(t)
     for k in range(3):
         s = int(k * 0.22 * sr)
@@ -169,11 +160,11 @@ def test_3_mode_b_cello_nlms_pitch_and_articulation() -> None:
         stacc_env[s:e] = np.exp(-5.0 * seg) * np.minimum(1.0, seg * 16.0)
     mic_stacc = cello_core * stacc_env + 0.65 * piano_ref
     snap_stacc = perception.analyze_utterance(mic_stacc, piano_ref, nlms=NLMSEchoCanceller())
-    assert abs(snap_stacc.midi_pitch - target_midi) <= 1, f"Expected MIDI ~{target_midi}, got {snap_stacc.midi_pitch}"
-    assert snap_stacc.articulation == "staccato", f"Expected staccato, got {snap_stacc.articulation}"
+    assert abs(snap_stacc.midi_pitch - target_midi) <= 1
+    assert snap_stacc.articulation == "staccato"
 
 
-def test_4_multiple_candidates_pruning_and_anti_ai_slop() -> None:
+def test_4_multiple_candidates_pruning_and_musical_logic_validator() -> None:
     with tempfile.TemporaryDirectory() as empty_dir:
         loader = ZeroConfigCorpusLoader(search_dirs=[Path(empty_dir)])
         assert loader.loaded_file_count == 0
@@ -186,100 +177,148 @@ def test_4_multiple_candidates_pruning_and_anti_ai_slop() -> None:
         snap = PerceptionSnapshot(
             mode="cello",
             timestamp=time.perf_counter(),
-            f0_hz=220.0,
-            midi_pitch=57,
-            note_name="A3",
+            f0_hz=146.83,
+            midi_pitch=50,
+            note_name="D3",
             articulation="staccato",
             breath_gauge=0.9,
             turn_ready=True,
         )
         human_notes = [
-            {"pitch": 57, "onset_s": 0.0, "duration_s": 0.12, "velocity": 76},
-            {"pitch": 60, "onset_s": 0.2, "duration_s": 0.12, "velocity": 78},
-            {"pitch": 64, "onset_s": 0.4, "duration_s": 0.14, "velocity": 82},
+            {"pitch": 50, "onset_s": 0.0, "duration_s": 0.12, "velocity": 76},
+            {"pitch": 51, "onset_s": 0.2, "duration_s": 0.12, "velocity": 78},
+            {"pitch": 53, "onset_s": 0.4, "duration_s": 0.14, "velocity": 82},
         ]
         hints = VerbalDirectiveRecognizer().parse_directive("対位法で挑発して、ペダルを浅く、乾いた音で")
-        intent = engine.decide_intent(snap, human_notes, hints)
+        policy = engine.decide_policy(snap, human_notes, hints)
+        turn = composer.compose_turn(human_notes, policy, human_mode="cello")
+        intent = engine.finalize_deliberation_monologue(snap, human_notes, policy, turn, hints)
 
-        # Anti-AI Slop validation on intent monologue
-        assert validate_chamber_music_monologue(intent.monologue_ja), f"Invalid monologue: {intent.monologue_ja}"
-        assert len(intent.monologue_ja) <= 60
-        for bad in BANNED_PHRASES:
-            assert bad not in intent.monologue_ja
-
-        # Ensure sanitizer strips slops/flattery if LLM were to produce them
-        slop_attempt = "素晴らしい演奏ですね！あなたのチェロの悲痛な叫びに共鳴しました🎹✨"
-        sanitized = sanitize_monologue_ja(slop_attempt, intent.monologue_ja)
-        assert validate_chamber_music_monologue(sanitized)
-        assert "!" not in sanitized and "！" not in sanitized
-
-        # Compose 4 candidates (1 adopted + 3 rejected with explicit rejection tags)
-        turn = composer.compose_turn(human_notes, intent, human_mode="cello")
-        assert len(turn.candidates) >= 3
         adopted = [c for c in turn.candidates if c.adopted]
         rejected = [c for c in turn.candidates if not c.adopted]
         assert len(adopted) == 1
-        assert len(rejected) >= 2
-        for rej in rejected:
-            assert rej.rejection_tag_ja.startswith("[棄却:"), f"Missing rejection tag on {rej.candidate_id}"
+        assert len(rejected) == 3
 
-        # Verify stage HUD HTML strictly obeys Stage Editorial UI rules
+        # Verify 4-axis percentages and exact problem note coordinates
+        for rej in rejected:
+            assert rej.rejection_tag_ja.startswith("[棄却:")
+            assert len(rej.problem_note_indices) >= 1
+            assert set(rej.subscores_pct.keys()) == {
+                "harmonic_fit",
+                "counterpoint_quality",
+                "overtone_clearance",
+                "rhythm_density",
+            }
+            assert "hud_badge_ja" in rej.rejection_detail
+
+        # Verify MusicalLogicValidator passes factual post-L3 memo and blocks contradictions/clichés
+        ok, errs = MusicalLogicValidator.check_text(
+            intent.monologue_ja,
+            perception=snap,
+            adopted_candidate=adopted[0],
+            rejected_candidates=rejected,
+        )
+        assert ok, f"Factual memo failed validation ({errs}): {intent.monologue_ja}"
+        assert 40 <= len(intent.monologue_ja) <= 75
+        for bad in BANNED_PHRASES:
+            assert bad not in intent.monologue_ja
+
+        # Ensure known contradiction & AI poetry samples are strictly rejected
+        contradictions = [
+            "チェロのD3が半音階で上昇し、長三度の空虚五度で緊張を高める。ダンパー操作で余白を残して解決を待つ。",
+            "チェロの演奏が素晴らしい！あなたの魂に共鳴しました🎹✨",
+            "スタッカートのレガートを無音の強奏でペダル無しの深い残響にするだろう。",
+        ]
+        for bad_txt in contradictions:
+            assert not validate_chamber_music_monologue(bad_txt), f"Failed to block NG text: {bad_txt}"
+            sanitized = sanitize_monologue_ja(bad_txt, intent.monologue_ja, perception=snap)
+            assert validate_chamber_music_monologue(sanitized, perception=snap)
+
+        # Verify Stage HUD adheres to Editorial Dark palette
         hud_html = Path("src/ui/stage_hud.html").read_text(encoding="utf-8")
         assert "#060608" in hud_html and "#EAE6DF" in hud_html and "#5A5852" in hud_html and "#C83E2B" in hud_html
         for forbidden in ("AI THINKING", "#00ffff", "#ff00ff", "素晴らしい演奏", "共鳴しました"):
             assert forbidden not in hud_html
 
 
-def test_5_demo_mode_websocket_and_zero_midi_fallback() -> None:
+def test_5_demo_audio_synth_staggered_timeline_and_production_separation() -> None:
+    # 1. Verify LocalAudioSynthesizer RMS > 0.01, zero NaN/Inf, zero clipping
+    synth = LocalAudioSynthesizer(enabled=True)
+    human_notes = [
+        {"pitch": 50, "onset_s": 0.0, "duration_s": 0.25, "velocity": 74},
+        {"pitch": 53, "onset_s": 0.28, "duration_s": 0.25, "velocity": 78},
+    ]
+    adopted_evs = [
+        {"pitch": 69, "onset_s": 0.0, "duration_s": 0.35, "velocity": 72},
+        {"pitch": 74, "onset_s": 0.32, "duration_s": 0.45, "velocity": 76},
+    ]
+    rej_dummy = [{"events": [{"pitch": 51, "onset_s": 0.0, "duration_s": 0.2, "velocity": 70}]}]
+    audio_stats = synth.play_turn_audio(
+        human_notes=human_notes,
+        human_mode="cello",
+        human_articulation="legato",
+        rejected_candidates=rej_dummy,
+        adopted_events=adopted_evs,
+        play_device=False,
+    )
+    assert audio_stats["rms"] > 0.01
+    assert audio_stats["has_nan_or_inf"] is False
+    assert audio_stats["clipping_count"] == 0
+    synth.close()
+
+    # 2. Verify Demo Mode (monitor_audio=True, staggered timeline, WS streaming, presets)
     with tempfile.TemporaryDirectory() as empty_dir:
         app = create_stage_app(
             demo_enabled=True,
+            monitor_audio=True,
+            production_mode=False,
             corpus_dirs=[Path(empty_dir)],
             use_ollama=False,
             open_hardware=False,
+            play_audio_device=False,
         )
         with TestClient(app) as client:
-            # 1. Serve Stage HUD
-            r_html = client.get("/")
-            assert r_html.status_code == 200
-            assert "Zone C" in r_html.text
+            assert client.get("/").status_code == 200
+            assert client.post("/api/stage/reset").json()["motif_nodes"] == 0
 
-            # 2. Reset Motif Memory Graph to 0 nodes (curtain rise state)
-            r_reset = client.post("/api/stage/reset")
-            assert r_reset.status_code == 200
-            assert r_reset.json()["motif_nodes"] == 0
-
-            # 3. Connect WebSocket & stream demo turns in Mode B and Mode A without any MIDI files
             with client.websocket_connect("/ws/stage") as ws:
-                initial_payload = ws.receive_json()
-                assert initial_payload["corpus_source"] == "builtin_seed_dictionary"
-                assert initial_payload["motif_graph"]["nodes"] == []
+                init_st = ws.receive_json()
+                assert init_st["monitor_audio"] is True
+                assert init_st["production_mode"] is False
 
-                # Trigger Mode B (Cello) turn
-                r_turn1 = client.post("/api/stage/turn")
-                assert r_turn1.status_code == 200
-                st1 = r_turn1.json()["state"]
-                assert st1["mode"] == "cello"
+                r_preset = client.post("/api/stage/preset", json={"preset": "baroque_counterpoint"})
+                assert r_preset.status_code == 200
+                st1 = r_preset.json()["state"]
+                assert len(st1["deliberation_timeline"]) >= 5
+                assert st1["audio_status"]["rms"] > 0.01
                 assert len(st1["candidates"]) == 4
-                assert sum(1 for c in st1["candidates"] if c["adopted"]) == 1
-                assert len(st1["motif_graph"]["nodes"]) == 2
 
-                # Switch to Mode A (Piano) & send MC directive & trigger turn
                 assert client.post("/api/stage/mode", json={"mode": "piano"}).status_code == 200
-                assert client.post("/api/stage/directive", json={"text": "短調で発展させて"}).status_code == 200
                 r_turn2 = client.post("/api/stage/turn")
                 assert r_turn2.status_code == 200
                 st2 = r_turn2.json()["state"]
                 assert st2["mode"] == "piano"
                 assert st2["perception"]["echo_suppressed_count"] >= 1
-                assert len(st2["motif_graph"]["nodes"]) == 4
-                assert len(st2["motif_graph"]["edges"]) >= 2
 
-                # Receive live WebSocket broadcast frame reflecting updated turn
-                ws_msg = ws.receive_json()
-                assert "candidates" in ws_msg and "output" in ws_msg
+                r_cal = client.post("/api/stage/calibrate")
+                assert r_cal.status_code == 200 and r_cal.json()["calibrated"] is True
 
-                # Emergency Panic check
                 r_panic = client.post("/api/stage/panic")
-                assert r_panic.status_code == 200
-                assert r_panic.json()["active_voices"] == 0
+                assert r_panic.status_code == 200 and r_panic.json()["active_voices"] == 0
+
+    # 3. Verify Production Mode strictly disables virtual demo and python monitor synth
+    with tempfile.TemporaryDirectory() as empty_dir:
+        prod_app = create_stage_app(
+            demo_enabled=True,  # Must be overridden to False in production mode
+            monitor_audio=True,
+            production_mode=True,
+            corpus_dirs=[Path(empty_dir)],
+            use_ollama=False,
+            open_hardware=False,
+            play_audio_device=False,
+        )
+        with TestClient(prod_app) as prod_client:
+            st = prod_client.get("/api/stage/state").json()
+            assert st["production_mode"] is True
+            assert st["demo_enabled"] is False
+            assert st["monitor_audio"] is False

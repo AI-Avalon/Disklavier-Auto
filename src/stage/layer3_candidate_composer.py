@@ -6,13 +6,12 @@ Core Process Visualization Mechanism:
 - Automatically falls back to built-in Classical Chamber Music & Counterpoint Seed Dictionary
   (Bach, Fauré, Brahms, Debussy) when zero MIDI files are present (Zero-Config).
 - Per turn, generates 4 distinct candidate phrases (Candidate A/B/C/D) using `symusic`:
-  1. Theory Motif Variation (contrary-motion inversion / rhythmic augmentation / modal shift)
+  1. Contrary Counterpoint Variation (clean register separation & open-fifth support)
   2. Contextual Corpus / Seed Accompaniment Matching (Somax2-style)
   3. Lightweight Modal Voice-Leading Continuation
-  4. Contrastive Draft exposing register clash or monotonous literal repetition
-- Scores candidates on harmonic fit, human register collision avoidance (100-600Hz Cello zone),
-  contrary/oblique counterpoint, and density match.
-- Selects top 1 as `adopted=True` for L5, and tags remaining 3 with explicit musical rejection tags.
+  4. Contrastive Draft exposing middle-register muddiness / minor-2nd clash / repetition
+- Computes 4-axis normalized scores (harmonic fit, counterpoint motion, cello overtone clearance,
+  rhythm density), exact problem note indices, measure/beat coordinates, and acoustic penalty tags.
 """
 
 from __future__ import annotations
@@ -23,6 +22,7 @@ from typing import Any, Dict, List, Optional, Tuple
 
 from symusic import Note, Score, Track
 
+from src.stage.layer1_perception import midi_to_note_name
 from src.stage.layer2_intent_llm import MusicalIntentSchema
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
@@ -84,9 +84,14 @@ class CandidatePhrase:
     events: List[Dict[str, Any]]
     total_score: float
     subscores: Dict[str, float]
+    subscores_pct: Dict[str, int]
     adopted: bool
     rejection_tag_ja: str
     symusic_note_count: int
+    pitch_range_str: str = "--"
+    sample_notes_str: str = "--"
+    problem_note_indices: List[int] = field(default_factory=list)
+    rejection_detail: Dict[str, Any] = field(default_factory=dict)
 
 
 @dataclass
@@ -203,11 +208,19 @@ def _events_to_symusic_score(events: List[Dict[str, Any]], tpq: int = 480) -> Sc
     return sc
 
 
+def _onset_to_measure_beat(onset_s: float, beat_s: float = 0.5) -> Tuple[int, int]:
+    total_beats = max(0.0, float(onset_s) / beat_s)
+    measure = int(total_beats // 4) + 1
+    beat = int(total_beats % 4) + 1
+    return measure, beat
+
+
 class MultipleCandidateComposer:
     """
     Layer 3 Composer & Pruner.
-    Generates 4 candidate continuations per turn using `symusic`, scores counterpoint & harmony,
-    adopts the best candidate, and labels rejected drafts with clear Japanese rejection reasons.
+    Generates 4 candidate continuations per turn using `symusic`, scores 4 musical axes,
+    adopts the best candidate, and isolates exact conflicting note coordinates & penalties
+    for transparent real-time stage auditioning.
     """
 
     def __init__(self, corpus_loader: Optional[ZeroConfigCorpusLoader] = None) -> None:
@@ -238,7 +251,6 @@ class MultipleCandidateComposer:
         step_base = max(0.24, 0.56 - intent.target_density * 0.28)
 
         if strategy == "contrary_counterpoint":
-            # Invert human melodic intervals and space cleanly within target register
             diffs = [human_pitches[i] - human_pitches[i - 1] for i in range(1, len(human_pitches))]
             if not diffs:
                 diffs = [3, 4, -2, -3]
@@ -257,7 +269,6 @@ class MultipleCandidateComposer:
                         "voice": "melody",
                     }
                 )
-                # Add open-fifth bass support on downbeats (avoiding major 3rd collision)
                 if i % 3 == 0:
                     bass_p = max(28, _quantize_to_scale(36 + tonic_pc, intent.tonal_center, 28, 48))
                     events.append(
@@ -278,7 +289,11 @@ class MultipleCandidateComposer:
             vels = pat["velocities"][:6]
             beats = pat["rhythm_beats"][:6]
             for idx, iv in enumerate(intervals):
-                p = _quantize_to_scale(anchor_pitch + (iv % 14) - 5, intent.tonal_center, reg_lo, reg_hi)
+                # Deliberately keeps partial octave overlap / repetitive motif anchor for clear contrast
+                p = _quantize_to_scale(anchor_pitch + (iv % 10) - 5, intent.tonal_center, reg_lo, reg_hi)
+                if idx in (2, 3):
+                    # Repeat same pitch to demonstrate motif stagnation penalty when compared to A
+                    p = events[-1]["pitch"] if events else p
                 dur = round(max(0.08, beats[idx % len(beats)] * step_base * 0.9), 3)
                 events.append(
                     {
@@ -292,11 +307,10 @@ class MultipleCandidateComposer:
                 t += dur * 0.95
 
         elif strategy == "modal_voice_leading":
-            # Lightweight Markov/voice-leading arpeggio avoiding middle register muddiness
-            scale_steps = [0, 7, 10, 14, 12, 7]
+            scale_steps = [0, 5, 7, 10, 7, 5]
             for i, iv in enumerate(scale_steps):
-                p = _quantize_to_scale(reg_lo + 4 + iv, intent.tonal_center, reg_lo, reg_hi)
-                dur = round(step_base * 1.1, 3)
+                p = _quantize_to_scale(reg_lo + 2 + iv, intent.tonal_center, reg_lo, reg_hi)
+                dur = round(step_base * 1.05, 3)
                 events.append(
                     {
                         "pitch": p,
@@ -309,35 +323,35 @@ class MultipleCandidateComposer:
                 t += step_base * 0.95
 
         else:
-            # Contrastive draft ("dense_mid_repetition"): intentionally crowds human middle register
-            # or repeats literal pitch pattern so the scorer rejects it for transparent display
+            # Contrastive draft ("dense_mid_repetition"): intentionally places minor-2nd clash & thick triad
+            # directly inside the human fundamental register (100-600 Hz) so L3 rejects and highlights it.
+            primary_human = human_pitches[-1]
+            clash_p = max(44, min(72, primary_human + 1))  # Minor 2nd clash against human pitch
             mid_clash = int(sum(human_pitches) / len(human_pitches))
-            for i in range(8):
-                p = max(48, min(72, mid_clash + (0 if i % 2 == 0 else 4)))
+            for i in range(7):
+                p = clash_p if i == 0 else max(46, min(72, mid_clash + (0 if i % 2 == 0 else 4)))
                 events.append(
                     {
                         "pitch": p,
                         "onset_s": round(t, 3),
                         "duration_s": round(step_base * 0.55, 3),
-                        "velocity": 76,
+                        "velocity": 78,
                         "voice": "dense_draft",
                     }
                 )
                 if i % 2 == 0:
-                    # Add thick tertian triad inside human fundamental band (48-64)
                     for triad_iv in (3, 7):
                         events.append(
                             {
                                 "pitch": min(74, p + triad_iv),
                                 "onset_s": round(t, 3),
                                 "duration_s": round(step_base * 0.5, 3),
-                                "velocity": 72,
+                                "velocity": 74,
                                 "voice": "dense_draft",
                             }
                         )
-                t += step_base * 0.52
+                t += step_base * 0.48
 
-        # Add CC#64 pedal event
         events.append({"pitch": 0, "onset_s": 0.0, "control": 64, "value": pedal_val, "voice": "pedal"})
         return events
 
@@ -348,10 +362,17 @@ class MultipleCandidateComposer:
         intent: MusicalIntentSchema,
         strategy: str,
         human_mode: str,
-    ) -> Tuple[float, Dict[str, float], str]:
+    ) -> Tuple[float, Dict[str, float], Dict[str, int], str, List[int], Dict[str, Any]]:
         note_evs = [e for e in events if int(e.get("pitch", 0)) > 0]
         if not note_evs:
-            return 0.0, {}, "[棄却: 音符欠如]"
+            return (
+                0.0,
+                {},
+                {"harmonic_fit": 0, "counterpoint_quality": 0, "overtone_clearance": 0, "rhythm_density": 0},
+                "[棄却: 音符欠如]",
+                [],
+                {},
+            )
 
         tonic_pc, scale_pcs = SCALE_INTERVALS.get(intent.tonal_center, (2, [0, 2, 3, 5, 7, 9, 10]))
         reg_lo, reg_hi = intent.register_range[0], intent.register_range[1]
@@ -360,33 +381,47 @@ class MultipleCandidateComposer:
             for n in human_notes
             if int(n.get("pitch", n.get("note", 0))) > 0
         ] or [62]
+        human_primary = human_pitches[-1]
+        human_primary_name = midi_to_note_name(human_primary)
 
         # 1. Harmonic Fit (0..30)
         in_scale = sum(1 for e in note_evs if (int(e["pitch"]) - tonic_pc) % 12 in scale_pcs)
         harmonic_fit = 30.0 * (in_scale / len(note_evs))
 
-        # 2. Register Collision Avoidance (0..30) — penalize colliding inside human register / Cello 100-600Hz (MIDI 44-72)
+        # 2. Register & Overtone Clearance (0..30) — detect exact colliding notes (minor 2nd / same band)
         in_target_reg = sum(1 for e in note_evs if reg_lo <= int(e["pitch"]) <= reg_hi)
-        clash_count = 0
-        for e in note_evs:
+        clash_indices: List[int] = []
+        minor2_indices: List[int] = []
+        for idx, e in enumerate(note_evs):
             p = int(e["pitch"])
-            if any(abs(p - hp) <= 4 for hp in human_pitches):
-                clash_count += 1
-        collision_ratio = clash_count / len(note_evs)
-        register_sep = max(0.0, 30.0 * (in_target_reg / len(note_evs)) - 26.0 * collision_ratio)
+            if any(abs(p - hp) in (1, 2) for hp in human_pitches):
+                minor2_indices.append(idx)
+                clash_indices.append(idx)
+            elif any(abs(p - hp) <= 4 for hp in human_pitches):
+                clash_indices.append(idx)
+        collision_ratio = len(clash_indices) / len(note_evs)
+        minor2_penalty = 10.0 if minor2_indices else 0.0
+        register_sep = max(0.0, 30.0 * (in_target_reg / len(note_evs)) - 26.0 * collision_ratio - minor2_penalty)
 
-        # 3. Counterpoint & Parallel-5th/8ve + Repetition Check (0..25)
+        # 3. Counterpoint Voice Leading (contrary / oblique motion & repetition check, 0..25)
         pitches = [int(e["pitch"]) for e in note_evs]
         unique_ratio = len(set(pitches)) / len(pitches)
-        contrary_bonus = 6.0 if strategy == "contrary_counterpoint" else 2.5
+        contrary_bonus = 6.5 if strategy == "contrary_counterpoint" else (3.0 if strategy == "modal_voice_leading" else 1.5)
+        repeat_indices = [i for i in range(1, len(pitches)) if pitches[i] == pitches[i - 1]]
+        parallel_indices: List[int] = []
         parallel_penalty = 0.0
         for i in range(1, len(pitches)):
             if abs(pitches[i] - pitches[i - 1]) in (7, 12) and i < len(human_pitches):
                 if abs(human_pitches[i % len(human_pitches)] - human_pitches[(i - 1) % len(human_pitches)]) == abs(pitches[i] - pitches[i - 1]):
                     parallel_penalty += 4.5
-        counterpoint_score = max(0.0, min(25.0, 14.0 * unique_ratio + contrary_bonus + 7.0 - parallel_penalty))
+                    parallel_indices.append(i)
+        repeat_penalty = min(6.0, len(repeat_indices) * 2.5)
+        counterpoint_score = max(
+            0.0,
+            min(25.0, 13.5 * unique_ratio + contrary_bonus + 7.0 - parallel_penalty - repeat_penalty),
+        )
 
-        # 4. Target Density Match (0..15)
+        # 4. Rhythm Density Match (0..15)
         span = max(1.0, max(float(e["onset_s"]) for e in note_evs) + 0.4)
         actual_density = min(1.0, (len(note_evs) / span) / 8.0)
         density_diff = abs(actual_density - intent.target_density)
@@ -399,20 +434,88 @@ class MultipleCandidateComposer:
             "counterpoint_quality": round(counterpoint_score, 1),
             "density_fit": round(density_score, 1),
         }
+        subscores_pct = {
+            "harmonic_fit": int(round((harmonic_fit / 30.0) * 100.0)),
+            "counterpoint_quality": int(round((counterpoint_score / 25.0) * 100.0)),
+            "overtone_clearance": int(round((register_sep / 30.0) * 100.0)),
+            "rhythm_density": int(round((density_score / 15.0) * 100.0)),
+        }
 
-        # Determine most informative musical rejection tag if rejected
-        if collision_ratio > 0.35 or register_sep < 16.0:
-            rej_tag = "[棄却: チェロ中音域との濁り]" if human_mode == "cello" else "[棄却: 厚すぎる三度重複]"
-        elif unique_ratio < 0.45:
-            rej_tag = "[棄却: 同形反復による停滞]"
-        elif density_diff > 0.32 or len(note_evs) >= 14:
-            rej_tag = "[棄却: 密度過多]"
-        elif parallel_penalty > 0:
-            rej_tag = "[棄却: 並達五度の発生]"
+        # Identify exact problem indices, measure/beat, and numeric acoustic penalty score
+        if minor2_indices or collision_ratio > 0.30 or register_sep < 18.0:
+            penalty_val = -max(22, int(round(48 - register_sep)))
+            if minor2_indices:
+                prob_idxs = minor2_indices[:2]
+                target_ev = note_evs[prob_idxs[0]]
+                m_no, b_no = _onset_to_measure_beat(float(target_ev.get("onset_s", 0.0)))
+                tp = int(target_ev["pitch"])
+                target_name = midi_to_note_name(tp)
+                hp_match = next((hp for hp in human_pitches if abs(tp - hp) in (1, 2)), human_primary)
+                hp_name = midi_to_note_name(hp_match)
+                reason_core = f"{m_no}小節{b_no}拍 {hp_name}基音と{target_name}が短2度衝突（濁りスコア {penalty_val}）"
+                short_reason = f"{hp_name}と{target_name}が短2度衝突し濁る"
+            elif clash_indices:
+                prob_idxs = clash_indices[:2]
+                target_ev = note_evs[prob_idxs[0]]
+                m_no, b_no = _onset_to_measure_beat(float(target_ev.get("onset_s", 0.0)))
+                tp = int(target_ev["pitch"])
+                target_name = midi_to_note_name(tp)
+                hp_match = next((hp for hp in human_pitches if abs(tp - hp) <= 4), human_primary)
+                hp_name = midi_to_note_name(hp_match)
+                reason_core = f"{m_no}小節{b_no}拍 {hp_name}倍音帯と{target_name}が三度重複（濁りスコア {penalty_val}）"
+                short_reason = f"{hp_name}倍音帯と重なり濁る"
+            else:
+                out_idxs = [i for i, e in enumerate(note_evs) if not (reg_lo <= int(e["pitch"]) <= reg_hi)] or [0]
+                prob_idxs = out_idxs[:2]
+                target_ev = note_evs[prob_idxs[0]]
+                m_no, b_no = _onset_to_measure_beat(float(target_ev.get("onset_s", 0.0)))
+                target_name = midi_to_note_name(int(target_ev["pitch"]))
+                reason_core = f"{m_no}小節{b_no}拍 {target_name}が目標音域外で倍音干渉（音域減点 {penalty_val}）"
+                short_reason = f"{target_name}が目標音域から外れ干渉する"
+        elif parallel_indices:
+            prob_idxs = parallel_indices[:2]
+            target_ev = note_evs[prob_idxs[0]]
+            m_no, b_no = _onset_to_measure_beat(float(target_ev.get("onset_s", 0.0)))
+            target_name = midi_to_note_name(int(target_ev["pitch"]))
+            penalty_val = -max(18, int(round(32 - counterpoint_score)))
+            reason_core = f"{m_no}小節{b_no}拍 {target_name}で並達五度・八度が発生（連結減点 {penalty_val}）"
+            short_reason = f"{m_no}小節{b_no}拍で並達五度が発生"
+        elif repeat_indices or unique_ratio < 0.72:
+            prob_idxs = repeat_indices[:2] or [len(note_evs) - 2, len(note_evs) - 1]
+            target_ev = note_evs[prob_idxs[0]]
+            m_no, b_no = _onset_to_measure_beat(float(target_ev.get("onset_s", 0.0)))
+            target_name = midi_to_note_name(int(target_ev["pitch"]))
+            penalty_val = -max(14, int(round(28 - counterpoint_score)))
+            reason_core = f"{m_no}小節{b_no}拍 {target_name}の同音反復で声部停滞（推進力 {penalty_val}）"
+            short_reason = f"{target_name}の同音反復で停滞"
+        elif density_diff > 0.25 or len(note_evs) >= 12:
+            prob_idxs = [len(note_evs) - 2, len(note_evs) - 1]
+            target_ev = note_evs[prob_idxs[0]]
+            m_no, b_no = _onset_to_measure_beat(float(target_ev.get("onset_s", 0.0)))
+            penalty_val = -max(16, int(round(30 - density_score * 2.0)))
+            reason_core = f"{m_no}小節{b_no}拍 リズム密度過多で過密（密度減点 {penalty_val}）"
+            short_reason = "リズム密度が目標値より過密"
         else:
-            rej_tag = "[棄却: 対位法的推進力の不足]"
+            prob_idxs = [len(note_evs) - 1]
+            target_ev = note_evs[prob_idxs[0]]
+            m_no, b_no = _onset_to_measure_beat(float(target_ev.get("onset_s", 0.0)))
+            target_name = midi_to_note_name(int(target_ev["pitch"]))
+            penalty_val = -max(10, int(round(100.0 - total)))
+            reason_core = f"{m_no}小節{b_no}拍 {target_name}の反行推進力が不足（対位法減点 {penalty_val}）"
+            short_reason = "対位法的な反行推進力が不足"
 
-        return total, subscores, rej_tag
+        rej_tag = f"[棄却: {reason_core}]"
+        rej_detail = {
+            "measure": m_no,
+            "beat": b_no,
+            "note_name": midi_to_note_name(int(note_evs[prob_idxs[0]]["pitch"])),
+            "human_note_name": human_primary_name,
+            "penalty_score": penalty_val,
+            "reason_core_ja": reason_core,
+            "short_reason_ja": short_reason,
+            "hud_badge_ja": f"[× 棄却: {reason_core}]",
+        }
+        return total, subscores, subscores_pct, rej_tag, prob_idxs, rej_detail
 
     def compose_turn(
         self,
@@ -431,12 +534,20 @@ class MultipleCandidateComposer:
         candidates: List[CandidatePhrase] = []
         for cid, label_ja, strat in specs:
             evs = self._build_candidate_events(strat, human_notes, intent, self.turn_counter)
-            # Build genuine symusic.Score for each candidate to verify/measure symbolic representation
             sc = _events_to_symusic_score(evs)
             sym_count = sum(len(tr.notes) for tr in sc.tracks)
-            score, subscores, rej_tag = self._score_candidate(
+            score, subscores, subscores_pct, rej_tag, prob_idxs, rej_detail = self._score_candidate(
                 evs, human_notes, intent, strat, human_mode
             )
+            pitches = sorted({int(e["pitch"]) for e in evs if int(e.get("pitch", 0)) > 0})
+            pitch_range_str = (
+                f"{midi_to_note_name(pitches[0])}-{midi_to_note_name(pitches[-1])}"
+                if pitches
+                else "--"
+            )
+            seq_pitches = [int(e["pitch"]) for e in evs if int(e.get("pitch", 0)) > 0][:3]
+            sample_notes_str = "-".join(midi_to_note_name(p) for p in seq_pitches) or "--"
+
             candidates.append(
                 CandidatePhrase(
                     candidate_id=cid,
@@ -445,15 +556,22 @@ class MultipleCandidateComposer:
                     events=evs,
                     total_score=score,
                     subscores=subscores,
+                    subscores_pct=subscores_pct,
                     adopted=False,
                     rejection_tag_ja=rej_tag,
                     symusic_note_count=sym_count,
+                    pitch_range_str=pitch_range_str,
+                    sample_notes_str=sample_notes_str,
+                    problem_note_indices=prob_idxs,
+                    rejection_detail=rej_detail,
                 )
             )
 
         best = max(candidates, key=lambda c: c.total_score)
         best.adopted = True
         best.rejection_tag_ja = ""
+        best.problem_note_indices = []
+        best.rejection_detail = {}
 
         return CompositionTurnResult(
             turn_id=self.turn_counter,
