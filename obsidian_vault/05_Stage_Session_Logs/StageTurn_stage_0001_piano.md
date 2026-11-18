@@ -3,29 +3,29 @@ type: stage_dialogue_turn
 turn_id: 1
 mode: "piano"
 adopted_candidate: "A"
-total_score: 98.78
-token_compression_pct: 63.1
+total_score: 97.54
+token_compression_pct: 60.5
 tags: [stage-session, musicality-critic, dual-pedal]
 ---
 
-# Stage Turn #1 (PIANO) — Adopted Candidate A (98.8 pts)
+# Stage Turn #1 (PIANO) — Adopted Candidate A (97.5 pts)
 
 ## 実演家メモ (L2 Deliberation)
-> ピアノA3→C4のスタッカートを検出。案Dは単調な順次音階で和声構築を欠くため捨て、案Aの両手和音C2-C6をウナ・コルダ＋踏替で置く。
+> ピアノD4のスタッカートを検出。案DはD4とD#4が短2度衝突し濁るため捨て、案Aの両手和音D2-D6を浅い踏み替えで置く。
 
 ## 人間フレーズ知覚 ＆ TokenEconomizer 圧縮
-- **人間音列**: `A3→C4→E4→F4→E4→C4` (staccato)
-- **和声進行設計**: `I -> V7 -> ii° -> IV -> V7` (`C_major`)
-- **TokenEconomizer 削減率**: `63.1%` (`436 -> 161` tokens)
-- **両ペダル制御**: Damper CC#64 `0..88` (repedals=1) / Una Corda CC#67 `12..115`
+- **人間音列**: `D4→F4→A4→G4→E4→D4` (staccato)
+- **和声進行設計**: `Dm9 -> Gm7 -> BbM7 -> A7sus4` (`D_minor`)
+- **TokenEconomizer 削減率**: `60.5%` (`522 -> 206` tokens)
+- **両ペダル制御**: Damper CC#64 `0..92` (repedals=1) / Una Corda CC#67 `18..72`
 
 ## 4候補 音楽性監査 (MusicalityCritic 6-Axis)
 | Candidate | Status | Score | Register | Rejection Reason |
 |---|---|---:|---|---|
-| A | ADOPTED | 98.8 | C2-C6 | - |
-| B | REJECTED | 95.9 | C2-G5 | 1小節1拍 A4で並達・同音停滞が発生 (-18) |
-| C | REJECTED | 98.8 | A1-D6 | 1小節4拍 G5の開離余白・内声推進が劣る (-8) |
-| D | REJECTED | 28.1 | D4-B4 | 1小節1拍 D4から単調な順次音階進行（動機・和声構築の欠如 -72） |
+| A | ADOPTED | 97.5 | D2-D6 | - |
+| B | REJECTED | 91.7 | D2-E6 | 2小節3拍 A3の開離余白・内声推進が劣る (-8) |
+| C | REJECTED | 93.3 | D2-E6 | 2小節3拍 G2の開離余白・内声推進が劣る (-8) |
+| D | REJECTED | 53.5 | D4-A#4 | 1小節1拍 D4基音とD#4が短2度衝突・低中域混濁 (-48) |
 
 ## 知識グラフリンク
 - [[Evolution_Overview]]

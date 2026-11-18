@@ -18,7 +18,13 @@ data/telemetry/*.png
 data/maestro-v3.0.0/
 data/midi/
 *.wav
+!docs/demos/*.wav
+!docs/demos/*.mp3
+!docs/demos/*.mid
+!docs/demos/*.musicxml
 *.pt
+!data/models/*.pt
+!data/models/*.json
 *.pth
 *.onnx
 *.bin

@@ -34,23 +34,36 @@ class MusicalIntentSchema(BaseModel):
     target_density: float = Field(..., ge=0.0, le=1.0)
     register_range: List[int] = Field(..., min_length=2, max_length=2)
     pedal_strategy: Literal["dry", "half_clear", "resonant"]
+    act_number: int = Field(default=1, ge=1, le=4)
+    act_label_ja: str = Field(default="第1幕: 種子提示と問いかけ")
+    phrase_function: Literal[
+        "question_half_cadence",
+        "dialogic_sequence",
+        "polyphonic_climax",
+        "recapitulation_resolution",
+    ] = Field(default="question_half_cadence")
+    voice_leading_bridge: str = Field(default="A4->A4")
+    motivic_transform: str = Field(default="inversion_question")
+    seed_motif_str: str = Field(default="--")
+    is_retake: bool = Field(default=False)
+    retake_summary_ja: str = Field(default="")
     voicing_structure: str = Field(
-        default="LH_open5th_tenor_step + RH_m3_9th_spread",
+        default="LH_open5th_10th_arpeggio + RH_cantabile_9th",
         description="左手バス・内声と右手和音ボイシングの3〜5声配置設計",
     )
     rh_contour: str = Field(
-        default="contrary_leap_suspension_resolution",
-        description="右手モチーフの音程コンター・掛留解決・リズム分割方針",
+        default="cantabile_gap_fill_single_apex",
+        description="右手モチーフの音程コンター・掛留解決・跳躍回復・単一頂点方針",
     )
     lh_motion: str = Field(
-        default="open_fifth_anchor_chromatic_inner",
+        default="root_fifth_tenth_breath_inner_suspension",
         description="左手バス・内声の進行方針",
     )
     candidate_approaches: List[str] = Field(
         default_factory=lambda: [
-            "contrary_open_polyphony",
-            "suspension_inner_voice",
-            "overtone_clear_high_spread",
+            "thematic_act_polyphony",
+            "pedal_point_suspension",
+            "chromatic_modulation_inner",
             "contrastive_flaw_check",
         ],
         min_length=4,
@@ -71,12 +84,21 @@ class MusicalIntentSchema(BaseModel):
 class LLMPolicyDesignSchema(BaseModel):
     interaction_stance: Literal["listen", "counterpoint", "imitate", "provoke", "cadence"]
     tonal_center: Literal["D_dorian", "D_minor", "G_minor", "C_major", "F_major", "A_minor"]
+    phrase_function: Literal[
+        "question_half_cadence",
+        "dialogic_sequence",
+        "polyphonic_climax",
+        "recapitulation_resolution",
+    ]
+    voice_leading_bridge: str
+    motivic_transform: str
     chord_progression: List[str] = Field(..., min_length=3, max_length=6)
     target_density: float = Field(..., ge=0.20, le=0.88)
     pedal_strategy: Literal["dry", "half_clear", "resonant"]
     voicing_structure: str
     rh_contour: str
     lh_motion: str
+    candidate_approaches: List[str] = Field(..., min_length=4, max_length=4)
     damper_cc64_plan: List[int] = Field(..., min_length=4, max_length=6)
     una_corda_cc67_plan: List[int] = Field(..., min_length=4, max_length=6)
 
@@ -86,6 +108,11 @@ class FactualMonologueSchema(BaseModel):
         ...,
         description="45〜74文字の実用メモ。①検出楽器・音列・奏法 ②ボツ案IDと具体的欠点 ③採用案IDと両手ボイシング・両ペダル操作のみを事実で書く。",
     )
+
+
+class WorkTitleSchema(BaseModel):
+    title_ja: str = Field(..., description="調性と形式・楽器編成を示す飾りのない音楽的な日本語作品名（例: ニ短調の問いかけと五度の回想 — チェロと自動演奏ピアノのための対話的幻想曲）")
+    title_en: str = Field(..., description="対応する英語タイトル")
 
 
 BANNED_PHRASES = (
@@ -184,6 +211,7 @@ CONTRADICTION_REGEXES = (
     re.compile(r"単音.{0,4}(和音|コード|トライアド)"),
     re.compile(r"(無音|休符).{0,4}(強奏|フォルテ|打鍵)"),
     re.compile(r"(バロック|印象派|ロマン派|古典派|現代|バッハ|ドビュッシー|ショパン|ブラームス|フォーレ|リスト|ラフマニノフ|モーツァルト|ベートーヴェン|カノン|ジャズ|クラシック|古)風"),
+    re.compile(r"[A-G][b#]?\s*[小大]調"),
 )
 
 EMOJI_PATTERN = re.compile(
@@ -245,7 +273,7 @@ class MusicalLogicValidator:
             violations.append("theatrical_volitional_ending")
 
         if perception is not None:
-            if perception.mode == "cello" and ("ピアノ打鍵を検出" in t or "鍵盤の終止を検出" in t):
+            if perception.mode == "cello" and ("ピアノ打鍵を検出" in t or "鍵盤の終止を検出" in t or "連弾" in t):
                 violations.append("mode_mismatch:expected_cello")
             if perception.mode == "piano" and ("チェロが" in t or "チェロの" in t or "弓圧" in t):
                 violations.append("mode_mismatch:expected_piano")
@@ -406,9 +434,11 @@ class MusicalIntentEngine:
 
     POLICY_PROMPT = (
         "あなたは室内楽のピアニスト兼作曲家である。〇〇風という固定ラベルは絶対禁止。"
-        "圧縮入力(IN/HIST/CORPUS/RULE)の跳躍・緊張度・回避帯域・参照ボイシングから、"
-        "両手立体ボイシング(voicing_structure)、右手コンター(rh_contour)、左手運動(lh_motion)、"
-        "和声進行(chord_progression)、連続CC#64/CC#67ペダル曲線(0..127)を自律設計しJSONで出力せよ。"
+        "圧縮入力(IN/FORM/HIST/CORPUS/RULE)の現在の幕(Act 1=問いかけ半終止, Act 2=模進発展, Act 3=多声クライマックス, Act 4=ウナ・コルダ回想と解決)・"
+        "冒頭種子動機(Seed)・直前終止からの声部ブリッジ(Br)・回避帯域・参照ボイシングから、"
+        "phrase_function(問いかけ/模進/頂点/終止)、voice_leading_bridge、motivic_transform、"
+        "4候補の作曲方針(A:主題展開, B:バス保続音と掛留解決, C:内声半音階と近親調転調, D:比較棄却案)、"
+        "両手ボイシング、和声進行、連続CC#64/CC#67ペダル曲線(0..127)を自律設計しJSONで出力せよ。"
     )
 
     DELIBERATION_PROMPT = (
@@ -438,13 +468,37 @@ class MusicalIntentEngine:
         self.last_validator_rewrites: int = 0
         self.last_token_stats: Dict[str, Any] = dict(self.economizer.last_stats)
 
+    @staticmethod
+    def _macro_dict(macro_plan: Optional[Any]) -> Dict[str, Any]:
+        if macro_plan is None:
+            return {}
+        if isinstance(macro_plan, dict):
+            return dict(macro_plan)
+        return {
+            "act_number": getattr(macro_plan, "act_number", 1),
+            "act_label_ja": getattr(macro_plan, "act_label_ja", "第1幕: 種子提示と問いかけ"),
+            "phrase_function": getattr(macro_plan, "phrase_function", "question_half_cadence"),
+            "target_tonality": getattr(macro_plan, "target_tonality", "D_dorian"),
+            "recommended_chords": list(getattr(macro_plan, "recommended_chords", []) or []),
+            "motivic_transform": getattr(macro_plan, "motivic_transform", "inversion_question"),
+            "seed_motif_str": getattr(macro_plan, "seed_motif_str", "--"),
+            "voice_leading_bridge_desc": getattr(macro_plan, "voice_leading_bridge_desc", "A4->A4"),
+            "target_apex_pitch": getattr(macro_plan, "target_apex_pitch", 79),
+            "pedal_cc64_hint": list(getattr(macro_plan, "pedal_cc64_hint", []) or []),
+            "pedal_cc67_hint": list(getattr(macro_plan, "pedal_cc67_hint", []) or []),
+            "is_retake": bool(getattr(macro_plan, "is_retake", False)),
+            "retake_diff_ja": str(getattr(macro_plan, "retake_diff_ja", "")),
+        }
+
     def _rule_based_intent(
         self,
         perception: PerceptionSnapshot,
         human_notes: List[Dict[str, Any]],
         directive_hints: Optional[Dict[str, Any]] = None,
+        macro_plan: Optional[Any] = None,
     ) -> MusicalIntentSchema:
         hints = directive_hints or {}
+        macro = self._macro_dict(macro_plan)
         pitches = [
             int(n.get("pitch", n.get("note", 60)))
             for n in human_notes
@@ -454,7 +508,7 @@ class MusicalIntentEngine:
             pitches = [perception.midi_pitch]
         mean_pitch = sum(pitches) / len(pitches) if pitches else 55.0
 
-        tonal_center = str(hints.get("tonal_hint") or "")
+        tonal_center = str(hints.get("tonal_hint") or macro.get("target_tonality") or "")
         if not tonal_center:
             if perception.mode == "cello":
                 tonal_center = "D_dorian" if perception.articulation == "legato" else "G_minor"
@@ -462,14 +516,14 @@ class MusicalIntentEngine:
                 tonal_center = "D_minor" if mean_pitch < 62 else "F_major"
 
         progression_map = {
-            "D_dorian": ["Dm9", "Gm11", "BbM7#11", "A7sus4", "Dm9"],
-            "G_minor": ["Gm9", "EbM7#11", "Cm11", "D7b9", "Gm"],
-            "D_minor": ["Dm", "Gm6", "BbM7", "A7sus4", "Dm9"],
-            "F_major": ["FM9", "Dm11", "BbM7#11", "C9sus4", "FM7"],
-            "C_major": ["CM9", "Am11", "Fmaj9", "G13sus4", "CM7"],
-            "A_minor": ["Am9", "Dm11", "Fmaj7#11", "E7sus4", "Am9"],
+            "D_dorian": ["Dm9", "Gm11", "BbM7#11", "A7sus4"],
+            "G_minor": ["Gm9", "EbM7#11", "Cm11", "D7b9"],
+            "D_minor": ["Dm", "Gm6", "BbM7", "A7sus4"],
+            "F_major": ["FM9", "Dm11", "BbM7#11", "C9sus4"],
+            "C_major": ["CM9", "Am11", "Fmaj9", "G13sus4"],
+            "A_minor": ["Am9", "Dm11", "Fmaj7#11", "E7sus4"],
         }
-        chords = progression_map.get(tonal_center, ["Dm9", "Gm11", "A7sus4", "Dm9"])
+        chords = list(macro.get("recommended_chords") or progression_map.get(tonal_center, ["Dm9", "Gm11", "A7sus4", "Dm9"]))
 
         # Wide two-hand register framing around human voice to preserve 100-600Hz clarity
         if perception.mode == "cello":
@@ -477,27 +531,38 @@ class MusicalIntentEngine:
         else:
             reg = [36, 88]
 
+        act_num = int(macro.get("act_number", 1))
+        act_label = str(macro.get("act_label_ja") or "第1幕: 種子提示と問いかけ")
+        phrase_func = str(macro.get("phrase_function") or "question_half_cadence")
+
+        default_stance = (
+            "cadence" if act_num == 4
+            else ("provoke" if act_num == 3 else ("counterpoint" if perception.articulation == "staccato" else "imitate"))
+        )
         stance: Literal["listen", "counterpoint", "imitate", "provoke", "cadence"] = hints.get(
             "stance_hint",
-            "counterpoint" if perception.articulation == "staccato" else "imitate",
+            default_stance,
         )
         if perception.turn_ready and stance == "listen":
             stance = "counterpoint"
 
         pedal_strategy: Literal["dry", "half_clear", "resonant"] = hints.get(
             "pedal_hint",
-            "dry" if perception.articulation == "staccato" else "half_clear",
+            "resonant" if act_num in (3, 4) else ("dry" if perception.articulation == "staccato" else "half_clear"),
         )
 
-        base_density = 0.56 if perception.articulation == "staccato" else 0.44
+        base_density = 0.68 if act_num == 3 else (0.38 if act_num == 4 else (0.56 if perception.articulation == "staccato" else 0.46))
         target_density = max(0.22, min(0.86, base_density + float(hints.get("density_delta", 0.0))))
 
-        if pedal_strategy == "dry":
+        if macro.get("pedal_cc64_hint") and macro.get("pedal_cc67_hint"):
+            cc64_plan = [max(0, min(127, int(v))) for v in macro["pedal_cc64_hint"]]
+            cc67_plan = [max(0, min(127, int(v))) for v in macro["pedal_cc67_hint"]]
+        elif pedal_strategy == "dry":
             cc64_plan = [0, 58, 0, 52, 0]
             cc67_plan = [18, 44, 62, 32, 0]
         elif pedal_strategy == "resonant":
             cc64_plan = [0, 88, 114, 14, 96, 0]
-            cc67_plan = [42, 92, 112, 78, 28]
+            cc67_plan = [64, 96, 114, 86, 48] if act_num == 4 else [14, 38, 22, 54, 18]
         else:
             cc64_plan = [0, 70, 96, 12, 78, 0]
             cc67_plan = [26, 68, 86, 54, 18]
@@ -505,7 +570,7 @@ class MusicalIntentEngine:
         rejection_criteria = [
             "4音以上の単調な順次音階進行",
             f"{midi_to_note_name(int(mean_pitch))}倍音域との短2度衝突",
-            "単声配置・リズム均一化・両ペダル欠如",
+            "主題動機や跳躍回復・両手伴奏イディオムの欠如",
         ]
 
         factual_memo = MusicalLogicValidator.build_factual_memo(
@@ -522,13 +587,21 @@ class MusicalIntentEngine:
             target_density=round(target_density, 2),
             register_range=reg,
             pedal_strategy=pedal_strategy,
-            voicing_structure="LH_P5_P10_anchor + RH_3rd_7th_9th_spread",
-            rh_contour="contrary_leap_suspension_resolution",
-            lh_motion="fifth_bass_step_inner_counterline",
+            act_number=act_num,
+            act_label_ja=act_label,
+            phrase_function=phrase_func,  # type: ignore[arg-type]
+            voice_leading_bridge=str(macro.get("voice_leading_bridge_desc") or "A4->A4"),
+            motivic_transform=str(macro.get("motivic_transform") or "inversion_question"),
+            seed_motif_str=str(macro.get("seed_motif_str") or "--"),
+            is_retake=bool(macro.get("is_retake", False)),
+            retake_summary_ja=str(macro.get("retake_diff_ja") or ""),
+            voicing_structure="LH_root_5th_10th_arpeggio + RH_cantabile_9th_spread",
+            rh_contour="cantabile_gap_fill_single_apex",
+            lh_motion="pedal_point_inner_chromatic_suspension",
             candidate_approaches=[
-                "contrary_open_polyphony",
-                "suspension_inner_voice",
-                "overtone_clear_high_spread",
+                "thematic_act_polyphony",
+                "pedal_point_suspension",
+                "chromatic_modulation_inner",
                 "contrastive_flaw_check",
             ],
             damper_cc64_plan=cc64_plan,
@@ -543,17 +616,21 @@ class MusicalIntentEngine:
         directive_hints: Optional[Dict[str, Any]] = None,
         corpus_refs: Optional[List[Dict[str, Any]]] = None,
         use_llm_design: bool = True,
+        macro_plan: Optional[Any] = None,
     ) -> MusicalIntentSchema:
         """
-        Determines autonomous compositional policy (voicing, contour, harmony, dual pedal curves)
-        via TokenEconomizer + Ollama RTX 3070 (`keep_alive=-1`) with deterministic rule fallback.
+        Determines autonomous compositional policy (macro phrase function, voice-leading bridge,
+        4 candidate strategies, voicing, contour, harmony, dual pedal curves) via TokenEconomizer
+        + Ollama RTX 3070 (`keep_alive=-1`) with deterministic rule fallback.
         """
-        base = self._rule_based_intent(perception, human_notes, directive_hints)
+        macro_dict = self._macro_dict(macro_plan)
+        base = self._rule_based_intent(perception, human_notes, directive_hints, macro_plan=macro_dict)
         econ = self.economizer.build_economized_context(
             perception=perception,
             human_notes=human_notes,
             corpus_refs=corpus_refs or [],
             directive_hints=directive_hints,
+            macro_form_state=macro_dict,
         )
         self.last_token_stats = dict(self.economizer.last_stats)
 
@@ -571,22 +648,21 @@ class MusicalIntentEngine:
                     {"role": "user", "content": econ.compact_prompt},
                 ],
                 format=LLMPolicyDesignSchema.model_json_schema(),
-                options={"temperature": 0.25, "num_ctx": 1536, "num_predict": 220},
+                options={"temperature": 0.25, "num_ctx": 1536, "num_predict": 240},
                 keep_alive=-1,
                 think=False,
             )
             raw_content = resp["message"]["content"] if isinstance(resp, dict) else resp.message.content
             designed = LLMPolicyDesignSchema.model_validate_json(raw_content)
 
-            # Respect explicit MC directive hints if user injected one
             hints = directive_hints or {}
-            tonal = str(hints.get("tonal_hint") or designed.tonal_center)
+            tonal = str(hints.get("tonal_hint") or macro_dict.get("target_tonality") or designed.tonal_center)
             stance = hints.get("stance_hint") or designed.interaction_stance
             pedal_strat = hints.get("pedal_hint") or designed.pedal_strategy
+            phrase_fn = macro_dict.get("phrase_function") or designed.phrase_function
 
             cc64 = [max(0, min(127, int(v))) for v in designed.damper_cc64_plan]
             cc67 = [max(0, min(127, int(v))) for v in designed.una_corda_cc67_plan]
-            # Guarantee dynamic range on both pedals
             if max(cc64) < 40:
                 cc64 = base.damper_cc64_plan
             if max(cc67) < 20:
@@ -596,12 +672,16 @@ class MusicalIntentEngine:
                 update={
                     "interaction_stance": stance,
                     "tonal_center": tonal,
+                    "phrase_function": phrase_fn,
+                    "voice_leading_bridge": (designed.voice_leading_bridge or base.voice_leading_bridge)[:48],
+                    "motivic_transform": (designed.motivic_transform or base.motivic_transform)[:48],
                     "chord_progression": designed.chord_progression,
                     "target_density": float(designed.target_density),
                     "pedal_strategy": pedal_strat,
                     "voicing_structure": designed.voicing_structure[:72],
                     "rh_contour": designed.rh_contour[:56],
                     "lh_motion": designed.lh_motion[:56],
+                    "candidate_approaches": designed.candidate_approaches,
                     "damper_cc64_plan": cc64,
                     "una_corda_cc67_plan": cc67,
                 }
@@ -617,6 +697,7 @@ class MusicalIntentEngine:
         turn_result: Any,
         directive_hints: Optional[Dict[str, Any]] = None,
         corpus_refs: Optional[List[Dict[str, Any]]] = None,
+        macro_plan: Optional[Any] = None,
     ) -> MusicalIntentSchema:
         """
         Produces the final factual performer memo (`monologue_ja`) AFTER L3 MusicalityCritic
@@ -626,6 +707,7 @@ class MusicalIntentEngine:
         adopted = getattr(turn_result, "adopted_candidate", None)
         candidates = getattr(turn_result, "candidates", []) or []
         rejected = [c for c in candidates if not getattr(c, "adopted", False)]
+        macro_dict = self._macro_dict(macro_plan)
 
         fallback_memo = MusicalLogicValidator.build_factual_memo(
             perception=perception,
@@ -656,6 +738,7 @@ class MusicalIntentEngine:
             corpus_refs=corpus_refs or [],
             directive_hints=directive_hints,
             candidate_summaries=cand_summaries,
+            macro_form_state=macro_dict,
         )
         self.last_token_stats = dict(self.economizer.last_stats)
 
@@ -680,7 +763,7 @@ class MusicalIntentEngine:
             h_names = econ.human_summary.get("pitches_str", perception.note_name)
             user_prompt = (
                 f"{econ.compact_prompt}\n"
-                f"人間検出音(1文目に必須)={h_names}, 採用=案{adopted_id}({adopted_reg}, {adopted_notes}), "
+                f"幕={intent.act_label_ja}, 人間検出音(1文目に必須)={h_names}, 採用=案{adopted_id}({adopted_reg}, {adopted_notes}), "
                 f"ボイシング={intent.voicing_structure}, ペダル={pedal_ja}\n"
                 "1文目は必ず人間検出音のみを使い、46〜72文字の自然な日本語メモ（〇〇風・ポエム・誤文法禁止、句点止め）をJSON出力せよ。"
             )
@@ -734,6 +817,46 @@ class MusicalIntentEngine:
             self.last_source = "rule_fallback"
             self.last_latency_ms = round((time.perf_counter() - t0) * 1000.0, 2)
             return intent.model_copy(update={"monologue_ja": fallback_memo})
+
+    def generate_work_title(self, summary_ctx: Dict[str, Any]) -> Tuple[str, str]:
+        """Generates a grounded, non-poetic musical work title via Ollama with fallback."""
+        fb_ja = str(summary_ctx.get("fallback_title_ja", "ニ短調の対話的幻想曲 — 自動演奏ピアノと室内楽のために"))
+        fb_en = str(summary_ctx.get("fallback_title_en", "Dialogic Fantasia for Chamber Instrument and Disklavier"))
+        if not self.use_ollama:
+            return fb_ja, fb_en
+        try:
+            import ollama
+
+            client = ollama.Client(host=self.ollama_host, timeout=self.timeout_s)
+            prompt = (
+                f"編成={summary_ctx.get('mode')}, 主調={summary_ctx.get('home_tonality')}, "
+                f"冒頭動機={summary_ctx.get('seed_motif')}, ターン数={summary_ctx.get('turns_count')}, "
+                f"総演奏時間={summary_ctx.get('total_duration_s')}秒\n"
+                "気取った比喩・AIポエム語(魂/共鳴/寄り添う/紡ぐ/織りなす/悲痛/歓喜/〇〇風)や感嘆符を一切使わず、"
+                "調性・動機特徴・楽器編成に基づく格調高く実用的なクラシック作品タイトル(日本語・英語)をJSON出力せよ。"
+            )
+            resp = client.chat(
+                model=self.model_name,
+                messages=[
+                    {"role": "system", "content": "あなたはクラシック音楽の楽譜出版編集者である。調性と形式に基づく簡潔な作品名を付ける。"},
+                    {"role": "user", "content": prompt},
+                ],
+                format=WorkTitleSchema.model_json_schema(),
+                options={"temperature": 0.2, "num_ctx": 1024, "num_predict": 96},
+                keep_alive=-1,
+                think=False,
+            )
+            raw = resp["message"]["content"] if isinstance(resp, dict) else resp.message.content
+            parsed = WorkTitleSchema.model_validate_json(raw)
+            t_ja = EMOJI_PATTERN.sub("", parsed.title_ja).replace("！", "").replace("!", "").strip()
+            t_en = EMOJI_PATTERN.sub("", parsed.title_en).replace("!", "").strip()
+            if any(b in t_ja for b in BANNED_PHRASES) or any(p.search(t_ja) for p in CONTRADICTION_REGEXES):
+                return fb_ja, fb_en
+            if len(t_ja) < 6 or len(t_ja) > 64:
+                return fb_ja, fb_en
+            return t_ja, (t_en[:80] if len(t_en) >= 6 else fb_en)
+        except Exception:
+            return fb_ja, fb_en
 
     def decide_intent(
         self,

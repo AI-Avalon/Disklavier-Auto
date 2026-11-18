@@ -2,30 +2,30 @@
 type: stage_dialogue_turn
 turn_id: 6
 mode: "piano"
-adopted_candidate: "C"
-total_score: 98.47
-token_compression_pct: 61.6
+adopted_candidate: "B"
+total_score: 94.08
+token_compression_pct: 60.0
 tags: [stage-session, musicality-critic, dual-pedal]
 ---
 
-# Stage Turn #6 (PIANO) — Adopted Candidate C (98.5 pts)
+# Stage Turn #6 (PIANO) — Adopted Candidate B (94.1 pts)
 
 ## 実演家メモ (L2 Deliberation)
-> ピアノD4→F4→A4→G4→E4→D4のレガートを検出。案BはD5周辺停滞のため捨て、案Cの両手D2-D6を浅いペダル踏み替えで置く。
+> ピアノA4→F5のレガートを検出。案DはA4とG#4が短2度衝突し濁るため捨て、案Bの両手和音F2-A6をウナ・コルダ＋踏替で置く。
 
 ## 人間フレーズ知覚 ＆ TokenEconomizer 圧縮
-- **人間音列**: `D4→F4→A4→G4→E4→D4` (legato)
-- **和声進行設計**: `FM9 -> Dm11 -> BbM7#11 -> C9sus4 -> FM7` (`F_major`)
-- **TokenEconomizer 削減率**: `61.6%` (`484 -> 186` tokens)
-- **両ペダル制御**: Damper CC#64 `0..68` (repedals=1) / Una Corda CC#67 `18..112`
+- **人間音列**: `A4→D5→F5→A5→G5→F5` (legato)
+- **和声進行設計**: `EbM7 -> Cm11 -> D7sus4 -> D7b9` (`G_minor`)
+- **TokenEconomizer 削減率**: `60.0%` (`515 -> 206` tokens)
+- **両ペダル制御**: Damper CC#64 `0..108` (repedals=2) / Una Corda CC#67 `20..84`
 
 ## 4候補 音楽性監査 (MusicalityCritic 6-Axis)
 | Candidate | Status | Score | Register | Rejection Reason |
 |---|---|---:|---|---|
-| A | REJECTED | 90.1 | F2-G6 | 1小節1拍 A#5で並達・同音停滞が発生 (-20) |
-| B | REJECTED | 93.3 | F2-D6 | 1小節1拍 D5で並達・同音停滞が発生 (-19) |
-| C | ADOPTED | 98.5 | D2-D6 | - |
-| D | REJECTED | 45.1 | D4-A#4 | 1小節1拍 D4基音とD#4が短2度衝突・低中域混濁 (-48) |
+| A | REJECTED | 93.2 | G2-A#6 | 2小節3拍 G3の開離余白・内声推進が劣る (-8) |
+| B | ADOPTED | 94.1 | F2-A6 | - |
+| C | REJECTED | 92.2 | G2-A#6 | 2小節3拍 G3の開離余白・内声推進が劣る (-8) |
+| D | REJECTED | 53.8 | E4-C5 | 1小節1拍 A4基音とG#4が短2度衝突・低中域混濁 (-48) |
 
 ## 知識グラフリンク
 - [[Evolution_Overview]]

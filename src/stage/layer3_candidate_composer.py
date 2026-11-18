@@ -1,19 +1,17 @@
 r"""
-Layer 3: Polyphonic Two-Hand Composition, Classical Corpus Grammar Indexing,
-MusicalityCritic 6-Axis Auditing & Dual-Pedal Curve Generation.
+Layer 3: Idiomatic Two-Hand Co-Composition Engine, RTX 3070 Corpus Phrase Transformer,
+Masterwork & MusicalityCritic Auditing, and Continuous Dual-Pedal Curves.
 
 Core Architecture:
-- Scans classical MIDI corpora (`D:\Disklavier-Data`, `data/imslp_midi`, `data/human_references`,
-  `data/maestro-v3.0.0`, `data/midi`) via `symusic`, indexing universal acoustic/voicing laws
-  (LH/RH spacing, contrary motion ratio, suspension patterns, agogic rhythm contrast, pedal curves)
-  rather than composer imitation labels.
-- Uses CUDA (RTX 3070) or NumPy vectorized cosine similarity to retrieve top voicing references
-  matching current tension, momentum, and overtone clearance constraints.
-- Generates 4 distinct two-hand polyphonic candidates (Candidate A/B/C/D) using `symusic` +
-  LLM autonomous compositional intent + corpus voicings, with continuous Damper (CC#64) &
-  Una Corda (CC#67) envelopes.
-- Audits all 4 candidates with `MusicalityCritic` (6 pillars), automatically repairing any
-  accidental scale run or monophonic artifact in A/B/C before selecting the winner.
+- Indexes classical MIDI corpora (`data/imslp_midi`, `data/human_references`,
+  `data/maestro-v3.0.0`, `data/midi`) via `symusic` + CUDA/NumPy cosine retrieval.
+- Queries `CorpusPhraseModelManager` (`data/models/classical_phrase_model.pt` trained on RTX 3070)
+  for cantabile melody degree curves, idiomatic LH accompaniment patterns
+  (`arpeggio_root_5th_10th`, `pedal_point_inner_voice`, `syncopated_offbeat_harmony`,
+  `una_corda_choral_recall`), 4-3 / 9-8 / 7-6 suspension resolutions, and agogic/velocity arches.
+- Integrates `CoCompositionArchitect` (`MacroTurnPlan` + `ThematicDNA`) to generate 2-bar
+  (8 melody notes + breathing LH/inner voices = 18-28 events) candidates A, B, C, and contrastive D,
+  with post-leap gap-fill, single melodic apex, voice-leading bridges, Melody Lead, and Act cadences.
 """
 
 from __future__ import annotations
@@ -25,6 +23,15 @@ from typing import Any, Dict, List, Optional, Tuple
 import numpy as np
 from symusic import Note, Score, Track
 
+from src.stage.co_composition_architect import (
+    SCALE_INTERVALS,
+    ThematicDNA,
+    quantize_pitch_to_tonality,
+)
+from src.stage.corpus_phrase_model import (
+    CorpusPhraseModelManager,
+    PhraseBlueprint,
+)
 from src.stage.layer1_perception import midi_to_note_name
 from src.stage.layer2_intent_llm import MusicalIntentSchema
 from src.stage.musicality_critic import MusicalityAuditReport, MusicalityCritic
@@ -39,16 +46,6 @@ except Exception:  # pragma: no cover
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 
-SCALE_INTERVALS: Dict[str, Tuple[int, List[int]]] = {
-    "D_dorian": (2, [0, 2, 3, 5, 7, 9, 10]),
-    "D_minor": (2, [0, 2, 3, 5, 7, 8, 10]),
-    "G_minor": (7, [0, 2, 3, 5, 7, 8, 10]),
-    "C_major": (0, [0, 2, 4, 5, 7, 9, 11]),
-    "F_major": (5, [0, 2, 4, 5, 7, 9, 11]),
-    "A_minor": (9, [0, 2, 3, 5, 7, 8, 10]),
-}
-
-# Universal polyphonic voicing & voice-leading seed grammar (no composer-imitation presets)
 BUILTIN_CHAMBER_SEED_DICTIONARY: List[Dict[str, Any]] = [
     {
         "id": "grammar_contrary_open_fifth",
@@ -124,6 +121,10 @@ class CandidatePhrase:
     audit_passed: bool = False
     pedal_cc64_curve: List[Dict[str, Any]] = field(default_factory=list)
     pedal_cc67_curve: List[Dict[str, Any]] = field(default_factory=list)
+    masterwork_total: float = 88.0
+    masterwork_pct: Dict[str, int] = field(default_factory=dict)
+    lh_idiom: str = "arpeggio_root_5th_10th"
+    blueprint_source: str = "rtx3070_transformer"
 
 
 @dataclass
@@ -197,7 +198,6 @@ class ZeroConfigCorpusLoader:
                 if len(all_notes) < 8:
                     continue
 
-                # Focus on an expressive phrase excerpt
                 slice_notes = all_notes[:24]
                 lh_notes = [n for n in slice_notes if n[1] < 60]
                 rh_notes = [n for n in slice_notes if n[1] >= 60]
@@ -223,7 +223,6 @@ class ZeroConfigCorpusLoader:
                 avg_dur = float(np.mean(beats)) if beats else 0.5
                 momentum = round(min(1.0, 0.35 / max(0.15, avg_dur)), 2)
 
-                # Measure contrary motion between LH and RH contours
                 k_cmp = min(len(lh_notes), len(rh_notes))
                 contrary = 0
                 for i in range(1, k_cmp):
@@ -306,22 +305,6 @@ class ZeroConfigCorpusLoader:
         return [self.patterns[int(i)] for i in idx_top]
 
 
-def _quantize_to_scale(pitch: int, tonal_center: str, min_midi: int, max_midi: int) -> int:
-    tonic_pc, intervals = SCALE_INTERVALS.get(tonal_center, (2, [0, 2, 3, 5, 7, 9, 10]))
-    best_p = max(min_midi, min(max_midi, int(pitch)))
-    best_dist = 999
-    for candidate in range(max(21, best_p - 5), min(108, best_p + 6)):
-        if candidate < min_midi or candidate > max_midi:
-            continue
-        pc = (candidate - tonic_pc) % 12
-        if pc in intervals:
-            d = abs(candidate - pitch)
-            if d < best_dist:
-                best_dist = d
-                best_p = candidate
-    return best_p
-
-
 def _events_to_symusic_score(events: List[Dict[str, Any]], tpq: int = 480) -> Score:
     sc = Score(tpq)
     tr_rh = Track(name="Piano_RH")
@@ -349,19 +332,10 @@ def _build_continuous_pedal_events(
     damper_plan: List[int],
     una_corda_plan: List[int],
     strategy: str,
+    act_number: int = 1,
 ) -> Tuple[List[Dict[str, Any]], List[Dict[str, Any]], List[Dict[str, Any]]]:
-    """
-    Generates continuous time-series CC#64 (Damper) and CC#67 (Una Corda) curves:
-    - Delayed depression after attack, half-pedal clarity (35..80), sharp chord-change
-      repedaling dip (110 -> 0 -> 92), and clean end release to 0.
-    - Continuous Una Corda lateral hammer shift curve matching dynamic contour.
-    """
-    dur = max(1.2, float(total_dur_s))
-    cc64_pts: List[Tuple[float, int]]
-    cc67_pts: List[Tuple[float, int]]
-
+    dur = max(1.4, float(total_dur_s))
     if strategy == "contrastive_flaw":
-        # Deliberately poor/missing dual pedal for Candidate D
         return (
             [{"pitch": 0, "onset_s": 0.0, "control": 64, "value": 100, "voice": "pedal"}],
             [{"t": 0.0, "val": 100}],
@@ -371,61 +345,61 @@ def _build_continuous_pedal_events(
     plan64 = [max(0, min(127, int(v))) for v in (damper_plan or [0, 74, 112, 8, 86, 0])]
     plan67 = [max(0, min(127, int(v))) for v in (una_corda_plan or [24, 76, 94, 48, 16])]
 
-    if strategy == "overtone_clear_high_spread":
-        # Deeper Una Corda veil + floating half-pedal with repedal
+    if act_number == 4 or strategy == "overtone_clear_high_spread":
+        # Deep Una Corda & luminous half-pedal across harmonic changes
+        u_base = 76 if act_number == 4 else 32
+        u_peak = 114 if act_number == 4 else 98
         cc64_pts = [
             (0.00, 0),
-            (0.08, min(78, max(44, plan64[1] if len(plan64) > 1 else 62))),
-            (round(dur * 0.44, 3), min(82, max(48, plan64[2] if len(plan64) > 2 else 74))),
-            (round(dur * 0.50, 3), 0),     # crisp repedaling dip
-            (round(dur * 0.57, 3), 68),    # half-pedal re-entry
+            (0.07, min(78, max(46, plan64[1] if len(plan64) > 1 else 64))),
+            (round(dur * 0.44, 3), min(86, max(54, plan64[2] if len(plan64) > 2 else 76))),
+            (round(dur * 0.50, 3), 0),     # crisp repedaling at barline
+            (round(dur * 0.56, 3), 72),
             (round(dur * 0.94, 3), 0),
         ]
         cc67_pts = [
-            (0.00, 32),
-            (round(dur * 0.22, 3), 96),
-            (round(dur * 0.55, 3), 112),
-            (round(dur * 0.80, 3), 72),
-            (round(dur * 0.96, 3), 18),
+            (0.00, u_base),
+            (round(dur * 0.25, 3), min(120, int(u_peak * 0.92))),
+            (round(dur * 0.55, 3), u_peak),
+            (round(dur * 0.82, 3), max(54, int(u_peak * 0.78))),
+            (round(dur * 0.96, 3), 24 if act_number != 4 else 48),
         ]
     elif strategy == "suspension_inner_voice":
-        # Syncopated damper repedaling across two harmonic pillars + moderate Una Corda
         cc64_pts = [
             (0.00, 0),
-            (0.07, 84),
+            (0.06, 86),
             (round(dur * 0.34, 3), 108),
             (round(dur * 0.42, 3), 4),     # repedal #1
-            (round(dur * 0.49, 3), 92),
-            (round(dur * 0.72, 3), 10),    # repedal #2
-            (round(dur * 0.79, 3), 76),
+            (round(dur * 0.49, 3), 94),
+            (round(dur * 0.73, 3), 8),     # repedal #2
+            (round(dur * 0.80, 3), 78),
             (round(dur * 0.95, 3), 0),
         ]
         cc67_pts = [
-            (0.00, 16),
-            (round(dur * 0.25, 3), 64),
-            (round(dur * 0.55, 3), 42),
-            (round(dur * 0.82, 3), 84),
-            (round(dur * 0.96, 3), 20),
+            (0.00, 20),
+            (round(dur * 0.25, 3), 68),
+            (round(dur * 0.52, 3), 42),
+            (round(dur * 0.80, 3), 84),
+            (round(dur * 0.96, 3), 22),
         ]
     else:
-        # "contrary_open_polyphony": delayed catch, dynamic half-to-full arch, repedal & clean tail
-        p_mid = max(55, min(116, plan64[2] if len(plan64) > 2 else 104))
+        p_mid = max(62, min(118, plan64[2] if len(plan64) > 2 else 104))
         cc64_pts = [
             (0.00, 0),
-            (0.07, max(48, min(88, plan64[1] if len(plan64) > 1 else 68))),
+            (0.06, max(48, min(88, plan64[1] if len(plan64) > 1 else 68))),
             (round(dur * 0.38, 3), p_mid),
-            (round(dur * 0.48, 3), 0),     # clean harmonic-change repedaling
-            (round(dur * 0.56, 3), 86),
-            (round(dur * 0.88, 3), 52),
+            (round(dur * 0.48, 3), 0),     # barline repedaling
+            (round(dur * 0.55, 3), 88),
+            (round(dur * 0.86, 3), 58),
             (round(dur * 0.96, 3), 0),
         ]
-        u_peak = max(48, min(115, max(plan67)))
+        u_peak = max(48, min(116, max(plan67)))
         cc67_pts = [
-            (0.00, max(12, plan67[0] if plan67 else 20)),
-            (round(dur * 0.25, 3), int(u_peak * 0.68)),
-            (round(dur * 0.52, 3), int(u_peak * 0.35)),  # open brightness at harmonic peak
-            (round(dur * 0.76, 3), u_peak),              # veil for lyrical tail
-            (round(dur * 0.96, 3), 14),
+            (0.00, max(16, plan67[0] if plan67 else 24)),
+            (round(dur * 0.25, 3), int(u_peak * 0.72)),
+            (round(dur * 0.52, 3), int(u_peak * 0.38)),
+            (round(dur * 0.78, 3), u_peak),
+            (round(dur * 0.96, 3), 18),
         ]
 
     evs: List[Dict[str, Any]] = []
@@ -442,11 +416,17 @@ def _build_continuous_pedal_events(
 
 class MultipleCandidateComposer:
     """
-    Layer 3 Two-Hand Polyphonic Composer & MusicalityCritic Auditor.
+    Layer 3 Co-Composition Two-Hand Composer powered by RTX 3070 `CorpusPhraseModelManager`,
+    `CoCompositionArchitect` (`MacroTurnPlan` / `ThematicDNA`), and `MusicalityCritic` + `MasterworkEvaluator`.
     """
 
-    def __init__(self, corpus_loader: Optional[ZeroConfigCorpusLoader] = None) -> None:
+    def __init__(
+        self,
+        corpus_loader: Optional[ZeroConfigCorpusLoader] = None,
+        phrase_model: Optional[CorpusPhraseModelManager] = None,
+    ) -> None:
         self.corpus_loader = corpus_loader or ZeroConfigCorpusLoader()
+        self.phrase_model = phrase_model or CorpusPhraseModelManager()
         self.turn_counter: int = 0
 
     def _safe_pitch_outside_mud(
@@ -457,7 +437,8 @@ class MultipleCandidateComposer:
         reg_hi: int,
         human_pitches: List[int],
     ) -> int:
-        p = _quantize_to_scale(raw_pitch, tonal_center, reg_lo, reg_hi)
+        p = quantize_pitch_to_tonality(raw_pitch, tonal_center, reg_lo, reg_hi)
+
         def _clashes(cand: int) -> bool:
             if any(abs(cand - hp) <= 2 for hp in human_pitches):
                 return True
@@ -467,10 +448,133 @@ class MultipleCandidateComposer:
 
         if _clashes(p):
             for shift in (-12, 12, -5, 5, 7, -7, 4, -3):
-                cand = _quantize_to_scale(p + shift, tonal_center, max(24, reg_lo - 7), min(98, reg_hi + 7))
+                cand = quantize_pitch_to_tonality(p + shift, tonal_center, max(24, reg_lo - 7), min(98, reg_hi + 7))
                 if not _clashes(cand):
                     return cand
         return p
+
+    @staticmethod
+    def _degree_offset_to_pitch(anchor_pitch: int, deg_off: int, tonality: str) -> int:
+        tonic_pc, intervals = SCALE_INTERVALS.get(tonality, (2, [0, 2, 3, 5, 7, 9, 10]))
+        # Build ordered scale ladder in [48..96]
+        scale_notes = [
+            m for m in range(48, 97) if (m - tonic_pc) % 12 in intervals
+        ]
+        if not scale_notes:
+            return max(60, min(90, anchor_pitch + deg_off))
+        nearest_idx = min(range(len(scale_notes)), key=lambda i: abs(scale_notes[i] - anchor_pitch))
+        tgt_idx = max(0, min(len(scale_notes) - 1, nearest_idx + int(deg_off)))
+        return scale_notes[tgt_idx]
+
+    @staticmethod
+    def _apply_post_leap_gap_fill(melody: List[int], tonality: str) -> List[int]:
+        """Enforces the classical Post-Leap Gap-Fill Law & prevents >=4 unidirectional steps or pitch repeats."""
+        if len(melody) < 4:
+            return melody
+        out = list(melody)
+        for i in range(1, len(out) - 1):
+            leap = out[i] - out[i - 1]
+            if abs(leap) >= 5:
+                nxt_iv = out[i + 1] - out[i]
+                # Must move in opposite direction by a step (1..3 semitones)
+                if leap * nxt_iv >= 0 or abs(nxt_iv) > 4 or nxt_iv == 0:
+                    step_dir = -2 if leap > 0 else 2
+                    out[i + 1] = quantize_pitch_to_tonality(out[i] + step_dir, tonality, 61, 89)
+
+        # Eliminate consecutive repeated melody notes (except purposeful syncopated suspension release)
+        for i in range(1, len(out)):
+            if out[i] == out[i - 1]:
+                nudge = 2 if i % 2 == 0 else -2
+                out[i] = quantize_pitch_to_tonality(out[i] + nudge, tonality, 61, 89)
+
+        # Break any >=3 consecutive unidirectional stepwise intervals
+        run_dir = 0
+        run_len = 0
+        for i in range(1, len(out)):
+            d = out[i] - out[i - 1]
+            cur_dir = 1 if d > 0 else (-1 if d < 0 else 0)
+            if cur_dir != 0 and cur_dir == run_dir and abs(d) <= 2:
+                run_len += 1
+                if run_len >= 2:
+                    out[i] = quantize_pitch_to_tonality(out[i - 1] - cur_dir * 4, tonality, 61, 89)
+                    run_dir = -cur_dir
+                    run_len = 0
+            else:
+                run_dir = cur_dir
+                run_len = 1 if cur_dir != 0 else 0
+        return out
+
+    def _build_idiomatic_lh_events(
+        self,
+        lh_idiom: str,
+        bar_onsets: List[float],
+        bar_durs: List[float],
+        bass_roots: List[int],
+        tonality: str,
+        human_pitches: List[int],
+        base_vel: int,
+        boost_inner: bool = False,
+    ) -> List[Dict[str, Any]]:
+        """Generates breathing, idiomatic classical LH patterns (10th arpeggio, pedal point, syncopation, choral recall)."""
+        evs: List[Dict[str, Any]] = []
+        inner_vel = min(74, base_vel - (2 if boost_inner else 8))
+
+        for b_idx, t0 in enumerate(bar_onsets):
+            b_dur = max(0.9, bar_durs[b_idx] if b_idx < len(bar_durs) else 1.4)
+            root = self._safe_pitch_outside_mud(bass_roots[b_idx % len(bass_roots)], tonality, 28, 45, human_pitches)
+            fifth = self._safe_pitch_outside_mud(root + 7, tonality, 34, 52, human_pitches)
+            tenth = self._safe_pitch_outside_mud(root + 15, tonality, 40, 58, human_pitches)
+            if tenth == fifth or abs(tenth - fifth) < 3:
+                tenth = self._safe_pitch_outside_mud(root + 12, tonality, 38, 56, human_pitches)
+
+            if lh_idiom == "arpeggio_root_5th_10th":
+                # Breathing root -> fifth -> tenth -> step inner suspension
+                pts = [
+                    (t0 + 0.015, root, b_dur * 0.92, base_vel - 6, "lh_bass"),
+                    (t0 + b_dur * 0.25, fifth, b_dur * 0.68, inner_vel, "lh_fifth"),
+                    (t0 + b_dur * 0.50, tenth, b_dur * 0.45, inner_vel, "lh_tenth"),
+                    (t0 + b_dur * 0.76, quantize_pitch_to_tonality(tenth - 2, tonality, 38, 58), b_dur * 0.24, inner_vel - 4, "lh_inner"),
+                ]
+            elif lh_idiom == "pedal_point_inner_voice":
+                # Sustained deep pedal point + active tenor counterline
+                anchor = self._safe_pitch_outside_mud(bass_roots[0], tonality, 28, 42, human_pitches)
+                step1 = self._safe_pitch_outside_mud(anchor + 14 + (b_idx % 2), tonality, 40, 57, human_pitches)
+                step2 = self._safe_pitch_outside_mud(step1 - 1, tonality, 39, 56, human_pitches)
+                pts = [
+                    (t0 + 0.015, anchor, b_dur * 0.95, base_vel - 4, "lh_bass"),
+                    (t0 + 0.030, anchor + 7, b_dur * 0.85, inner_vel - 2, "lh_fifth"),
+                    (t0 + b_dur * 0.34, step1, b_dur * 0.35, inner_vel + 2, "lh_inner"),
+                    (t0 + b_dur * 0.68, step2, b_dur * 0.30, inner_vel, "lh_inner"),
+                ]
+            elif lh_idiom == "syncopated_offbeat_harmony":
+                # Beat-1 bass + offbeat inner chord & suspension
+                pts = [
+                    (t0 + 0.015, root, b_dur * 0.90, base_vel - 5, "lh_bass"),
+                    (t0 + b_dur * 0.28, fifth, b_dur * 0.40, inner_vel, "lh_fifth"),
+                    (t0 + b_dur * 0.54, tenth, b_dur * 0.42, inner_vel + 2, "lh_inner"),
+                    (t0 + b_dur * 0.78, quantize_pitch_to_tonality(fifth + 5, tonality, 38, 58), b_dur * 0.22, inner_vel - 2, "lh_inner"),
+                ]
+            else:  # una_corda_choral_recall
+                pts = [
+                    (t0 + 0.015, root, b_dur * 0.94, max(36, base_vel - 10), "lh_bass"),
+                    (t0 + 0.065, fifth, b_dur * 0.88, max(34, inner_vel - 4), "lh_fifth"),
+                    (t0 + b_dur * 0.42, tenth, b_dur * 0.52, max(34, inner_vel - 2), "lh_inner"),
+                ]
+
+            for on_s, p, d_s, vel, v_role in pts:
+                if abs(on_s) < 0.001:
+                    on_s = 0.016  # Melody Lead (+16ms) keeps RH top melody prominent
+                evs.append(
+                    {
+                        "pitch": max(24, min(59, int(p))),
+                        "onset_s": round(on_s, 3),
+                        "duration_s": round(max(0.14, d_s), 3),
+                        "velocity": max(28, min(92, int(vel))),
+                        "hand": "lh",
+                        "voice": v_role,
+                    }
+                )
+        return evs
 
     def _build_polyphonic_candidate(
         self,
@@ -479,8 +583,11 @@ class MultipleCandidateComposer:
         intent: MusicalIntentSchema,
         turn_idx: int,
         corpus_refs: List[Dict[str, Any]],
-    ) -> Tuple[List[Dict[str, Any]], List[Dict[str, Any]], List[Dict[str, Any]]]:
-        tonic_pc, _ = SCALE_INTERVALS.get(intent.tonal_center, (2, [0, 2, 3, 5, 7, 9, 10]))
+        macro_plan: Dict[str, Any],
+        blueprint: PhraseBlueprint,
+    ) -> Tuple[List[Dict[str, Any]], List[Dict[str, Any]], List[Dict[str, Any]], str]:
+        tonality = intent.tonal_center
+        tonic_pc, _ = SCALE_INTERVALS.get(tonality, (2, [0, 2, 3, 5, 7, 9, 10]))
         human_pitches = [
             int(n.get("pitch", n.get("note", 54)))
             for n in human_notes
@@ -492,11 +599,9 @@ class MultipleCandidateComposer:
             evs: List[Dict[str, Any]] = []
             t = 0.0
             if turn_idx % 2 == 1:
-                # Flaw Type 1: Monotonous 5-note single-direction scale run, monophonic, flat rhythm
-                start_p = 60 + tonic_pc
-                cur = start_p
+                cur = 60 + tonic_pc
                 for i in range(6):
-                    cur = _quantize_to_scale(cur + 2, intent.tonal_center, 58, 84)
+                    cur = quantize_pitch_to_tonality(cur + 2, tonality, 58, 84)
                     if i > 0 and cur <= evs[-1]["pitch"]:
                         cur = evs[-1]["pitch"] + 2
                     evs.append(
@@ -511,7 +616,6 @@ class MultipleCandidateComposer:
                     )
                     t += 0.25
             else:
-                # Flaw Type 2: Minor-2nd & thick triad mud inside human 100-600Hz fundamental band
                 primary_human = human_pitches[-1]
                 clash_p = max(44, min(65, primary_human + 1))
                 for i in range(5):
@@ -528,59 +632,122 @@ class MultipleCandidateComposer:
                             }
                         )
                     t += 0.26
-            ped_evs, c64, c67 = _build_continuous_pedal_events(t + 0.2, [100], [0], "contrastive_flaw")
-            return evs + ped_evs, c64, c67
+            ped_evs, c64, c67 = _build_continuous_pedal_events(t + 0.2, [100], [0], "contrastive_flaw", 1)
+            return evs + ped_evs, c64, c67, "contrastive_flaw"
 
-        # Genuine two-hand polyphonic strategies
-        ref = corpus_refs[0] if corpus_refs else BUILTIN_CHAMBER_SEED_DICTIONARY[turn_idx % len(BUILTIN_CHAMBER_SEED_DICTIONARY)]
-        lh_base = max(36, min(46, 36 + tonic_pc))
-        if abs(lh_base - human_pitches[-1]) <= 4:
-            lh_base = max(33, lh_base - 12)
+        act_num = int(macro_plan.get("act_number", 1))
+        phrase_func = str(macro_plan.get("phrase_function", "question_half_cadence"))
+        bridge_pitch = int(macro_plan.get("voice_leading_bridge_pitch", 69))
+        target_apex = int(macro_plan.get("target_apex_pitch", 81))
+        seed_pitches = list(macro_plan.get("seed_motif_pitches") or human_pitches)
+        seed_ivs = list(macro_plan.get("seed_motif_intervals") or [3, 4, -2, -3])
+        boost_inner = bool((macro_plan.get("directive_override_flags") or {}).get("boost_lh_inner", False))
 
-        rh_anchor = 69 + tonic_pc if max(human_pitches) >= 57 else 65 + tonic_pc
-        if strategy == "overtone_clear_high_spread":
-            rh_anchor = min(79, rh_anchor + 5)
-            lh_base = max(34, lh_base - 2)
+        dna = ThematicDNA(
+            seed_pitches=seed_pitches,
+            seed_intervals=seed_ivs,
+            home_tonality=tonality,
+        )
 
-        human_diffs = [human_pitches[i] - human_pitches[i - 1] for i in range(1, len(human_pitches))] or [3, -2, 4, -3]
-        ref_rh_ivs = list(ref.get("rh_intervals") or [0, 5, 12, 9, 7, 14])
-        ref_lh_ivs = list(ref.get("lh_intervals") or [0, 7, 12, 16])
-
-        # Diverse rhythmic durations (never uniform!) and agogic breathing gaps
+        # Construct 8-note cantabile melody combining ThematicDNA transformation + RTX 3070 Transformer Blueprint
         if strategy == "contrary_open_polyphony":
-            rhythm_steps = [0.36, 0.22, 0.44, 0.24, 0.34, 0.56]
-            vel_arch = [62, 72, 82, 76, 68, 56]
-            rh_contour_offsets = [-human_diffs[0], -human_diffs[1 % len(human_diffs)] + 4, -5, 7, -3, 5]
+            t_mode = str(macro_plan.get("motivic_transform") or "inversion_question")
+            dna_mel = dna.transform_motif(t_mode, bridge_pitch, tonality, target_len=8)
+            bp_mel = [self._degree_offset_to_pitch(bridge_pitch, off, tonality) for off in blueprint.melody_degree_offsets]
+            raw_mel = [
+                dna_mel[0],
+                dna_mel[1],
+                bp_mel[2],
+                dna_mel[3],
+                bp_mel[4],
+                max(dna_mel[5], target_apex) if act_num == 3 else dna_mel[5],
+                bp_mel[6],
+                dna_mel[7],
+            ]
+            lh_idiom = blueprint.lh_idiom if not boost_inner else "arpeggio_root_5th_10th"
         elif strategy == "suspension_inner_voice":
-            rhythm_steps = [0.46, 0.24, 0.26, 0.48, 0.28, 0.58]
-            vel_arch = [58, 70, 78, 66, 74, 54]
-            # Explicit suspension-resolution shape (+5 -> +4, +9 -> +7)
-            rh_contour_offsets = [0, 5, -1, 6, -2, 4]
-        else:
-            # "overtone_clear_high_spread"
-            rhythm_steps = [0.48, 0.28, 0.38, 0.22, 0.42, 0.62]
-            vel_arch = [48, 60, 70, 64, 54, 44]
-            rh_contour_offsets = [0, 7, -3, 9, -5, 4]
+            dna_mel = dna.transform_motif("sequence_up" if act_num != 4 else "coda_recall", bridge_pitch, tonality, target_len=8)
+            # Inject explicit 4-3 / 9-8 suspension figure across steps 3->4 and 6->7
+            susp_peak = quantize_pitch_to_tonality(dna_mel[2] + 5, tonality, 65, 86)
+            raw_mel = [
+                dna_mel[0],
+                dna_mel[1],
+                susp_peak,
+                quantize_pitch_to_tonality(susp_peak - 2, tonality, 63, 84),
+                quantize_pitch_to_tonality(dna_mel[4] + 3, tonality, 65, 88),
+                quantize_pitch_to_tonality(target_apex, tonality, 70, 90),
+                quantize_pitch_to_tonality(target_apex - 2, tonality, 66, 86),
+                dna_mel[7],
+            ]
+            lh_idiom = "pedal_point_inner_voice" if act_num in (2, 3) else "syncopated_offbeat_harmony"
+        else:  # "overtone_clear_high_spread"
+            dna_mel = dna.transform_motif("coda_recall" if act_num == 4 else "polyphonic_stretto", min(82, bridge_pitch + 4), tonality, target_len=8)
+            raw_mel = [
+                quantize_pitch_to_tonality(bridge_pitch + (2 if act_num != 4 else 0), tonality, 64, 84),
+                dna_mel[1],
+                quantize_pitch_to_tonality(dna_mel[1] + 5, tonality, 67, 88),
+                quantize_pitch_to_tonality(dna_mel[1] + 3, tonality, 65, 86),
+                quantize_pitch_to_tonality(target_apex, tonality, 72, 91),
+                quantize_pitch_to_tonality(target_apex - 3, tonality, 68, 88),
+                dna_mel[6],
+                dna_mel[7],
+            ]
+            lh_idiom = "una_corda_choral_recall" if act_num == 4 else "arpeggio_root_5th_10th"
+
+        # Enforce Act cadence ending (Question half-cadence vs Tonic resolution) & clear human fundamentals
+        mel = self._apply_post_leap_gap_fill(raw_mel, tonality)
+        mel = [self._safe_pitch_outside_mud(p, tonality, 61, 90, human_pitches) for p in mel]
+
+        if phrase_func == "question_half_cadence":
+            # End on 5th (dom) or 2nd degree for open-ended questioning feel
+            q_target = quantize_pitch_to_tonality(72 + tonic_pc + 7, tonality, 65, 83)
+            if abs(q_target - mel[-2]) > 7:
+                q_target = quantize_pitch_to_tonality(60 + tonic_pc + 7, tonality, 65, 80)
+            mel[-1] = self._safe_pitch_outside_mud(q_target, tonality, 63, 84, human_pitches)
+            if mel[-1] == mel[-2]:
+                mel[-1] = self._safe_pitch_outside_mud(72 + tonic_pc + 2, tonality, 63, 84, human_pitches)
+        elif phrase_func == "recapitulation_resolution":
+            t_target = quantize_pitch_to_tonality(60 + tonic_pc + 12, tonality, 64, 80)
+            if abs(t_target - mel[-2]) > 7:
+                t_target = quantize_pitch_to_tonality(60 + tonic_pc, tonality, 62, 78)
+            mel[-1] = self._safe_pitch_outside_mud(t_target, tonality, 62, 82, human_pitches)
+            if mel[-1] == mel[-2]:
+                mel[-2] = self._safe_pitch_outside_mud(mel[-1] + 2, tonality, 63, 84, human_pitches)
+
+        # Guarantee single clear melodic apex in steps 3..6
+        apex_idx = 5 if act_num >= 2 else 4
+        other_max = max(mel[i] for i in range(len(mel)) if i != apex_idx)
+        if mel[apex_idx] <= other_max:
+            mel[apex_idx] = self._safe_pitch_outside_mud(min(90, other_max + 2), tonality, 68, 90, human_pitches)
+
+        # Build 2-bar agogic timing (approx 3.1 - 3.8s total) using learned blueprint rubato + velocity arch
+        base_beats = [0.46, 0.28, 0.36, 0.52, 0.34, 0.56, 0.32, 0.72]
+        ag = blueprint.agogic_ratios or [1.0] * 8
+        step_dts = [round(max(0.20, min(0.88, base_beats[i] * float(ag[i % len(ag)]))), 3) for i in range(8)]
+
+        act_vel_boost = 12 if act_num == 3 else (-8 if act_num == 4 else 0)
+        bp_vel = blueprint.velocity_curve or [0.64] * 8
+        vel_seq = [
+            max(42, min(98, int(round(36 + float(bp_vel[i % len(bp_vel)]) * 54 + act_vel_boost + (8 if i == apex_idx else 0)))))
+            for i in range(8)
+        ]
 
         events: List[Dict[str, Any]] = []
         t = 0.0
-        cur_rh = _quantize_to_scale(rh_anchor, intent.tonal_center, 62, 84)
+        bar1_start = 0.0
+        bar2_start = 0.0
 
-        for i in range(6):
-            step_dt = rhythm_steps[i % len(rhythm_steps)]
-            # Non-monotonic melodic jump + turn to guarantee zero scale runs
-            if strategy == "suspension_inner_voice":
-                raw_rh = rh_anchor + (ref_rh_ivs[i % len(ref_rh_ivs)] % 12) + rh_contour_offsets[i]
-            else:
-                delta = rh_contour_offsets[i]
-                # Ensure alternating direction or leap >= 3 so it never forms a 4-note monotonic scale
-                if i % 2 == 1 and abs(delta) < 3:
-                    delta = 5 if delta >= 0 else -4
-                raw_rh = cur_rh + delta
+        for i in range(8):
+            if i == 4:
+                t += 0.07  # phrase breath between Bar 1 and Bar 2
+                bar2_start = t
 
-            cur_rh = self._safe_pitch_outside_mud(raw_rh, intent.tonal_center, 62, 86, human_pitches)
-            dur_rh = round(max(0.14, step_dt * (0.72 if intent.pedal_strategy == "dry" else 1.04)), 3)
-            vel_rh = vel_arch[i % len(vel_arch)]
+            dt = step_dts[i]
+            cur_rh = mel[i]
+            vel_rh = vel_seq[i]
+            dur_rh = round(max(0.18, dt * (0.76 if intent.pedal_strategy == "dry" else 1.06)), 3)
+            if i == 7:
+                dur_rh = round(max(0.55, dur_rh * 1.25), 3)
 
             events.append(
                 {
@@ -593,90 +760,75 @@ class MultipleCandidateComposer:
                 }
             )
 
-            # Vertical RH harmony support (3rd, 6th, or 4th/7th chord tone below top melody)
-            if i in (0, 2, 3, 5):
-                harm_iv = 4 if (i % 2 == 0) else 5
-                harm_p = self._safe_pitch_outside_mud(cur_rh - harm_iv, intent.tonal_center, 60, cur_rh - 3, human_pitches)
+            # Vertical RH harmony dyads/chords on strong harmonic pillars (steps 0, 2, 4, 5, 7)
+            if i in (0, 2, 4, 5, 7):
+                harm_iv = 4 if i in (0, 5) else (5 if i == 4 else 3)
+                harm_p = self._safe_pitch_outside_mud(cur_rh - harm_iv, tonality, 60, cur_rh - 3, human_pitches)
                 if harm_p != cur_rh and abs(cur_rh - harm_p) >= 3:
                     events.append(
                         {
                             "pitch": harm_p,
-                            "onset_s": round(t + 0.014, 3),  # gentle chord roll
-                            "duration_s": round(dur_rh * 0.92, 3),
-                            "velocity": max(40, vel_rh - 12),
+                            "onset_s": round(t + 0.016, 3),  # +16ms Melody Lead offset
+                            "duration_s": round(dur_rh * 0.90, 3),
+                            "velocity": max(34, vel_rh - 14),
                             "hand": "rh",
                             "voice": "rh_harmony",
                         }
                     )
+                # In Act 3 climax, add a rich 3rd chordal voice (6th/7th below soprano)
+                if act_num == 3 and i in (0, 5):
+                    harm_low = self._safe_pitch_outside_mud(cur_rh - 9, tonality, 58, harm_p - 3, human_pitches)
+                    if harm_low != harm_p and abs(harm_p - harm_low) >= 3:
+                        events.append(
+                            {
+                                "pitch": harm_low,
+                                "onset_s": round(t + 0.028, 3),
+                                "duration_s": round(dur_rh * 0.88, 3),
+                                "velocity": max(34, vel_rh - 18),
+                                "hand": "rh",
+                                "voice": "rh_harmony",
+                            }
+                        )
 
-            # Left-Hand Bass + Inner Tenor Counterline (cleared from human mud collisions)
-            if i in (0, 3):
-                bass_root = self._safe_pitch_outside_mud(
-                    lh_base + (0 if i == 0 else 5), intent.tonal_center, 26, 46, human_pitches
-                )
-                fifth_iv = ref_lh_ivs[1] if len(ref_lh_ivs) > 1 and 5 <= ref_lh_ivs[1] <= 12 else 7
-                bass_fifth = self._safe_pitch_outside_mud(
-                    bass_root + fifth_iv, intent.tonal_center, 31, 52, human_pitches
-                )
-                if bass_fifth == bass_root:
-                    bass_fifth = max(28, bass_root + 7)
-                lh_dur = round(step_dt * 2.15, 3)
-                events.append(
-                    {
-                        "pitch": bass_root,
-                        "onset_s": round(t, 3),
-                        "duration_s": lh_dur,
-                        "velocity": max(44, vel_rh - 10),
-                        "hand": "lh",
-                        "voice": "lh_bass",
-                    }
-                )
-                events.append(
-                    {
-                        "pitch": bass_fifth,
-                        "onset_s": round(t + 0.018, 3),
-                        "duration_s": round(lh_dur * 0.92, 3),
-                        "velocity": max(40, vel_rh - 16),
-                        "hand": "lh",
-                        "voice": "lh_fifth",
-                    }
-                )
-            elif i in (1, 4):
-                # Inner tenor/alto counterline avoiding mud register around human pitch
-                inner_target = lh_base + 14 + (1 if i == 1 else -1)
-                inner_p = self._safe_pitch_outside_mud(
-                    inner_target,
-                    intent.tonal_center,
-                    40,
-                    59,
-                    human_pitches,
-                )
-                if any(abs(inner_p - hp) <= 4 for hp in human_pitches):
-                    inner_p = self._safe_pitch_outside_mud(
-                        lh_base + 7, intent.tonal_center, 31, 46, human_pitches
-                    )
-                events.append(
-                    {
-                        "pitch": inner_p,
-                        "onset_s": round(t, 3),
-                        "duration_s": round(step_dt * 1.35, 3),
-                        "velocity": max(38, vel_rh - 16),
-                        "hand": "lh",
-                        "voice": "lh_inner",
-                    }
-                )
+            t += dt + (0.04 if i == 6 else 0.0)
 
-            # Add subtle breathing rest before final cadence note (i == 4)
-            breath_gap = 0.09 if i == 4 else 0.015
-            t += step_dt + breath_gap
+        bar1_dur = max(1.1, bar2_start - bar1_start - 0.05)
+        bar2_dur = max(1.1, t - bar2_start)
+
+        # Bass roots matching Act harmonic progression
+        bass_root1 = 36 + tonic_pc
+        while bass_root1 > 44:
+            bass_root1 -= 12
+        if phrase_func == "question_half_cadence":
+            bass_root2 = bass_root1 + 7  # Move to V for open question
+        elif phrase_func == "recapitulation_resolution":
+            bass_root2 = bass_root1      # Resolve back to I
+            bass_root1 = bass_root1 + 7  # From V in bar 1 -> I in bar 2
+        elif act_num == 3:
+            bass_root2 = bass_root1      # Pedal point anchor
+        else:
+            bass_root2 = bass_root1 + 5  # IV / subdominant motion
+
+        lh_evs = self._build_idiomatic_lh_events(
+            lh_idiom=lh_idiom,
+            bar_onsets=[bar1_start, bar2_start],
+            bar_durs=[bar1_dur, bar2_dur],
+            bass_roots=[bass_root1, bass_root2],
+            tonality=tonality,
+            human_pitches=human_pitches,
+            base_vel=max(46, min(82, int(np.mean(vel_seq)) - 8)),
+            boost_inner=boost_inner,
+        )
+        events.extend(lh_evs)
 
         ped_evs, c64, c67 = _build_continuous_pedal_events(
-            total_dur_s=t + 0.25,
+            total_dur_s=t + 0.35,
             damper_plan=intent.damper_cc64_plan,
             una_corda_plan=intent.una_corda_cc67_plan,
             strategy=strategy,
+            act_number=act_num,
         )
-        return events + ped_evs, c64, c67
+        return events + ped_evs, c64, c67, lh_idiom
 
     def _repair_to_polyphonic_standard(
         self,
@@ -684,9 +836,10 @@ class MultipleCandidateComposer:
         human_notes: List[Dict[str, Any]],
         intent: MusicalIntentSchema,
         audit: MusicalityAuditReport,
+        macro_plan: Optional[Dict[str, Any]] = None,
     ) -> Tuple[List[Dict[str, Any]], List[Dict[str, Any]], List[Dict[str, Any]]]:
-        """Auto-repairs any candidate failing MusicalityCritic (breaks scale runs, adds LH/RH harmony & dual pedal)."""
-        tonic_pc, _ = SCALE_INTERVALS.get(intent.tonal_center, (2, [0, 2, 3, 5, 7, 9, 10]))
+        tonality = intent.tonal_center
+        tonic_pc, _ = SCALE_INTERVALS.get(tonality, (2, [0, 2, 3, 5, 7, 9, 10]))
         human_pitches = [
             int(n.get("pitch", n.get("note", 54)))
             for n in human_notes
@@ -700,7 +853,7 @@ class MultipleCandidateComposer:
                 if idx % 2 == 1:
                     n["pitch"] = self._safe_pitch_outside_mud(
                         int(n["pitch"]) + (5 if idx % 4 == 1 else -4),
-                        intent.tonal_center,
+                        tonality,
                         62,
                         92,
                         human_pitches,
@@ -711,20 +864,55 @@ class MultipleCandidateComposer:
                 p = int(n["pitch"])
                 if any(abs(p - hp) <= 4 for hp in human_pitches):
                     if str(n.get("hand", "")).lower() == "lh" or p < 60:
-                        n["pitch"] = self._safe_pitch_outside_mud(p - 12, intent.tonal_center, 24, 46, human_pitches)
+                        n["pitch"] = self._safe_pitch_outside_mud(p - 12, tonality, 26, 46, human_pitches)
                     else:
-                        n["pitch"] = self._safe_pitch_outside_mud(p + 12, intent.tonal_center, 66, 94, human_pitches)
+                        n["pitch"] = self._safe_pitch_outside_mud(p + 12, tonality, 65, 92, human_pitches)
 
-        # Guarantee LH bass + vertical harmony
+        if "voice_bridge_disconnect" in audit.failures and macro_plan:
+            bridge_p = int(macro_plan.get("voice_leading_bridge_pitch", 69))
+            rh_sorted = sorted(
+                [n for n in note_evs if str(n.get("hand", "")).lower() == "rh" or int(n["pitch"]) >= 60],
+                key=lambda x: float(x.get("onset_s", 0.0)),
+            )
+            if rh_sorted:
+                rh_sorted[0]["pitch"] = self._safe_pitch_outside_mud(bridge_p, tonality, 62, 86, human_pitches)
+
+        if "parallel_fifth_octave" in audit.failures or "excessive_pitch_repetition" in audit.failures:
+            mel_notes = sorted(
+                [
+                    n
+                    for n in note_evs
+                    if str(n.get("voice", "")).lower() in ("rh_melody", "melody")
+                    or (str(n.get("hand", "")).lower() == "rh" and str(n.get("voice", "")).lower() != "rh_harmony")
+                ],
+                key=lambda x: float(x.get("onset_s", 0.0)),
+            )
+            for idx in range(1, len(mel_notes)):
+                prev_p = int(mel_notes[idx - 1]["pitch"])
+                cur_p = int(mel_notes[idx]["pitch"])
+                if cur_p == prev_p:
+                    mel_notes[idx]["pitch"] = self._safe_pitch_outside_mud(
+                        cur_p + (3 if idx % 2 == 0 else -2), tonality, 62, 89, human_pitches
+                    )
+                elif idx < len(human_pitches):
+                    iv_ai = cur_p - prev_p
+                    iv_hu = human_pitches[idx] - human_pitches[idx - 1]
+                    if iv_ai != 0 and iv_ai == iv_hu and abs(cur_p - human_pitches[idx]) % 12 in (0, 7):
+                        contrary_shift = -3 if iv_hu > 0 else 4
+                        mel_notes[idx]["pitch"] = self._safe_pitch_outside_mud(
+                            prev_p + contrary_shift, tonality, 62, 89, human_pitches
+                        )
+
         has_lh = any(str(n.get("hand", "")).lower() == "lh" or int(n["pitch"]) < 60 for n in note_evs)
         if not has_lh:
-            bass_p = _quantize_to_scale(36 + tonic_pc, intent.tonal_center, 30, 48)
-            note_evs.append({"pitch": bass_p, "onset_s": 0.0, "duration_s": 0.9, "velocity": 58, "hand": "lh", "voice": "lh_bass"})
-            note_evs.append({"pitch": bass_p + 7, "onset_s": 0.02, "duration_s": 0.85, "velocity": 50, "hand": "lh", "voice": "lh_fifth"})
+            bass_p = quantize_pitch_to_tonality(36 + tonic_pc, tonality, 30, 48)
+            note_evs.append({"pitch": bass_p, "onset_s": 0.016, "duration_s": 1.1, "velocity": 58, "hand": "lh", "voice": "lh_bass"})
+            note_evs.append({"pitch": bass_p + 7, "onset_s": 0.35, "duration_s": 0.9, "velocity": 50, "hand": "lh", "voice": "lh_fifth"})
 
-        max_end = max((float(n.get("onset_s", 0.0)) + float(n.get("duration_s", 0.35)) for n in note_evs), default=1.6)
+        max_end = max((float(n.get("onset_s", 0.0)) + float(n.get("duration_s", 0.35)) for n in note_evs), default=2.8)
         ped_evs, c64, c67 = _build_continuous_pedal_events(
-            max_end + 0.25, intent.damper_cc64_plan, intent.una_corda_cc67_plan, "contrary_open_polyphony"
+            max_end + 0.35, intent.damper_cc64_plan, intent.una_corda_cc67_plan, "contrary_open_polyphony",
+            act_number=int((macro_plan or {}).get("act_number", 1)),
         )
         return note_evs + ped_evs, c64, c67
 
@@ -733,6 +921,7 @@ class MultipleCandidateComposer:
         human_notes: List[Dict[str, Any]],
         intent: MusicalIntentSchema,
         human_mode: str = "cello",
+        macro_plan: Optional[Any] = None,
     ) -> CompositionTurnResult:
         self.turn_counter += 1
         human_pitches = [
@@ -748,39 +937,91 @@ class MultipleCandidateComposer:
             top_k=3,
         )
 
+        if macro_plan is None:
+            seed_ivs = [human_pitches[i] - human_pitches[i - 1] for i in range(1, len(human_pitches))] or [3, 4, -2]
+            macro_dict: Dict[str, Any] = {
+                "act_number": intent.act_number,
+                "phrase_function": intent.phrase_function,
+                "motivic_transform": intent.motivic_transform,
+                "seed_motif_pitches": list(human_pitches),
+                "seed_motif_intervals": seed_ivs,
+                "voice_leading_bridge_pitch": max(62, min(80, human_pitches[-1] + 12)),
+                "target_apex_pitch": 79 if intent.act_number <= 2 else 85,
+                "directive_override_flags": {},
+            }
+        elif isinstance(macro_plan, dict):
+            macro_dict = dict(macro_plan)
+        else:
+            macro_dict = {
+                "act_number": getattr(macro_plan, "act_number", 1),
+                "phrase_function": getattr(macro_plan, "phrase_function", "question_half_cadence"),
+                "motivic_transform": getattr(macro_plan, "motivic_transform", "inversion_question"),
+                "seed_motif_pitches": list(getattr(macro_plan, "seed_motif_pitches", human_pitches)),
+                "seed_motif_intervals": list(getattr(macro_plan, "seed_motif_intervals", [3, 4, -2])),
+                "voice_leading_bridge_pitch": getattr(macro_plan, "voice_leading_bridge_pitch", 69),
+                "target_apex_pitch": getattr(macro_plan, "target_apex_pitch", 79),
+                "directive_override_flags": dict(getattr(macro_plan, "directive_override_flags", {}) or {}),
+            }
+
+        tonic_pc, valid_pcs = SCALE_INTERVALS.get(intent.tonal_center, (2, [0, 2, 3, 5, 7, 9, 10]))
+        blueprint = self.phrase_model.predict_blueprint(
+            act_number=int(macro_dict["act_number"]),
+            phrase_function=str(macro_dict["phrase_function"]),
+            seed_intervals=list(macro_dict["seed_motif_intervals"]),
+            prev_end_pitch=int(macro_dict["voice_leading_bridge_pitch"]),
+            anchor_pitch=int(macro_dict["voice_leading_bridge_pitch"]),
+            tonic_pc=tonic_pc,
+            tension=tension,
+            momentum=intent.target_density,
+            articulation="legato" if intent.pedal_strategy != "dry" else "staccato",
+            mode=human_mode,
+        )
+
+        act_label_short = {
+            1: "主題問いかけ・開離10度案",
+            2: "模進発展・内声対位法案",
+            3: "保続低音・重層頂点統合案",
+            4: "ウナ・コルダ回想・終止案",
+        }.get(int(macro_dict["act_number"]), "対位法反行・両手開離案")
+
         specs = [
-            ("A", "対位法反行・両手開離ボイシング案", "contrary_open_polyphony"),
-            ("B", "掛留解決・立体内声ポリフォニー案", "suspension_inner_voice"),
-            ("C", "高次倍音回避・透明色彩ボイシング案", "overtone_clear_high_spread"),
+            ("A", f"{act_label_short} (Transformer)", "contrary_open_polyphony"),
+            ("B", "掛留解決・保続音テノール対旋律案", "suspension_inner_voice"),
+            ("C", "高域透明・ウナ・コルダ色彩ボイシング案", "overtone_clear_high_spread"),
             ("D", "対照検証案（音階単調・低中域混濁）", "contrastive_flaw_check"),
         ]
 
-        scale_tuple = SCALE_INTERVALS.get(intent.tonal_center, (2, [0, 2, 3, 5, 7, 9, 10]))
         candidates: List[CandidatePhrase] = []
-
         for idx_spec, (cid, label_ja, strat) in enumerate(specs):
-            evs, c64, c67 = self._build_polyphonic_candidate(
-                strat, human_notes, intent, self.turn_counter, corpus_refs[idx_spec % len(corpus_refs) :]
+            evs, c64, c67, lh_idiom = self._build_polyphonic_candidate(
+                strat,
+                human_notes,
+                intent,
+                self.turn_counter,
+                corpus_refs[idx_spec % len(corpus_refs) :],
+                macro_dict,
+                blueprint,
             )
             audit = MusicalityCritic.audit_candidate(
                 evs,
                 human_notes=human_notes,
                 tonal_center=intent.tonal_center,
-                scale_pcs=scale_tuple,
+                scale_pcs=(tonic_pc, valid_pcs),
                 register_range=intent.register_range,
                 human_mode=human_mode,
+                macro_plan=macro_dict,
             )
 
-            # Auto-repair A/B/C if any MusicalityCritic violation sneaks in
             if cid != "D" and not audit.passed:
-                evs, c64, c67 = self._repair_to_polyphonic_standard(evs, human_notes, intent, audit)
+                evs, c64, c67 = self._repair_to_polyphonic_standard(evs, human_notes, intent, audit, macro_plan=macro_dict)
                 audit = MusicalityCritic.audit_candidate(
                     evs,
                     human_notes=human_notes,
                     tonal_center=intent.tonal_center,
-                    scale_pcs=scale_tuple,
+                    scale_pcs=(tonic_pc, valid_pcs),
                     register_range=intent.register_range,
                     human_mode=human_mode,
+                    macro_plan=macro_dict,
                 )
 
             sc = _events_to_symusic_score(evs)
@@ -811,11 +1052,15 @@ class MultipleCandidateComposer:
                     audit_passed=audit.passed,
                     pedal_cc64_curve=c64,
                     pedal_cc67_curve=c67,
+                    masterwork_total=audit.masterwork_total,
+                    masterwork_pct=audit.masterwork_pct,
+                    lh_idiom=lh_idiom,
+                    blueprint_source=blueprint.source,
                 )
             )
 
         eligible = [c for c in candidates if c.candidate_id != "D"]
-        best = max(eligible or candidates, key=lambda c: c.total_score)
+        best = max(eligible or candidates, key=lambda c: (1 if c.audit_passed else 0, c.total_score))
         best.adopted = True
         best.rejection_tag_ja = ""
         best.problem_note_indices = []
@@ -826,6 +1071,6 @@ class MultipleCandidateComposer:
             intent=intent,
             candidates=candidates,
             adopted_candidate=best,
-            corpus_source=self.corpus_loader.source_mode,
+            corpus_source=f"{self.corpus_loader.source_mode} + {blueprint.source}",
             corpus_refs_used=corpus_refs,
         )

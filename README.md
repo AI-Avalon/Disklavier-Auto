@@ -1,81 +1,101 @@
-# Disklavier-Auto — 自律音楽思考・両ペダル物理模擬・舞台プロセス可視化システム
+# Disklavier-Auto — 4幕共同作曲エンジン・RTX 3070コーパス学習・ホール音響舞台システム
 
-> **「〇〇風」テンプレートに頼らない自律音楽思考 × 両手ポリフォニー作曲 × ウナ・コルダ／ダンパー連続物理制御 × 舞台公開推敲HUD**  
-> Yamaha Disklavier 実機とチェロ／ピアノ奏者が舞台上で対話し、**L1知覚 → `TokenEconomizer` 圧縮 → L2自律作曲設計（RTX 3070 Ollama）→ L3クラシックMIDIコーパス構造参照・両手ポリフォニー作曲 → `MusicalityCritic` 6軸音楽性監査 → L5両ペダル安全駆動＆物理シミュレーション → L4 60fps舞台HUD＆Obsidianアーカイブ** までを一貫実行する Windows 11 リアルタイム共演システムです。
+> **「問いかけと応答で1つの楽曲を共同作曲する」4幕構成アーキテクチャ × RTX 3070 MIDI学習 × コンサートホール物理モデリング音響 × 舞台公開推敲HUD**  
+> Yamaha Disklavier 実機とチェロ／ピアノ奏者が対話し、**L1知覚 → `CoCompositionArchitect`（4幕大局構成・種子核・声部接続）→ RTX 3070 `ClassicalPhraseTransformerNet` 推論 → `TokenEconomizer` × Ollama → `MasterworkEvaluator` / `MusicalityCritic` 監査 → L5安全駆動＆コンサートホールステレオ音響（`.mp3`/`.wav`/`.mid`/`.musicxml`）→ L4 60fps舞台HUD＆Obsidianアーカイブ** までを一貫実行する Windows 11 リアルタイム共演作曲システムです。
 
 ---
 
-## 1. 実機稼働・舞台HUDスクリーンショット
+## 1. 完成デモ音源（`.mp3` / `.wav` / `.mid` / `.musicxml`）＆ 楽曲アナリーゼ
 
-### Mode B: チェロ × 両手ピアノ対話（大譜表・6軸監査・連続両ペダル波形・モチーフ記憶グラフ）
+ローカル Ollama（`qwen3.5:4b`）、RTX 3070 学習済みフレーズモデル（`data/models/classical_phrase_model.pt`）、4幕構成エンジン、およびコンサートホール物理モデリング音響シンセを実際に稼働させ、公開リハーサル（小節の書き直し）を経て1曲として完成させた音源と楽譜を収録しています（MIDIソフト不要でそのまま試聴できます）。
+
+### 作品1（Mode B：チェロ × Disklavier 対話作品）
+- **作品名**: *D ドリアン変奏曲：G3 への四度昇進* (*Variations on D Dorian: The Fourth Ascent to G3*)
+- **構成**: 4幕8ターン ＋ 公開推敲書き直し（Turn 2）＋ ウナ・コルダ回想コーダ（総演奏時間 **56.18 秒** / 44.1kHz Stereo / `RMS=0.11515` / `Clipping=0`）
+- **試聴・楽譜**:
+  - [MP3 完成音源 (`demo_mode_b_cello_dialogue.mp3`)](docs/demos/demo_mode_b_cello_dialogue.mp3)
+  - [WAV マスター音源 (`demo_mode_b_cello_dialogue.wav`)](docs/demos/demo_mode_b_cello_dialogue.wav)
+  - [標準MIDI (`demo_mode_b_cello_dialogue.mid`)](docs/demos/demo_mode_b_cello_dialogue.mid)
+  - [MusicXML 大譜表 (`demo_mode_b_cello_dialogue.musicxml`)](docs/demos/demo_mode_b_cello_dialogue.musicxml)
+
+### 作品2（Mode A：人間ピアノ × Disklavier 連弾対話作品）
+- **作品名**: *前奏曲と対話的変奏 ニ短調 — 連弾対話のための公開推敲作品* (*Prelude and Dialogic Variations in D minor for Two Pianists*)
+- **構成**: 4幕8ターン ＋ 公開推敲書き直し（Turn 2）＋ 終止コーダ（総演奏時間 **55.59 秒** / 44.1kHz Stereo / `RMS=0.08653` / `Clipping=0`）
+- **試聴・楽譜**:
+  - [MP3 完成音源 (`demo_mode_a_piano_dialogue.mp3`)](docs/demos/demo_mode_a_piano_dialogue.mp3)
+  - [WAV マスター音源 (`demo_mode_a_piano_dialogue.wav`)](docs/demos/demo_mode_a_piano_dialogue.wav)
+  - [標準MIDI (`demo_mode_a_piano_dialogue.mid`)](docs/demos/demo_mode_a_piano_dialogue.mid)
+  - [MusicXML 大譜表 (`demo_mode_a_piano_dialogue.musicxml`)](docs/demos/demo_mode_a_piano_dialogue.musicxml)
+
+- **全ターン推敲アナリーゼ・ボツ案棄却理由・書き直し記録**: [`docs/demos/COMPOSITION_SHOWCASE.md`](docs/demos/COMPOSITION_SHOWCASE.md)
+
+---
+
+## 2. 舞台HUD 実画面スクリーンショット（1920x1080）
+
+### Mode B: チェロ × Disklavier（第3幕クライマックス・公開推敲・連続両ペダル波形）
 ![Disklavier-Auto Stage HUD Mode B Cello](docs/images/stage_hud_mode_b_cello.png)
 
-### Mode A: ピアノ × 両手ピアノ対話（自己打鍵エコー100%抑圧台帳・自律反行・両ペダル連続制御）
+### Mode A: ピアノ × Disklavier（第4幕ウナ・コルダ回想終止・16ノード記憶グラフ・完成曲統合）
 ![Disklavier-Auto Stage HUD Mode A Piano](docs/images/stage_hud_mode_a_piano.png)
 
 ---
 
-## 2. 本システムの革新ポイント（再構築後のコア機能）
+## 3. 本システムの抜本再構築ポイント
 
-1. **「〇〇風」プリセット撤廃 × 自律音楽思考（First-Principles Musical Reasoning）**:
-   - コードおよびUI（`DEMO DECK`）から「バロック風」「印象派風」等の固定スタイルボタンを完全排除しました。
-   - `data/imslp_midi/`、`data/human_references/`、`data/maestro-v3.0.0/`（1,276曲以上）を `symusic` で構造解析し、作曲家ラベルではなく **「両手の立体ボイシング配置」「緊張と弛緩の和声ベクトル」「反行・掛留解決」「アゴーギクとペダル曲線」** としてインデックス化しています（CUDA / NumPy ベクトル近傍検索）。
-2. **`TokenEconomizer` × RTX 3070 ローカルLLM本格作曲（L2 + L3）**:
-   - `microsoft/TokenEconomizer` の圧縮設計を統合した [`src/stage/token_economizer.py`](src/stage/token_economizer.py) により、人間パートの跳躍・緊張度・回避帯域・コーパス参照ボイシング・失敗介入台帳を高密度圧縮（約 55〜62% トークン削減）し、`keep_alive=-1` / `OLLAMA_FLASH_ATTENTION=1` / `OLLAMA_KV_CACHE_TYPE=q8_0` で RTX 3070 上のローカル Ollama を高速駆動します。
-3. **「ただの音階」を絶対に許さない音楽性監査（`MusicalityCritic` 6軸評価）**:
-   - [`src/stage/musicality_critic.py`](src/stage/musicality_critic.py) が全候補（A/B/C/D）を **①反・音階化（4音以上の一方向順次音階を即棄却） ②両手ポリフォニー＆垂直和声 ③声部進行（並達回避・掛留解決） ④倍音クリアランス（100〜600Hz泥帯域回避） ⑤律動・休符・強弱多様性 ⑥両ペダル連続連動** で監査し、ボツ案の問題音符をヴァーミリオン（`#C83E2B`）で赤ペン添削・棄却します。
-4. **ウナ・コルダ（左ペダル `CC#67`）＆ダンパー（右ペダル `CC#64`）の連続物理シミュレーション**:
-   - ON/OFFの2値ではなく、時間軸に沿った連続エンベロープ（`0..127`：遅れ踏み込み・ハーフペダル・和音交代時の踏み替えリペダリング・解放）を L3 で生成し、L5 (`DisklavierStageOutputLayer`) で 40ms/±3 デッドバンド間引き安全送出、[`src/stage/local_audio_synth.py`](src/stage/local_audio_synth.py) と WebAudio で減衰延長・共鳴倍音・ウナ・コルダ高次倍音減衰を忠実再現します。
-5. **Obsidian 連携 ＆ バッチ文字重複・404解消**:
-   - 全 `.bat` ランチャーを純粋 ASCII 記述＋[`src/stage/cli_banner.py`](src/stage/cli_banner.py) 経由の UTF-8 出力に統一し、Windows `cmd.exe` の文字ダブり（`起起動動...`）を根絶しました。
-   - `/favicon.ico`（[`src/stage/favicon.py`](src/stage/favicon.py)）を両サーバで `200 OK` 配信し、毎ターンの対話履歴・推敲スコア・ボイシングは [`src/obsidian/obsidian_brain.py`](src/obsidian/obsidian_brain.py) 経由で `obsidian_vault/05_Stage_Session_Logs/` へ自動保存されます。
-
----
-
-## 3. デモ作曲データ（`docs/demos/`）
-
-新エンジン＋実ローカル Ollama で実際に8ターン通し作曲・対話させた標準MIDIファイルと全ターン推敲解説を収録しています：
-- **Mode B（チェロ × 両手ピアノ 8ターン対話）**: [`docs/demos/demo_mode_b_cello_dialogue.mid`](docs/demos/demo_mode_b_cello_dialogue.mid)
-- **Mode A（ピアノ × 両手ピアノ 8ターン対話）**: [`docs/demos/demo_mode_a_piano_dialogue.mid`](docs/demos/demo_mode_a_piano_dialogue.mid)
-- **全ターン4候補比較・棄却根拠・和声＆両ペダル詳細**: [`docs/demos/COMPOSITION_SHOWCASE.md`](docs/demos/COMPOSITION_SHOWCASE.md)
+1. **1つの楽曲を育てる「4幕大局構成エンジン (`src/stage/co_composition_architect.py`)」**:
+   - 毎ターン無関係な断片を出す設計を廃止し、**第1幕（種子動機の提示と半終止での音楽的問いかけ）→ 第2幕（ゼクエンツ模進・近親調転調・声部ブリッジ接続）→ 第3幕（低音バス保続音＋多声統合のクライマックスと単一頂点）→ 第4幕（ウナ・コルダによる冒頭動機の回想と完全終止）** の楽曲構成アークを形成します。
+   - **公開リハーサル（Retake）** で人間のダメ出しに応じて直前フレーズをその場で書き直し、最後に **`[作品を完成させ通し演奏]`** で全ターンを1曲の完結作品へ統合・自動命名して MP3/WAV/MIDI/MusicXML/Obsidian へ一括出力します。
+2. **RTX 3070（CUDA）クラシックMIDIコーパス実学習（`train/train_phrase_transformer.py` & `src/stage/corpus_phrase_model.py`）**:
+   - `data/imslp_midi/`, `data/human_references/`, `data/maestro-v3.0.0/` から `symusic` で抽出した1,975フレーズ窓（174曲解析）を RTX 3070 CUDA 上で学習し、`data/models/classical_phrase_model.pt` を構築しました。
+   - **跳躍後の順次逆行回復（Post-Leap Gap-Fill Law）**、**息づく左手伴奏イディオム（根音→5度→10度開離アルペジオ、バス保続音＋内声対旋律、裏拍シンコペーション和音、ウナ・コルダコラール）**、**4-3/9-8/7-6 掛留解決**、**アゴーギク・ルバート曲線** をリアルタイム推論します。
+3. **`TokenEconomizer` × Ollama × `MasterworkEvaluator` + `MusicalityCritic`**:
+   - [`src/stage/token_economizer.py`](src/stage/token_economizer.py) が知覚特徴と4幕構成・声部ブリッジ・失敗介入台帳を圧縮（約 57〜61% 削減）して RTX 3070 Ollama へ渡します。
+   - [`src/stage/musicality_critic.py`](src/stage/musicality_critic.py) が6軸監査に加え **Masterwork 4基準（主題統一性・旋律頂点設計・機能和声引力・フレーズ間声部接続）** で審査し、単調な音階・単声・短2度濁りを排除します。
+4. **コンサートホール物理モデリング音響シンセ（`src/stage/local_audio_synth.py`）**:
+   - 10倍音非調和ピアノモデル（3本弦微小デチューン・二段階響板減衰・ハンマーフェルト打撃）、チェロ4大ボディフォルマント（200/420/950/2150Hz）＋松脂擦弦・漸進ビブラート、連続ダンパー（`CC#64`）＆ウナ・コルダ（`CC#67`）物理音響、さらに **室内楽ホール（1.6s RT60）ステレオFFT畳み込み残響** を搭載し、44.1kHz Stereo WAV/MP3 を直接生成します。
+5. **Obsidian 完全連携 ＆ 純粋ASCII `.bat` / `/favicon.ico` 200 OK**:
+   - 各ターンの推敲記録（`obsidian_vault/05_Stage_Session_Logs/`）に加え、完成作品のタイトル・4幕推移・書き直し履歴・MP3/WAV/MIDI/MusicXMLリンクを `obsidian_vault/02_Hall_of_Fame_Performances/` へ自動保存します。
 
 ---
 
 ## 4. システムアーキテクチャ＆安全回路（Mermaid図解）
 
-### 全体アーキテクチャ
+### 4幕共同作曲 ＆ 5レイヤー全体構成
 ```mermaid
 graph TD
     Human["人間奏者 (Mode A: Piano MIDI IN / Mode B: Cello C519ML + Ref Mic)"] --> L1["L1: 知覚・エコー抑圧 (EchoSuppressionLedger / 2ch NLMS / F0・呼吸検知)"]
-    Corpus["クラシックMIDIコーパス (symusic: IMSLP / Human Refs / Maestro 1276曲)"] --> Loader["ZeroConfigCorpusLoader (CUDA / NumPy 近傍検索)"]
-    L1 --> Econ["TokenEconomizer (音響事実符号化・コンテキスト枝刈り・失敗介入台帳)"]
-    Loader --> Econ
-    Econ --> L2P["L2: 自律作曲設計 (Ollama keep_alive=-1: 和声・両手配置・両ペダル設計)"]
-    L2P --> L3["L3: 両手ポリフォニー作曲 (Candidate A/B/C/D ＋ 連続 CC#64 / CC#67)"]
-    L3 --> Critic["MusicalityCritic (6軸監査: 反音階・両手和声・対位法・倍音・律動・両ペダル)"]
+    L1 --> Arch["CoCompositionArchitect (4幕構成・ThematicDNA種子核・声部ブリッジ・公開推敲Retake)"]
+    Corpus["data/ クラシックMIDI資産 (IMSLP / Human Refs / Maestro)"] --> Train["RTX 3070 CUDA学習 (train/train_phrase_transformer.py)"]
+    Train --> Model["CorpusPhraseModelManager (classical_phrase_model.pt)"]
+    Arch --> Econ["TokenEconomizer (音響＋4幕圧縮・失敗介入台帳)"]
+    Econ --> L2P["L2: 自律作曲設計 (Ollama keep_alive=-1: 問いかけ/発展/頂点/終止)"]
+    Model --> L3["L3: 2小節ポリフォニー作曲 (Candidate A/B/C/D ＋ 連続 CC#64 / CC#67)"]
+    L2P --> L3
+    L3 --> Critic["MusicalityCritic (6軸) & MasterworkEvaluator (主題統一・頂点・和声・接続)"]
     Critic --> L2M["L2: 実演家メモ言語化 (MusicalLogicValidator 矛盾・ポエム・〇〇風ゼロ)"]
     L2M --> L5["L5: Disklavier安全出力 (30音上限・熱保護・CC#64/67間引き・<10ms Panic)"]
-    L2M --> Synth["LocalAudioSynthesizer (44.1kHz 両ペダル連続物理模擬 / デモ専用)"]
-    L2M --> L4["L4: 60fps舞台HUD (大譜表・両ペダル波形・モチーフ記憶グラフ) & Obsidian"]
+    L2M --> Synth["LocalAudioSynthesizer (コンサートホール物理音響・1.6s残響・MP3/WAV書き出し)"]
+    L2M --> L4["L4: 60fps舞台HUD (4幕アーク・MP3プレイヤー・大譜表) & Obsidian"]
 ```
 
-### TokenEconomizer × LLM × MIDIコーパス × MusicalityCritic 推敲フロー
+### 公開推敲（Retake）＆ 完成作品統合フロー
 ```mermaid
 sequenceDiagram
     participant Human as "チェロ / ピアノ奏者"
-    participant L1 as "L1 知覚 (NLMS / Echo Ledger)"
-    participant Econ as "TokenEconomizer + Corpus"
-    participant L2 as "L2 Ollama (RTX 3070)"
-    participant L3 as "L3 作曲 + MusicalityCritic"
-    participant L45 as "L4 舞台HUD / L5 出力"
+    participant Arch as "CoCompositionArchitect"
+    participant Model as "RTX 3070 Transformer + L2/L3"
+    participant Critic as "MusicalityCritic & MasterworkEvaluator"
+    participant Output as "L4 HUD / Hall Synth / Obsidian"
 
-    Human->>L1: "フレーズ演奏・呼吸終止 (または CC#67 合図)"
-    L1->>Econ: "実測音列・跳躍ベクトル・緊張度・回避帯域を圧縮"
-    Econ->>L2: "最小トークンコンテキスト送信 (55〜62%削減)"
-    L2->>L3: "和声進行・両手ボイシング・CC#64/67方針を出力"
-    L3->>L3: "4候補 (A/B/C/D) 生成 & 6軸監査（音階化時は自動再構成）"
-    L3->>L2: "採用1案・ボツ3案の座標と欠点を返却"
-    L2->>L45: "45〜74文字の実用メモを添えてStep 1→2→3実演・Obsidian記録"
+    Human->>Arch: "Turn 1 種子モチーフ提示 (Seed DNA記録)"
+    Arch->>Model: "第1幕: 反行・半終止で音楽的に問いかけ返す"
+    Model->>Critic: "2小節両手ポリフォニー4案を監査"
+    Critic->>Output: "案A/Cロック・ボツ案赤ペン棄却"
+    Human->>Arch: "Retake指示: まだ解決せず問いかけのまま左手内声を強化"
+    Arch->>Output: "同ターンを書き直し再試奏・差分記録"
+    Human->>Arch: "第2幕(模進) -> 第3幕(同時重層頂点) -> 第4幕(ウナ・コルダ回想)"
+    Arch->>Output: "1曲統合・LLM作品命名・MP3/WAV/MIDI/MusicXML/Obsidian一括出力"
 ```
 
 ### 両ペダル連続制御 ＆ 物理安全回路
@@ -91,9 +111,9 @@ flowchart LR
 ### デモモードと本番実機モードの運用分岐
 ```mermaid
 flowchart TD
-    Start{"起動用途を選択"} -->|PC単体デモ・作曲試聴| Demo["run_demo_showcase.bat (--demo --monitor-audio)"]
+    Start{"起動用途を選択"} -->|PC単体デモ・完成作品試聴| Demo["run_demo_showcase.bat (--demo --monitor-audio)"]
     Start -->|コンサート本番・実機リハーサル| Prod["start_stage.bat (--production)"]
-    Demo --> DemoState["仮想奏者ON / 両ペダル物理シンセON / 対話シナリオDECK表示"]
+    Demo --> DemoState["仮想奏者ON / ホール音響シンセON / 完成MP3プレイヤー＆シナリオ表示"]
     Prod --> ProdState["仮想奏者OFF / PC発音完全OFF / 実機Disklavier & UR22直結 / F10投影"]
 ```
 
@@ -101,16 +121,16 @@ flowchart TD
 
 ## 5. 使い方（クイックスタート）
 
-1. **初回セットアップ**:
+1. **初回セットアップ（PyTorch CUDA・RTX 3070 コーパス学習含む）**:
    ```bat
    setup_environment.bat
    ```
-   `.venv` 構築、パッケージ導入、および `src.stage.config_scanner` による環境診断（`config.local.yaml` 生成）を行います。
+   `.venv` 構築、必須パッケージ（`torch` CUDA 12.4、`lameenc` 等）導入、`src.stage.config_scanner` による環境診断、および `train/train_phrase_transformer.py` によるモデル重み構築を一括実行します。
 2. **デモ・試聴モード（PCスピーカーで体験）**:
    ```bat
    run_demo_showcase.bat
    ```
-   `http://localhost:8000/?demo=1` が開き、仮想チェロ／ピアノの問いかけに対する **両手ポリフォニー作曲・赤線添削・連続両ペダル実演** が即座に開始されます。
+   `http://localhost:8000/?demo=1` が開き、4幕アークのリアルタイム対話、`推敲書き直し (Retake)`、`作品を完成させ通し演奏`、および完成デモMP3試聴が利用できます。
 3. **本番・リハーサル実機モード**:
    - Yamaha Disklavier 側メニューで **`Delay In = OFF`** に設定し、USB-MIDI と Steinberg UR22（Ch1: AKG C519ML / Ch2: ピアノ参照マイク）を接続した状態で起動します：
    ```bat
@@ -121,7 +141,7 @@ flowchart TD
    ```bat
    run_self_check.bat
    ```
-   `tests/test_stage_system.py`、`pytest tests/`、`validate_system_integrity.py`、および実Ollama・両ペダル音響・安全ゲート10回連続ループ（`scripts/run_10x_iterative_refinement.py`）を一括実行します。
+   `tests/test_stage_system.py`、`pytest tests/`、`validate_system_integrity.py`、および実Ollama・4幕構成・完成音源検証・安全ゲート10回連続ループ（`scripts/run_10x_iterative_refinement.py`）を一括実行します。
 
 ---
 
@@ -129,4 +149,4 @@ flowchart TD
 - アーキテクチャ設計詳細: [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md)
 - 操作・運用・トラブルシューティング: [`docs/USER_GUIDE.md`](docs/USER_GUIDE.md)
 - 実機ハードウェア手動安全テスト手順: [`docs/HARDWARE_TEST_PROCEDURE.md`](docs/HARDWARE_TEST_PROCEDURE.md)
-- 8ターン作曲デモ解説: [`docs/demos/COMPOSITION_SHOWCASE.md`](docs/demos/COMPOSITION_SHOWCASE.md)
+- 4幕共同作曲マスターワーク解説: [`docs/demos/COMPOSITION_SHOWCASE.md`](docs/demos/COMPOSITION_SHOWCASE.md)

@@ -744,5 +744,96 @@ class ObsidianMusicalBrain:
             self._graph_version += 1
             return md_path
 
+    def record_completed_masterwork(
+        self,
+        work: Dict[str, Any],
+        turn_history: List[Dict[str, Any]],
+        asset_paths: Dict[str, str],
+        session_tag: str = "stage",
+    ) -> Path:
+        """
+        Records a completed multi-act co-composed masterwork (title, 4-act trajectory,
+        seed motif, per-turn rejection reasons, retake revisions, and links to
+        .mp3 / .wav / .mid / .musicxml) to `obsidian_vault/02_Hall_of_Fame_Performances/`.
+        """
+        with self._lock:
+            self.hof_dir.mkdir(parents=True, exist_ok=True)
+            safe_tag = _slugify(session_tag)
+            mode = str(work.get("mode", "cello"))
+            note_id = f"Masterwork_{safe_tag}_{mode}"
+            md_path = self.hof_dir / f"{note_id}.md"
+
+            title_ja = str(work.get("title_ja", "共同作曲作品"))
+            title_en = str(work.get("title_en", "Co-Composed Work"))
+            dur_s = float(work.get("total_duration_s", 0.0))
+            seed = str(work.get("seed_motif", "--"))
+            home_ton = str(work.get("home_tonality", "D_dorian"))
+
+            act_rows: List[str] = []
+            for tr in turn_history:
+                t_no = tr.get("turn_number", 0)
+                act_lbl = tr.get("act_label_ja", "")
+                func = tr.get("phrase_function", "")
+                ad = tr.get("adopted") or {}
+                cands = tr.get("candidates") or []
+                rej_str = " / ".join(
+                    f"案{c.get('candidate_id')}:{c.get('rejection_tag_ja', '')}"
+                    for c in cands
+                    if not c.get("adopted")
+                )
+                act_rows.append(
+                    f"| {t_no} | {act_lbl} | `{func}` | `{tr.get('tonal_center')}` | "
+                    f"案{ad.get('candidate_id', 'A')} ({ad.get('total_score', 0)}) | {tr.get('monologue_ja', '')} | {rej_str} |"
+                )
+
+            retakes = list(work.get("retake_logs") or [])
+            retake_lines = [
+                f"- Turn {rt.get('turn_number')} 書き直し#{rt.get('retake_index')}: "
+                f"`{rt.get('directive_text', '')}` ({rt.get('diff_ja', '')}, "
+                f"Score {rt.get('before_score', 0):.1f} -> {rt.get('after_score', 0):.1f})"
+                for rt in retakes
+            ]
+            retake_section = "\n".join(retake_lines) if retake_lines else "- 公開推敲によるやり直しなし"
+
+            links_lines = [
+                f"- **MP3完成音源**: `{asset_paths.get('mp3', '')}`" if asset_paths.get("mp3") else "",
+                f"- **WAVマスター音源**: `{asset_paths.get('wav', '')}`" if asset_paths.get("wav") else "",
+                f"- **標準MIDI (SMF)**: `{asset_paths.get('mid', '')}`" if asset_paths.get("mid") else "",
+                f"- **MusicXML大譜表**: `{asset_paths.get('musicxml', '')}`" if asset_paths.get("musicxml") else "",
+            ]
+            links_block = "\n".join(l for l in links_lines if l) or "- (ローカル出力なし)"
+
+            md_content = (
+                "---\n"
+                "type: completed_masterwork\n"
+                f"title_ja: \"{title_ja}\"\n"
+                f"title_en: \"{title_en}\"\n"
+                f"mode: \"{mode}\"\n"
+                f"home_tonality: \"{home_ton}\"\n"
+                f"duration_s: {dur_s:.2f}\n"
+                f"midi_file: \"{asset_paths.get('mid', '')}\"\n"
+                "tags: [masterwork, co-composition, 4-act-form]\n"
+                "---\n\n"
+                f"# {title_ja}\n"
+                f"*{title_en}*\n\n"
+                f"- **編成**: `{'Mode B: Cello + Disklavier' if mode == 'cello' else 'Mode A: Human Piano + Disklavier'}`\n"
+                f"- **主調**: `{home_ton}` / **冒頭主題核 (Seed Motif)**: `{seed}`\n"
+                f"- **総演奏時間**: `{dur_s:.2f} 秒` ({len(turn_history)} ターン構成)\n\n"
+                f"## 完成音源・楽譜ファイル\n"
+                f"{links_block}\n\n"
+                f"## 公開推敲・書き直し履歴\n"
+                f"{retake_section}\n\n"
+                f"## 4幕楽曲構成・全ターン推敲アナリーゼ\n"
+                f"| Turn | 幕構成 | 楽曲機能 | 調性 | 採用案 | 実演家メモ | ボツ案棄却理由 |\n"
+                f"|---:|---|---|---|---|---|---|\n"
+                + ("\n".join(act_rows) or "| - | - | - | - | - | - | - |")
+                + "\n\n## 知識グラフリンク\n"
+                f"- [[Evolution_Overview]]\n"
+                f"- [[04_Human_Directives]]\n"
+            )
+            md_path.write_text(md_content, encoding="utf-8")
+            self._graph_version += 1
+            return md_path
+
     def close(self) -> None:
         self._running = False

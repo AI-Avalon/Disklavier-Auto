@@ -1,11 +1,11 @@
 """
-Generates Authentic Multi-Turn MIDI Demo Compositions (`docs/demos/`) and
-Captures Live Headless Browser Screenshots (`docs/images/`) of the Stage HUD.
+Generates Complete 4-Act Co-Composed Masterwork Audio/MIDI/MusicXML Demos (`docs/demos/`)
+and Captures Live 1920x1080 Headless Browser Screenshots (`docs/images/`) of the Stage HUD.
 
 Outputs:
-1. `docs/demos/demo_mode_b_cello_dialogue.mid` (8-turn Cello <-> Two-Hand Piano + CC#64/CC#67)
-2. `docs/demos/demo_mode_a_piano_dialogue.mid` (8-turn Piano <-> Two-Hand Piano + CC#64/CC#67)
-3. `docs/demos/COMPOSITION_SHOWCASE.md` (Turn-by-turn MusicalityCritic & Voicing Dossier)
+1. `docs/demos/demo_mode_b_cello_dialogue.{mp3,wav,mid,musicxml}` (8-turn 4-Act Cello <-> Disklavier + Retake)
+2. `docs/demos/demo_mode_a_piano_dialogue.{mp3,wav,mid,musicxml}` (8-turn 4-Act Piano <-> Disklavier + Retake)
+3. `docs/demos/COMPOSITION_SHOWCASE.md` (Full 4-Act Musicological Analysis, Retake Diff & Critique Dossier)
 4. `docs/images/stage_hud_mode_b_cello.png` (Live 1920x1080 HUD capture in Mode B)
 5. `docs/images/stage_hud_mode_a_piano.png` (Live 1920x1080 HUD capture in Mode A)
 """
@@ -22,7 +22,6 @@ import threading
 import time
 from typing import Any, Dict, List, Tuple
 
-import mido
 import requests
 from symusic import Score
 import uvicorn
@@ -60,49 +59,15 @@ def _free_port() -> int:
         return int(s.getsockname()[1])
 
 
-def _events_to_mido_track(
-    name: str,
-    program: int,
-    channel: int,
-    timed_items: List[Tuple[float, str, int, int]],
-    tpq: int = 480,
-    tempo_bpm: int = 75,
-) -> mido.MidiTrack:
-    """Converts absolute-time MIDI messages (sec, kind, p1, p2) into a mido MidiTrack."""
-    tr = mido.MidiTrack()
-    tr.append(mido.MetaMessage("track_name", name=name, time=0))
-    tr.append(mido.Message("program_change", program=program, channel=channel, time=0))
-
-    sec_per_beat = 60.0 / float(tempo_bpm)
-    ticks_per_sec = float(tpq) / sec_per_beat
-
-    # Sort chronologically: note_off before note_on at identical timestamps
-    order_rank = {"note_off": 0, "control_change": 1, "note_on": 2}
-    sorted_items = sorted(timed_items, key=lambda x: (round(x[0], 4), order_rank.get(x[1], 1), x[2]))
-
-    last_tick = 0
-    for t_sec, kind, p1, p2 in sorted_items:
-        cur_tick = max(last_tick, int(round(max(0.0, t_sec) * ticks_per_sec)))
-        delta = cur_tick - last_tick
-        last_tick = cur_tick
-        if kind == "note_on":
-            tr.append(mido.Message("note_on", note=max(21, min(108, p1)), velocity=max(18, min(112, p2)), channel=channel, time=delta))
-        elif kind == "note_off":
-            tr.append(mido.Message("note_off", note=max(21, min(108, p1)), velocity=24, channel=channel, time=delta))
-        elif kind == "control_change":
-            tr.append(mido.Message("control_change", control=p1, value=max(0, min(127, p2)), channel=channel, time=delta))
-    tr.append(mido.MetaMessage("end_of_track", time=240))
-    return tr
-
-
-def _compose_8turn_midi(
+def _compose_4act_masterwork(
     mode: str,
-    out_mid_path: Path,
+    basename: str,
     use_ollama: bool,
-) -> List[Dict[str, Any]]:
+) -> Tuple[Dict[str, Any], List[Dict[str, Any]]]:
     """
-    Runs 8 full L1->L2->L3->Critic turns via StageOrchestrator and compiles all human inquiries,
-    AI Right-Hand, AI Left-Hand, and continuous CC#64/CC#67 pedal curves into an SMF Type-1 MIDI file.
+    Runs an 8-turn 4-Act co-composition session (plus 1 live Public Rehearsal Retake)
+    via StageOrchestrator with real Ollama + RTX 3070 CorpusPhraseModelManager +
+    CoCompositionArchitect + Concert Hall Synth, and exports .mp3 / .wav / .mid / .musicxml.
     """
     app = create_stage_app(
         demo_enabled=False,
@@ -119,84 +84,50 @@ def _compose_8turn_midi(
 
     directives_by_mode = {
         "cello": [
-            "低音レガートに対し開離ボイシングとウナ・コルダ踏み替えで応答",
-            "鋭い跳躍スピッカートに反行対位法と浅い踏み替えで応対",
-            "重音の倍音域を空け高域透明和音とハーフペダルで支える",
-            "半音階下降に対し内声掛留解決と踏み替えで返す",
-            "休符の呼吸を生かし長調側へ開く両手ボイシングで応える",
-            "低音バスP5維持のまま上声で跳躍対旋律を置く",
-            "ウナ・コルダを深く踏み弱奏の対話で繋ぐ",
-            "主音へ落ち着いた終止和音と緩やかなペダル解放で締める",
+            "第1幕提示: 低音レガートに対し、半終止のまま音楽的に問いかけて",
+            "第1幕対話: 跳躍スピッカートを反転模倣し、左手に10度アルペジオの呼吸を",
+            "第2幕発展: 相対調へ転調しつつ上行ゼクエンツと内声対旋律を展開",
+            "第2幕模進: 重音の倍音域を避け、4-3掛留解決とハーフペダルで接続",
+            "第2幕架橋: 休符の呼吸を生かし属調方向へ緊張を繋ぐ",
+            "第3幕頂点: 低音バス保続音の上で3声ポリフォニーを高域頂点へ統合",
+            "第3幕高揚: バスP5支えと両手対位法の掛け合いでクライマックスを維持",
+            "第4幕回想: ウナ・コルダを深く踏み、冒頭種子動機を静かに回想して完全終止",
         ],
         "piano": [
-            "提示モチーフに対し反行対位法と踏み替えで応対",
-            "高域フレーズを受け低音バスと内声半音進行で支える",
-            "スタッカート対話に明晰な跳躍とドライ気味の踏み替え",
-            "掛留音と9thテンションを交えた開離両手ボイシング",
-            "ウナ・コルダで音色を柔らかく変え反行変奏を置く",
-            "密集回避のため10度バスと高域三度・六度で展開",
-            "付点と呼吸休符を伴う室内楽的掛け合いで応じる",
-            "静かな終止和音と両ペダルの段階的解放で結ぶ",
+            "第1幕提示: 冒頭モチーフに対し、半終止の問いかけと開離10度で応対",
+            "第1幕対話: 跳躍と逆行回復を伴い、解決せず次へ繋ぐ問いかけを置く",
+            "第2幕発展: 近親調へ転調しながらゼクエンツ模進とテノール内声を展開",
+            "第2幕模進: 掛留解決とシンコペーション和音で立体的に前進する",
+            "第2幕架橋: 密な中域を避けて10度バスと高域対旋律で架橋する",
+            "第3幕頂点: 低音保続音と4声ポリフォニーを作品全体の最高音頂点へ導く",
+            "第3幕高揚: ソプラノ頂点の跳躍回復と充実した両手和声で響かせる",
+            "第4幕回想: ウナ・コルダで音色を柔らかく変え冒頭動機を回想し完全終止",
         ],
     }
 
-    human_track_msgs: List[Tuple[float, str, int, int]] = []
-    rh_track_msgs: List[Tuple[float, str, int, int]] = []
-    lh_track_msgs: List[Tuple[float, str, int, int]] = []
     turn_logs: List[Dict[str, Any]] = []
-
-    cursor_s = 0.0
     for idx in range(8):
         orch.apply_directive(directives_by_mode[mode][idx])
         st = orch.execute_composition_turn(use_virtual_human=True, staggered_playback=False)
 
+        # Demonstrate live Public Rehearsal Retake right after Turn 2 (rewriting Act 1 ending before Act 2)
+        if idx == 1:
+            st = orch.retake_last_turn(
+                "今のフレーズはまだ解決しないで問いかけのままにして、左手の内声を増強して書き直して"
+            )
+
         human_notes = list(st["perception"].get("recent_human_notes") or [])
         adopted = next((c for c in st["candidates"] if c["adopted"]), st["candidates"][0])
-        ai_events = list(adopted.get("events") or [])
-
-        # Append Human inquiry notes
-        human_end = 0.4
-        for hn in human_notes:
-            p = int(hn.get("pitch", 50))
-            if p <= 0:
-                continue
-            on = cursor_s + float(hn.get("onset_s", 0.0))
-            dur = max(0.08, float(hn.get("duration_s", 0.25)))
-            vel = int(hn.get("velocity", 72))
-            human_track_msgs.append((on, "note_on", p, vel))
-            human_track_msgs.append((on + dur, "note_off", p, 24))
-            human_end = max(human_end, float(hn.get("onset_s", 0.0)) + dur)
-
-        # Append AI Two-Hand Response & Continuous CC#64 / CC#67 Curves
-        ai_start = cursor_s + human_end + 0.14
-        ai_end = 0.5
-        for ev in ai_events:
-            p = int(ev.get("pitch", 0) or 0)
-            on = ai_start + float(ev.get("onset_s", 0.0))
-            if p <= 0:
-                ctrl = int(ev.get("control", 0) or 0)
-                val = int(ev.get("value", 0) or 0)
-                if ctrl in (64, 67):
-                    lh_track_msgs.append((on, "control_change", ctrl, val))
-                continue
-
-            dur = max(0.06, float(ev.get("duration_s", 0.35)))
-            vel = int(ev.get("velocity", 68))
-            hand = str(ev.get("hand", "")).lower()
-            target = lh_track_msgs if (hand == "lh" or p < 60) else rh_track_msgs
-            target.append((on, "note_on", p, vel))
-            target.append((on + dur, "note_off", p, 24))
-            ai_end = max(ai_end, float(ev.get("onset_s", 0.0)) + dur)
-
-        # Reset pedals cleanly between turns
-        lh_track_msgs.append((ai_start + ai_end + 0.08, "control_change", 64, 0))
-        lh_track_msgs.append((ai_start + ai_end + 0.08, "control_change", 67, 0))
-
         turn_logs.append(
             {
                 "turn": idx + 1,
                 "mode": mode,
-                "human_pitches": "-".join(midi_to_note_name(int(n["pitch"])) for n in human_notes if int(n.get("pitch", 0)) > 0),
+                "act_label_ja": st["intent"].get("act_label_ja", f"第{((idx)//2)+1}幕"),
+                "phrase_function": st["intent"].get("phrase_function", ""),
+                "bridge": st["intent"].get("voice_leading_bridge", "--"),
+                "human_pitches": "-".join(
+                    midi_to_note_name(int(n["pitch"])) for n in human_notes if int(n.get("pitch", 0)) > 0
+                ),
                 "articulation": st["perception"].get("articulation"),
                 "intent": st["intent"],
                 "candidates": st["candidates"],
@@ -204,58 +135,83 @@ def _compose_8turn_midi(
                 "audio_status": st["audio_status"],
             }
         )
-        cursor_s = ai_start + ai_end + 0.45
 
+    summary = orch.synthesize_complete_work(
+        out_dir=DOCS_DEMOS_DIR,
+        basename=basename,
+        play_audio=False,
+    )
+    retake_logs = list(orch.architect.retake_logs)
+    summary["retake_logs"] = retake_logs
     orch.close()
 
-    mid = mido.MidiFile(type=1, ticks_per_beat=480)
-    tempo_tr = mido.MidiTrack()
-    tempo_tr.append(mido.MetaMessage("track_name", name=f"Disklavier-Auto {mode.upper()} 8-Turn Dialogue", time=0))
-    tempo_tr.append(mido.MetaMessage("set_tempo", tempo=mido.bpm2tempo(75), time=0))
-    tempo_tr.append(mido.MetaMessage("time_signature", numerator=4, denominator=4, time=0))
-    tempo_tr.append(mido.MetaMessage("end_of_track", time=0))
-    mid.tracks.append(tempo_tr)
+    # Rigorous output verification
+    mid_path = DOCS_DEMOS_DIR / f"{basename}.mid"
+    wav_path = DOCS_DEMOS_DIR / f"{basename}.wav"
+    mp3_path = DOCS_DEMOS_DIR / f"{basename}.mp3"
+    xml_path = DOCS_DEMOS_DIR / f"{basename}.musicxml"
+    for p in (mid_path, wav_path, mp3_path, xml_path):
+        assert p.exists() and p.stat().st_size > 1000, f"Expected output artifact missing or tiny: {p}"
 
-    human_prog = 42 if mode == "cello" else 0
-    human_name = "Cello_Human_Part" if mode == "cello" else "Piano_Human_Part"
-    mid.tracks.append(_events_to_mido_track(human_name, human_prog, 0, human_track_msgs))
-    mid.tracks.append(_events_to_mido_track("AI_Piano_RightHand", 0, 1, rh_track_msgs))
-    mid.tracks.append(_events_to_mido_track("AI_Piano_LeftHand_DualPedal", 0, 2, lh_track_msgs))
-
-    out_mid_path.parent.mkdir(parents=True, exist_ok=True)
-    mid.save(str(out_mid_path))
-
-    # Verify loadability via symusic & dual-pedal presence
-    sc = Score(str(out_mid_path))
+    sc = Score(str(mid_path))
     total_notes = sum(len(tr.notes) for tr in sc.tracks)
     cc_nums = {int(c.number) for tr in sc.tracks for c in tr.controls}
-    assert total_notes >= 40, f"{out_mid_path} has too few notes: {total_notes}"
-    assert 64 in cc_nums and 67 in cc_nums, f"{out_mid_path} missing CC#64 or CC#67: {cc_nums}"
-    return turn_logs
+    assert total_notes >= 80, f"{mid_path} has too few notes for a complete work: {total_notes}"
+    assert 64 in cc_nums and 67 in cc_nums, f"{mid_path} missing CC#64 or CC#67: {cc_nums}"
+
+    am = summary["audio_metrics"]
+    assert 45.0 <= float(am["duration_s"]) <= 135.0, f"Unexpected masterwork audio duration: {am['duration_s']}"
+    assert float(am["rms"]) > 0.015, f"Masterwork audio RMS too low: {am['rms']}"
+    assert int(am["clipping_count"]) == 0 and not am["has_nan_or_inf"]
+    return summary, turn_logs
 
 
 def _write_showcase_markdown(
+    mode_b_sum: Dict[str, Any],
     mode_b_logs: List[Dict[str, Any]],
+    mode_a_sum: Dict[str, Any],
     mode_a_logs: List[Dict[str, Any]],
     out_md: Path,
 ) -> None:
     lines: List[str] = [
-        "# Disklavier-Auto 8ターン自律作曲デモ・ショーケース (`COMPOSITION_SHOWCASE.md`)",
+        "# Disklavier-Auto 4幕共同作曲マスターワーク・ショーケース (`COMPOSITION_SHOWCASE.md`)",
         "",
-        "本ドキュメントは、再構築された **L1知覚 → TokenEconomizer → L2自律作曲設計 (Ollama) → L3コーパス構造参照・両手ポリフォニー生成 → `MusicalityCritic` 6軸監査 → 連続両ペダル (CC#64/CC#67) 物理シミュレーション** の各ターン推敲記録と実演出力を自動収録したものです。",
+        "本ドキュメントは、**4幕大局構成エンジン (`CoCompositionArchitect`) × RTX 3070 クラシックMIDI学習モデル (`CorpusPhraseModelManager`) × Ollama + TokenEconomizer × `MusicalityCritic` + `MasterworkEvaluator` × コンサートホール物理モデリング音響 (`LocalAudioSynthesizer`)** によって共同作曲・公開推敲され、1つの完結した楽曲として出力された2作品の全記録です。",
         "",
-        "## 収録標準MIDIファイル",
-        "- **Mode B（チェロ × 両手ピアノ 8ターン通し対話）**: [`demo_mode_b_cello_dialogue.mid`](demo_mode_b_cello_dialogue.mid)",
-        "- **Mode A（ピアノ × 両手ピアノ 8ターン通し対話）**: [`demo_mode_a_piano_dialogue.mid`](demo_mode_a_piano_dialogue.mid)",
+        "## 完成デモ音源・楽譜ダウンロード（MIDIソフト不要で即試聴可）",
+        "",
+        "### 作品1（Mode B：チェロ × Disklavier）",
+        f"- **作品名**: {mode_b_sum['title_ja']} (*{mode_b_sum['title_en']}*)",
+        f"- **主調 / 主題核**: `{mode_b_sum['home_tonality']}` / `{mode_b_sum['seed_motif']}`",
+        f"- **総演奏時間 / 音響統計**: `{mode_b_sum['total_duration_s']} 秒` (`RMS={mode_b_sum['audio_metrics']['rms']}`, `{mode_b_sum['audio_metrics']['dbfs']} dBFS`, `Clipping=0`)",
+        "- **試聴・楽譜ファイル**: [MP3 完成音源 (`demo_mode_b_cello_dialogue.mp3`)](demo_mode_b_cello_dialogue.mp3) | [WAV マスター (`demo_mode_b_cello_dialogue.wav`)](demo_mode_b_cello_dialogue.wav) | [標準MIDI (`demo_mode_b_cello_dialogue.mid`)](demo_mode_b_cello_dialogue.mid) | [MusicXML 大譜表 (`demo_mode_b_cello_dialogue.musicxml`)](demo_mode_b_cello_dialogue.musicxml)",
+        "",
+        "### 作品2（Mode A：人間ピアノ × Disklavier 連弾対話）",
+        f"- **作品名**: {mode_a_sum['title_ja']} (*{mode_a_sum['title_en']}*)",
+        f"- **主調 / 主題核**: `{mode_a_sum['home_tonality']}` / `{mode_a_sum['seed_motif']}`",
+        f"- **総演奏時間 / 音響統計**: `{mode_a_sum['total_duration_s']} 秒` (`RMS={mode_a_sum['audio_metrics']['rms']}`, `{mode_a_sum['audio_metrics']['dbfs']} dBFS`, `Clipping=0`)",
+        "- **試聴・楽譜ファイル**: [MP3 完成音源 (`demo_mode_a_piano_dialogue.mp3`)](demo_mode_a_piano_dialogue.mp3) | [WAV マスター (`demo_mode_a_piano_dialogue.wav`)](demo_mode_a_piano_dialogue.wav) | [標準MIDI (`demo_mode_a_piano_dialogue.mid`)](demo_mode_a_piano_dialogue.mid) | [MusicXML 大譜表 (`demo_mode_a_piano_dialogue.musicxml`)](demo_mode_a_piano_dialogue.musicxml)",
         "",
     ]
 
-    for title, logs in (
-        ("## 1. Mode B: チェロ × 両手ピアノ対話（8ターン詳細）", mode_b_logs),
-        ("## 2. Mode A: ピアノ × 両手ピアノ対話（8ターン詳細）", mode_a_logs),
+    for heading, summary, logs in (
+        (f"## 1. Mode B 完成作品アナリーゼ: {mode_b_sum['title_ja']}", mode_b_sum, mode_b_logs),
+        (f"## 2. Mode A 完成作品アナリーゼ: {mode_a_sum['title_ja']}", mode_a_sum, mode_a_logs),
     ):
-        lines.append(title)
+        lines.append(heading)
         lines.append("")
+        lines.append("### 公開リハーサル（ダメ出し・小節書き直し）の記録")
+        retakes = summary.get("retake_logs") or []
+        if retakes:
+            for rt in retakes:
+                lines.append(
+                    f"- **Turn {rt.get('turn_number')} 書き直し#{rt.get('retake_index')}**: 指示「{rt.get('directive_text')}」 → "
+                    f"`{rt.get('diff_ja')}` (スコア {rt.get('before_score')} → {rt.get('after_score')})"
+                )
+        else:
+            lines.append("- 書き直し履歴なし")
+        lines.append("")
+
         for rec in logs:
             intent = rec["intent"]
             ad = rec["adopted"]
@@ -264,12 +220,15 @@ def _write_showcase_markdown(
             c67 = ad.get("pedal_cc67_curve") or []
             c64_range = f"{min(x['val'] for x in c64)}..{max(x['val'] for x in c64)}" if c64 else "0"
             c67_range = f"{min(x['val'] for x in c67)}..{max(x['val'] for x in c67)}" if c67 else "0"
+            mw = ad.get("masterwork_pct") or {}
 
-            lines.append(f"### Turn {rec['turn']} — 入力 `{rec['human_pitches']}` ({rec['articulation']})")
+            lines.append(f"### Turn {rec['turn']} [{rec['act_label_ja']}] — 入力 `{rec['human_pitches']}` ({rec['articulation']})")
+            lines.append(f"- **楽曲機能・声部接続**: `{rec['phrase_function']}` / Bridge `{rec['bridge']}` / LH書法 `{ad.get('lh_idiom', '--')}` (`{ad.get('blueprint_source', '--')}`)")
             lines.append(f"- **実演家メモ (`monologue_ja`)**: {intent.get('monologue_ja')}")
-            lines.append(f"- **自律和声・ボイシング設計**: 調性 `{intent.get('tonal_center')}` / 進行 `{' → '.join(intent.get('chord_progression', []))}` / 立体配置 `{intent.get('voicing_structure')}`")
+            lines.append(f"- **自律和声・ボイシング設計**: 調性 `{intent.get('tonal_center')}` / 進行 `{' → '.join(intent.get('chord_progression', []))}`")
+            lines.append(f"- **Masterwork 4基準**: 主題統一 `{mw.get('thematic_unity', 0)}%` / 旋律頂点 `{mw.get('melodic_arch', 0)}%` / 和声引力 `{mw.get('harmonic_trajectory', 0)}%` / 声部接続 `{mw.get('inter_turn_continuity', 0)}%`")
             lines.append(f"- **TokenEconomizer 圧縮**: 削減率 `{econ.get('compression_ratio_pct', 0)}%` (`{econ.get('raw_tokens_est', 0)} -> {econ.get('compressed_tokens_est', 0)}` tokens) / LLM `{intent.get('llm_source')}`")
-            lines.append(f"- **連続両ペダル実演**: Damper CC#64 `{c64_range}` (踏み替え `{rec['audio_status'].get('repedal_count', 0)}` 回) / Una Corda CC#67 `{c67_range}` (倍音ベール `{rec['audio_status'].get('una_corda_veil_db', 0)} dB`)")
+            lines.append(f"- **連続両ペダル実演**: Damper CC#64 `{c64_range}` (踏み替え `{rec['audio_status'].get('repedal_count', 0)}` 回) / Una Corda CC#67 `{c67_range}`")
             lines.append("")
             lines.append("| 案 | 状態 | 総合点 | 反音階 | 両手和声 | 声部進行 | 倍音回避 | 律動呼吸 | 両ペダル | 音域 | 棄却根拠 |")
             lines.append("|---|---|---:|---:|---:|---:|---:|---:|---:|---|---|")
@@ -322,10 +281,16 @@ def _capture_live_screenshots(use_ollama: bool) -> Tuple[Path, Path]:
     img_a = DOCS_IMAGES_DIR / "stage_hud_mode_a_piano.png"
 
     try:
-        # Mode B: Execute 4 rich turns so Motif Graph has 8 connected nodes and Zone C shows 4 staves
+        # Mode B: Execute 6 turns through Act 3 Climax + 1 Retake so HUD shows Act 3 Climax & 12 connected nodes
         requests.post(f"{base_url}/api/stage/mode", json={"mode": "cello"}, timeout=5.0).raise_for_status()
-        for sc_key in ("cello_low_legato", "cello_leap_spiccato", "overtone_mud_clearance"):
-            requests.post(f"{base_url}/api/stage/preset", json={"preset": sc_key}, timeout=15.0).raise_for_status()
+        for idx in range(6):
+            requests.post(f"{base_url}/api/stage/turn", timeout=18.0).raise_for_status()
+            if idx == 1:
+                requests.post(
+                    f"{base_url}/api/stage/retake",
+                    json={"text": "今のフレーズはまだ解決しない問いかけのまま、左手の内声を増強して書き直して"},
+                    timeout=18.0,
+                ).raise_for_status()
 
         subprocess.run(
             [
@@ -342,11 +307,18 @@ def _capture_live_screenshots(use_ollama: bool) -> Tuple[Path, Path]:
             timeout=30,
         )
 
-        # Mode A: Reset and execute 3 piano<->piano turns
+        # Mode A: Reset and execute 8 turns through Act 4 + Retake + synthesize title
         requests.post(f"{base_url}/api/stage/reset", timeout=5.0).raise_for_status()
         requests.post(f"{base_url}/api/stage/mode", json={"mode": "piano"}, timeout=5.0).raise_for_status()
-        for _ in range(3):
-            requests.post(f"{base_url}/api/stage/turn", timeout=15.0).raise_for_status()
+        for idx in range(8):
+            requests.post(f"{base_url}/api/stage/turn", timeout=18.0).raise_for_status()
+            if idx == 1:
+                requests.post(
+                    f"{base_url}/api/stage/retake",
+                    json={"text": "問いかけのまま左手10度を強調して書き直して"},
+                    timeout=18.0,
+                ).raise_for_status()
+        requests.post(f"{base_url}/api/stage/synthesize_work", json={"play_audio": False}, timeout=20.0).raise_for_status()
 
         subprocess.run(
             [
@@ -372,18 +344,31 @@ def _capture_live_screenshots(use_ollama: bool) -> Tuple[Path, Path]:
 
 
 def main() -> int:
-    parser = argparse.ArgumentParser(description="Generate demo MIDIs, showcase doc, and live HUD screenshots")
+    parser = argparse.ArgumentParser(description="Generate 4-Act demo audio/MIDI/MusicXML, showcase doc, and HUD screenshots")
     parser.add_argument("--no-ollama", action="store_true")
     args = parser.parse_args()
 
     ollama_running = bool(scan_ollama_environment().get("running", False)) and not args.no_ollama
-    print(f"Generating 8-turn Mode B & Mode A demo MIDIs (Ollama={ollama_running})...")
-    mode_b_logs = _compose_8turn_midi("cello", DOCS_DEMOS_DIR / "demo_mode_b_cello_dialogue.mid", ollama_running)
-    mode_a_logs = _compose_8turn_midi("piano", DOCS_DEMOS_DIR / "demo_mode_a_piano_dialogue.mid", ollama_running)
-    _write_showcase_markdown(mode_b_logs, mode_a_logs, DOCS_DEMOS_DIR / "COMPOSITION_SHOWCASE.md")
+    print(f"Generating 4-Act Masterwork Demos in Mode B & Mode A (Ollama={ollama_running})...")
+    mode_b_sum, mode_b_logs = _compose_4act_masterwork("cello", "demo_mode_b_cello_dialogue", ollama_running)
+    mode_a_sum, mode_a_logs = _compose_4act_masterwork("piano", "demo_mode_a_piano_dialogue", ollama_running)
+    _write_showcase_markdown(
+        mode_b_sum,
+        mode_b_logs,
+        mode_a_sum,
+        mode_a_logs,
+        DOCS_DEMOS_DIR / "COMPOSITION_SHOWCASE.md",
+    )
     print("Capturing live Stage HUD screenshots (1920x1080)...")
     img_b, img_a = _capture_live_screenshots(ollama_running)
-    print(f"Generated assets:\n - {DOCS_DEMOS_DIR / 'demo_mode_b_cello_dialogue.mid'}\n - {DOCS_DEMOS_DIR / 'demo_mode_a_piano_dialogue.mid'}\n - {DOCS_DEMOS_DIR / 'COMPOSITION_SHOWCASE.md'}\n - {img_b}\n - {img_a}")
+    print(
+        f"Generated assets:\n"
+        f" - Mode B: {mode_b_sum['title_ja']} ({mode_b_sum['total_duration_s']}s) -> demo_mode_b_cello_dialogue.{{mp3,wav,mid,musicxml}}\n"
+        f" - Mode A: {mode_a_sum['title_ja']} ({mode_a_sum['total_duration_s']}s) -> demo_mode_a_piano_dialogue.{{mp3,wav,mid,musicxml}}\n"
+        f" - {DOCS_DEMOS_DIR / 'COMPOSITION_SHOWCASE.md'}\n"
+        f" - {img_b}\n"
+        f" - {img_a}"
+    )
     return 0
 
 

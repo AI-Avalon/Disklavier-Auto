@@ -23,12 +23,14 @@ import time
 from typing import Any, Dict, List, Optional, Set
 
 from fastapi import APIRouter, FastAPI, Request, WebSocket, WebSocketDisconnect
-from fastapi.responses import HTMLResponse, JSONResponse, Response
+from fastapi.responses import FileResponse, HTMLResponse, JSONResponse, Response
 import numpy as np
 from pydantic import BaseModel
 
 from src.obsidian import ObsidianMusicalBrain
+from src.stage.co_composition_architect import CoCompositionArchitect
 from src.stage.config_scanner import DEFAULT_CONFIG_PATH, scan_ollama_environment
+from src.stage.corpus_phrase_model import CorpusPhraseModelManager
 from src.stage.favicon import PIANO_FAVICON_ICO_BYTES
 from src.stage.layer1_perception import (
     CelloAcousticPerception,
@@ -129,11 +131,15 @@ class AudioMonitorReq(BaseModel):
 
 
 class DirectiveReq(BaseModel):
-    text: str
+    text: str = ""
 
 
 class PresetReq(BaseModel):
     preset: str
+
+
+class SynthesizeWorkReq(BaseModel):
+    play_audio: bool = False
 
 
 class StageOrchestrator:
@@ -212,9 +218,17 @@ class StageOrchestrator:
 
             threading.Thread(target=_probe_ollama, name="OllamaAsyncProbe", daemon=True).start()
 
-        # L3 Multiple Candidate Composer & MusicalityCritic
+        # L3 Multiple Candidate Composer, RTX 3070 Corpus Phrase Model & CoCompositionArchitect
         self.corpus_loader = ZeroConfigCorpusLoader(search_dirs=corpus_dirs)
-        self.composer = MultipleCandidateComposer(corpus_loader=self.corpus_loader)
+        self.phrase_model = CorpusPhraseModelManager()
+        self.composer = MultipleCandidateComposer(
+            corpus_loader=self.corpus_loader,
+            phrase_model=self.phrase_model,
+        )
+        self.architect = CoCompositionArchitect()
+        self.latest_macro_state: Dict[str, Any] = self.architect.get_macro_state_snapshot()
+        self.latest_synthesized_work: Optional[Dict[str, Any]] = None
+        self.turn_revision: int = 0
 
         # Obsidian Vault Second Brain Integration
         self.obsidian_brain: Optional[ObsidianMusicalBrain] = None
@@ -413,11 +427,16 @@ class StageOrchestrator:
             self._last_human_node_id = None
             self._last_ai_node_id = None
             self.turn_id = 0
+            self.turn_revision = 0
+            self._demo_step_idx = 0
             self.human_phrase_buffer.clear()
             self.latest_candidates = []
             self.deliberation_stage = "idle"
             self.deliberation_active_reject_id = ""
             self.deliberation_timeline = []
+            self.architect.reset()
+            self.latest_macro_state = self.architect.get_macro_state_snapshot()
+            self.latest_synthesized_work = None
         self.audio_synth.stop_audio()
         self.output_layer.panic()
         return {"ok": True, "motif_nodes": 0}
@@ -425,15 +444,20 @@ class StageOrchestrator:
     def _simulate_virtual_human_turn(self, step_idx: int) -> tuple[PerceptionSnapshot, List[Dict[str, Any]]]:
         now = time.perf_counter()
         rng = random.Random(step_idx + 101)
+        pos_in_arc = (max(1, step_idx) - 1) % 8
         if self.mode == "cello":
+            # Coherent 8-turn 4-act thematic journey derived from Turn 1 Seed Motif (D3-F3-A3-G3-E3)
             cello_motifs = [
-                ([50, 53, 57, 55, 52, 50], "legato", "D_dorian"),
-                ([55, 58, 62, 65, 63, 62], "staccato", "G_minor"),
-                ([45, 52, 57, 60, 59, 57], "legato", "D_minor"),
-                ([57, 60, 64, 67, 65, 62], "staccato", "D_dorian"),
-                ([48, 55, 58, 60, 58, 55], "legato", "G_minor"),
+                ([50, 53, 57, 55, 52, 50], "legato", "D_dorian"),     # Turn 1 (Act 1): Seed Motif statement
+                ([50, 57, 55, 53, 52, 57], "staccato", "D_dorian"),   # Turn 2 (Act 1): Question response on 5th
+                ([53, 57, 60, 58, 57, 55], "legato", "F_major"),      # Turn 3 (Act 2): Sequence into relative F major
+                ([55, 58, 62, 65, 63, 62], "staccato", "G_minor"),    # Turn 4 (Act 2): Subdominant G minor rise
+                ([57, 60, 64, 62, 60, 59], "legato", "A_minor"),      # Turn 5 (Act 2): Dominant A minor modulation
+                ([57, 62, 65, 69, 67, 65], "staccato", "D_minor"),    # Turn 6 (Act 3): Climactic leap to high F4/A4
+                ([58, 62, 65, 64, 62, 69], "legato", "D_minor"),      # Turn 7 (Act 3): Broad chamber summit
+                ([50, 53, 57, 55, 52, 50], "legato", "D_dorian"),     # Turn 8 (Act 4): Calm Act 1 Seed Motif recall
             ]
-            pitches, target_art, _ = cello_motifs[step_idx % len(cello_motifs)]
+            pitches, target_art, _ = cello_motifs[pos_in_arc]
             sr = 44100
             f0_main = 440.0 * (2.0 ** ((pitches[-1] - 69) / 12.0))
             n_samp = int(sr * 0.65)
@@ -462,7 +486,6 @@ class StageOrchestrator:
             mic = cello + bleed
 
             snap = self.cello_perception.analyze_utterance(mic, piano_ref, nlms=self.nlms)
-            # Also track NLMS pure-bleed ERLE (since total mic power includes valid cello signal)
             pure_erle = NLMSEchoCanceller.measure_bleed_erle_db(bleed, piano_ref)
             self.nlms.last_erle_db = pure_erle
             snap.nlms_erle_db = pure_erle
@@ -488,11 +511,16 @@ class StageOrchestrator:
 
         else:
             piano_motifs = [
-                [62, 65, 69, 67, 64, 62],
-                [57, 60, 64, 65, 64, 60],
-                [67, 70, 74, 72, 69, 67],
+                [62, 65, 69, 67, 64, 62],     # Turn 1 (Act 1): Seed Motif in D minor
+                [62, 69, 67, 65, 64, 69],     # Turn 2 (Act 1): Question continuation
+                [65, 69, 72, 70, 69, 67],     # Turn 3 (Act 2): Sequence into F major
+                [67, 70, 74, 72, 69, 67],     # Turn 4 (Act 2): Sequence into G minor
+                [69, 72, 76, 74, 72, 71],     # Turn 5 (Act 2): Dominant A minor
+                [69, 74, 77, 81, 79, 77],     # Turn 6 (Act 3): High lyrical climax
+                [70, 74, 77, 76, 74, 81],     # Turn 7 (Act 3): Peak duet exchange
+                [62, 65, 69, 67, 64, 62],     # Turn 8 (Act 4): Calm Act 1 Seed Motif recall
             ]
-            pitches = piano_motifs[step_idx % len(piano_motifs)]
+            pitches = piano_motifs[pos_in_arc]
             echo_pitch = 72
             self.echo_ledger.register_sent_note(echo_pitch, now - 0.045)
             assert self.echo_ledger.filter_incoming_note(echo_pitch, 68, recv_ts=now) is None
@@ -588,37 +616,67 @@ class StageOrchestrator:
         self,
         use_virtual_human: bool = True,
         staggered_playback: bool = False,
+        explicit_retake: bool = False,
     ) -> Dict[str, Any]:
         with self._lock:
-            self._demo_step_idx += 1
-            step_idx = self._demo_step_idx
+            hints = dict(self.pending_directive_hints)
+            is_retake_req = bool(
+                self.architect.turn_history
+                and (explicit_retake or self.architect.detect_retake_request(str(hints.get("raw_text") or "")))
+            )
+
             self.phase = "deliberating"
             self.deliberation_stage = "step1_sketch"
 
-            if use_virtual_human or not self.human_phrase_buffer:
-                snap, human_notes = self._simulate_virtual_human_turn(step_idx)
-                self.recent_human_demo_notes = human_notes
-            else:
-                human_notes = list(self.human_phrase_buffer[-8:])
-                self.human_phrase_buffer.clear()
+            if is_retake_req and self.recent_human_demo_notes:
+                human_notes = [dict(n) for n in self.recent_human_demo_notes]
                 snap = self.latest_perception
                 snap.breath_gauge = 1.0
                 snap.turn_ready = True
+            else:
+                self._demo_step_idx += 1
+                step_idx = self._demo_step_idx
+                if use_virtual_human or not self.human_phrase_buffer:
+                    snap, human_notes = self._simulate_virtual_human_turn(step_idx)
+                    self.recent_human_demo_notes = [dict(n) for n in human_notes]
+                else:
+                    human_notes = list(self.human_phrase_buffer[-8:])
+                    self.human_phrase_buffer.clear()
+                    self.recent_human_demo_notes = [dict(n) for n in human_notes]
+                    snap = self.latest_perception
+                    snap.breath_gauge = 1.0
+                    snap.turn_ready = True
 
-            hints = dict(self.pending_directive_hints)
             if hints.get("raw_text"):
                 snap.verbal_directive = str(hints["raw_text"])
+
+        # Step 0: Macro-Form 4-Act Architecture Planning & Voice-Leading Bridge
+        macro_plan = self.architect.plan_turn_architecture(
+            human_notes=human_notes,
+            directive_hints=hints,
+            mode=snap.mode,
+            explicit_retake=is_retake_req,
+        )
 
         # Step 1: L2 decides autonomous musical policy via TokenEconomizer + Ollama/Rules
         corpus_refs = self.corpus_loader.retrieve_voicing_references(
             tension=0.5, momentum=0.5, top_k=3
         )
         policy_intent = self.intent_engine.decide_policy(
-            snap, human_notes, hints, corpus_refs=corpus_refs
+            snap,
+            human_notes,
+            hints,
+            corpus_refs=corpus_refs,
+            macro_plan=macro_plan,
         )
 
-        # Step 2: L3 generates 4 two-hand polyphonic candidates + audits 6 MusicalityCritic axes
-        turn_res = self.composer.compose_turn(human_notes, policy_intent, human_mode=snap.mode)
+        # Step 2: L3 generates 4 two-hand polyphonic candidates + RTX 3070 Transformer Blueprint + Masterwork Audit
+        turn_res = self.composer.compose_turn(
+            human_notes,
+            policy_intent,
+            human_mode=snap.mode,
+            macro_plan=macro_plan,
+        )
         adopted = turn_res.adopted_candidate
         rejected = [c for c in turn_res.candidates if not c.adopted]
 
@@ -630,17 +688,49 @@ class StageOrchestrator:
             turn_res,
             hints,
             corpus_refs=turn_res.corpus_refs_used,
+            macro_plan=macro_plan,
         )
         timeline = self._build_deliberation_timeline(
             turn_res.candidates, fast_mode=self.production_mode
         )
 
+        # Commit turn into CoCompositionArchitect's macro-form history (supports in-place Retake)
+        cand_dicts = [
+            {
+                "candidate_id": c.candidate_id,
+                "label_ja": c.label_ja,
+                "strategy": c.strategy,
+                "events": c.events,
+                "total_score": c.total_score,
+                "subscores": c.subscores,
+                "subscores_pct": c.subscores_pct,
+                "adopted": c.adopted,
+                "rejection_tag_ja": c.rejection_tag_ja,
+                "pitch_range_str": c.pitch_range_str,
+                "masterwork_total": c.masterwork_total,
+                "masterwork_pct": c.masterwork_pct,
+            }
+            for c in turn_res.candidates
+        ]
+        adopted_dict = next((c for c in cand_dicts if c["adopted"]), cand_dicts[0])
+        self.architect.commit_turn(
+            plan=macro_plan,
+            mode=snap.mode,
+            human_notes=human_notes,
+            intent_dict=final_intent.model_dump(),
+            candidates=cand_dicts,
+            adopted=adopted_dict,
+            directive_text=str(hints.get("raw_text") or ""),
+        )
+
         # Publish Step 1 -> Step 2 -> Step 3 intermediate deliberation states for live WebSocket observers
         with self._lock:
-            self.turn_id = turn_res.turn_id
+            self.turn_id = macro_plan.turn_number
+            self.turn_revision += 1
             self.latest_perception = snap
             self.latest_intent = final_intent
             self.latest_candidates = turn_res.candidates
+            self.latest_macro_state = self.architect.get_macro_state_snapshot()
             self.deliberation_timeline = timeline
             self.deliberation_stage = "step1_sketch"
             self.deliberation_active_reject_id = ""
@@ -681,7 +771,7 @@ class StageOrchestrator:
                 c64_list = [int(pt["val"]) for pt in adopted.pedal_cc64_curve] or [0]
                 c67_list = [int(pt["val"]) for pt in adopted.pedal_cc67_curve] or [0]
                 note_path = self.obsidian_brain.record_stage_dialogue_turn(
-                    turn_id=turn_res.turn_id,
+                    turn_id=macro_plan.turn_number,
                     mode=snap.mode,
                     human_summary=self.economizer.extract_human_phrase_metrics(snap, human_notes),
                     token_stats=self.intent_engine.last_token_stats,
@@ -721,6 +811,14 @@ class StageOrchestrator:
             a_id = f"A{self.turn_id}"
             h_pitches = [int(n["pitch"]) for n in human_notes[:4]]
             a_pitches = [int(e["pitch"]) for e in adopted.events if int(e.get("pitch", 0)) > 0][:4]
+
+            # Update existing node if this was an in-place Retake
+            if macro_plan.is_retake:
+                self.motif_nodes = [n for n in self.motif_nodes if n["id"] not in (h_id, a_id)]
+                self.motif_edges = [
+                    e for e in self.motif_edges if e["target"] not in (h_id, a_id) and e["source"] != a_id
+                ]
+
             self.motif_nodes.append(
                 {
                     "id": h_id,
@@ -736,7 +834,7 @@ class StageOrchestrator:
                     "id": a_id,
                     "kind": "ai",
                     "turn": self.turn_id,
-                    "label": f"AI [{adopted.candidate_id}] {final_intent.tonal_center}: "
+                    "label": f"AI [{adopted.candidate_id}] Act{macro_plan.act_number} {final_intent.tonal_center}: "
                     + "-".join(midi_to_note_name(p) for p in a_pitches[:3]),
                     "pitches": a_pitches,
                     "stance": final_intent.interaction_stance,
@@ -749,7 +847,7 @@ class StageOrchestrator:
                     "relation": final_intent.interaction_stance,
                 }
             )
-            if self._last_ai_node_id is not None:
+            if self._last_ai_node_id is not None and self._last_ai_node_id != a_id:
                 self.motif_edges.append(
                     {
                         "source": self._last_ai_node_id,
@@ -767,6 +865,100 @@ class StageOrchestrator:
                 ]
 
         return self.get_hud_state()
+
+    def retake_last_turn(self, directive_text: str = "") -> Dict[str, Any]:
+        """Public Rehearsal: rewrites the most recent AI phrase in-place following human critique."""
+        if not self.architect.turn_history:
+            return self.execute_composition_turn(use_virtual_human=True, staggered_playback=False)
+        text = directive_text.strip() or "今のフレーズはまだ解決しない問いかけのまま、左手の内声を増強して書き直して"
+        self.apply_directive(text)
+        return self.execute_composition_turn(
+            use_virtual_human=True,
+            staggered_playback=False,
+            explicit_retake=True,
+        )
+
+    def synthesize_complete_work(
+        self,
+        out_dir: Optional[Path] = None,
+        basename: Optional[str] = None,
+        play_audio: bool = False,
+    ) -> Dict[str, Any]:
+        """
+        Synthesizes all recorded turns into ONE completed masterwork with LLM title naming,
+        concert-hall stereo WAV & MP3 rendering, SMF Type-1 MIDI, MusicXML Grand Staff,
+        and Obsidian Vault archival.
+        """
+        if not self.architect.turn_history:
+            self.execute_composition_turn(use_virtual_human=True, staggered_playback=False)
+
+        work = self.architect.synthesize_complete_masterwork(
+            mode=self.mode,
+            title_generator_fn=self.intent_engine.generate_work_title,
+        )
+        stereo_audio, audio_metrics = self.audio_synth.render_masterwork_stereo_audio(work)
+
+        export_dir = out_dir or (REPO_ROOT / "data" / "telemetry" / "exports")
+        stem = basename or f"masterwork_{self.mode}_{int(time.time())}"
+        mid_path = self.architect.export_masterwork_midi(work, export_dir / f"{stem}.mid")
+        xml_path = self.architect.export_masterwork_musicxml(work, export_dir / f"{stem}.musicxml")
+        audio_files = self.audio_synth.export_stereo_wav_and_mp3(
+            stereo_audio,
+            out_wav_path=export_dir / f"{stem}.wav",
+            out_mp3_path=export_dir / f"{stem}.mp3",
+        )
+
+        asset_rel = {
+            "mid": mid_path.name,
+            "musicxml": xml_path.name,
+            "wav": Path(audio_files["wav_path"]).name,
+            "mp3": Path(audio_files["mp3_path"]).name if audio_files.get("mp3_path") else "",
+            "mp3_url": f"/demos/{Path(audio_files['mp3_path']).name}" if audio_files.get("mp3_path") else "",
+            "wav_url": f"/demos/{Path(audio_files['wav_path']).name}",
+            "mid_url": f"/demos/{mid_path.name}",
+            "musicxml_url": f"/demos/{xml_path.name}",
+        }
+
+        if self.obsidian_brain is not None:
+            try:
+                obs_path = self.obsidian_brain.record_completed_masterwork(
+                    work=work,
+                    turn_history=self.architect.turn_history,
+                    asset_paths=asset_rel,
+                    session_tag="demo" if self.demo_enabled else ("prod" if self.production_mode else "stage"),
+                )
+                self.obsidian_last_note = obs_path.name
+            except Exception:
+                pass
+
+        if play_audio and self.monitor_audio and self.play_audio_device:
+            try:
+                import sounddevice as sd
+
+                sd.stop()
+                sd.play(stereo_audio, samplerate=self.audio_synth.sample_rate, blocking=False)
+            except Exception:
+                pass
+
+        summary = {
+            "ok": True,
+            "title_ja": work["title_ja"],
+            "title_en": work["title_en"],
+            "mode": work["mode"],
+            "home_tonality": work["home_tonality"],
+            "seed_motif": work["seed_motif"],
+            "total_duration_s": audio_metrics["duration_s"],
+            "turns_count": work["turns_count"],
+            "retakes_count": work["retakes_count"],
+            "preflight_passed": bool(work["preflight_report"].get("passed", True)),
+            "audio_metrics": audio_metrics,
+            "assets": asset_rel,
+            "obsidian_note": self.obsidian_last_note,
+        }
+        with self._lock:
+            self.latest_synthesized_work = summary
+            self.latest_macro_state = self.architect.get_macro_state_snapshot()
+        return summary
 
     def _orchestration_loop(self) -> None:
         last_turn_t = 0.0
@@ -818,6 +1010,10 @@ class StageOrchestrator:
                     "audit_passed": c.audit_passed,
                     "pedal_cc64_curve": c.pedal_cc64_curve,
                     "pedal_cc67_curve": c.pedal_cc67_curve,
+                    "masterwork_total": c.masterwork_total,
+                    "masterwork_pct": c.masterwork_pct,
+                    "lh_idiom": c.lh_idiom,
+                    "blueprint_source": c.blueprint_source,
                 }
                 for c in self.latest_candidates
             ]
@@ -826,7 +1022,7 @@ class StageOrchestrator:
                 f"実機MIDI出力: {hw_port}"
                 if (self.production_mode or hw_port)
                 else (
-                    "音声出力中: Python Direct Audio + WebAudio"
+                    "音声出力中: Concert Hall Synth + WebAudio"
                     if self.monitor_audio
                     else "モニター消音中 (WebAudio待機)"
                 )
@@ -843,7 +1039,11 @@ class StageOrchestrator:
                 "deliberation_active_reject_id": self.deliberation_active_reject_id,
                 "deliberation_timeline": list(self.deliberation_timeline),
                 "turn_id": self.turn_id,
+                "turn_revision": self.turn_revision,
+                "macro_form": dict(self.latest_macro_state),
+                "synthesized_work": dict(self.latest_synthesized_work) if self.latest_synthesized_work else None,
                 "corpus_source": self.corpus_loader.source_mode,
+                "phrase_model_device": self.phrase_model.device if self.phrase_model.loaded else "fallback",
                 "calibration": dict(self.calibration_status),
                 "audio_status": {
                     **self.latest_audio_stats,
@@ -1016,6 +1216,35 @@ def build_stage_router(orch: StageOrchestrator, broadcaster: StageWSBroadcaster)
     async def api_stage_turn(request: Request) -> JSONResponse:
         state = orch.execute_composition_turn(use_virtual_human=True, staggered_playback=False)
         return JSONResponse({"ok": True, "state": state})
+
+    @router.post("/api/stage/retake")
+    async def api_stage_retake(req: Optional[DirectiveReq] = None) -> JSONResponse:
+        text = req.text if req is not None else ""
+        state = orch.retake_last_turn(text)
+        return JSONResponse({"ok": True, "state": state})
+
+    @router.post("/api/stage/synthesize_work")
+    async def api_stage_synthesize_work(req: Optional[SynthesizeWorkReq] = None) -> JSONResponse:
+        play_audio = bool(req.play_audio) if req is not None else False
+        summary = orch.synthesize_complete_work(play_audio=play_audio)
+        return JSONResponse({**summary, "state": orch.get_hud_state()})
+
+    @router.get("/demos/{filename:path}", include_in_schema=False)
+    async def serve_demo_or_export_file(filename: str) -> Response:
+        safe_name = Path(filename).name
+        if not safe_name or safe_name != filename or ".." in filename:
+            return JSONResponse({"ok": False, "error": "Invalid filename"}, status_code=400)
+        for folder in (REPO_ROOT / "docs" / "demos", REPO_ROOT / "data" / "telemetry" / "exports"):
+            candidate = (folder / safe_name).resolve()
+            if candidate.exists() and candidate.is_file() and candidate.parent == folder.resolve():
+                media_map = {
+                    ".mp3": "audio/mpeg",
+                    ".wav": "audio/wav",
+                    ".mid": "audio/midi",
+                    ".musicxml": "application/vnd.recordare.musicxml+xml",
+                }
+                return FileResponse(str(candidate), media_type=media_map.get(candidate.suffix.lower()))
+        return JSONResponse({"ok": False, "error": "File not found"}, status_code=404)
 
     @router.post("/api/stage/reset")
     async def api_stage_reset() -> JSONResponse:

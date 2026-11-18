@@ -39,14 +39,77 @@
 
     .stage-shell {
       display: grid;
-      grid-template-rows: auto auto 1fr;
+      grid-template-rows: auto auto auto 1fr;
       width: 100vw;
       height: 100vh;
       background: var(--bg-stage);
     }
 
     .stage-shell.projection-clean {
-      grid-template-rows: 1fr;
+      grid-template-rows: auto 1fr;
+    }
+
+    .macro-arc-bar {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 10px;
+      padding: 4px 12px;
+      border-bottom: 1px solid #191815;
+      background: #070709;
+      font-family: var(--font-mono);
+      font-size: 10px;
+      min-height: 28px;
+    }
+
+    .act-steps {
+      display: flex;
+      align-items: center;
+      gap: 4px;
+      flex-wrap: nowrap;
+    }
+
+    .act-pill {
+      padding: 2px 7px;
+      border: 1px solid #23211D;
+      color: var(--ink-rejected);
+      font-family: var(--font-serif);
+      font-size: 10.5px;
+      white-space: nowrap;
+    }
+
+    .act-pill.active {
+      border-color: var(--ink-adopted);
+      color: var(--ink-adopted);
+      background: #141311;
+    }
+
+    .act-pill.climax.active {
+      border-color: var(--ink-vermilion);
+      color: var(--ink-vermilion);
+    }
+
+    .macro-work-title {
+      font-family: var(--font-serif);
+      font-size: 11.5px;
+      color: var(--ink-adopted);
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      max-width: 44vw;
+    }
+
+    .demo-audio-player {
+      display: inline-flex;
+      align-items: center;
+      gap: 5px;
+    }
+
+    .demo-audio-player audio {
+      height: 22px;
+      width: 175px;
+      filter: invert(0.9) hue-rotate(180deg) saturate(0.2);
+      opacity: 0.85;
     }
 
     /* Top Minimal Bar (F10 toggles hidden) */
@@ -178,7 +241,7 @@
       padding: 3px 7px;
       font-family: var(--font-serif);
       font-size: 11px;
-      width: 155px;
+      width: 215px;
       outline: none;
     }
 
@@ -581,10 +644,12 @@
           type="text"
           id="mc-input"
           class="mc-input"
-          placeholder="口頭指示 (例: 対位法＋踏み替え)"
+          placeholder="指示・推敲 (例: 解決せず問いかけのまま)"
           onkeydown="if (event.key === 'Enter') sendDirective()"
         />
         <button class="btn" onclick="sendDirective()">送信</button>
+        <button class="btn" id="btn-retake" onclick="retakeLastTurn()">推敲書き直し (Retake)</button>
+        <button class="btn active" id="btn-synthesize" onclick="synthesizeCompleteWork()">作品を完成させ通し演奏</button>
         <button class="btn" id="btn-calibrate" onclick="runCalibration()">VDL/NLMS校正</button>
         <button class="btn" onclick="triggerTurn()">次ターン</button>
         <button class="btn" onclick="resetGraph()">記憶初期化</button>
@@ -592,20 +657,37 @@
       </div>
     </header>
 
-    <!-- Demo Control Deck (Visible in Demo Mode, Hidden in Production or F10) -->
+    <!-- Demo Control Deck & Complete Masterwork Audio Player (Hidden in Production or F10) -->
     <section class="demo-deck" id="demo-deck">
       <div class="bar-group">
-        <span style="color: var(--ink-rejected);">DEMO DECK / 対話シナリオ:</span>
-        <button class="btn active" id="preset-cello_low_legato" onclick="applyPreset('cello_low_legato')">チェロ低音レガート問いかけ</button>
-        <button class="btn" id="preset-cello_leap_spiccato" onclick="applyPreset('cello_leap_spiccato')">チェロ跳躍スピッカート</button>
-        <button class="btn" id="preset-piano_chromatic_cadence" onclick="applyPreset('piano_chromatic_cadence')">ピアノ半音階終止</button>
-        <button class="btn" id="preset-overtone_mud_clearance" onclick="applyPreset('overtone_mud_clearance')">中音域倍音クリアランス検証</button>
+        <span style="color: var(--ink-rejected);">対話シナリオ:</span>
+        <button class="btn active" id="preset-cello_low_legato" onclick="applyPreset('cello_low_legato')">チェロ低音問いかけ</button>
+        <button class="btn" id="preset-cello_leap_spiccato" onclick="applyPreset('cello_leap_spiccato')">跳躍スピッカート</button>
+        <button class="btn" id="preset-piano_chromatic_cadence" onclick="applyPreset('piano_chromatic_cadence')">半音階終止</button>
+        <button class="btn" id="preset-overtone_mud_clearance" onclick="applyPreset('overtone_mud_clearance')">倍音クリアランス</button>
+        <button class="btn active" id="btn-audition" onclick="toggleAuditionPreview()">試奏音: ON</button>
       </div>
-      <div class="bar-group">
-        <span style="color: var(--ink-rejected);">リハーサル指示注入:</span>
-        <button class="btn" onclick="injectDirective('中音濁りを避け、両手開離和音とペダル踏み替えで返して')">開離ボイシング＋踏み替え</button>
-        <button class="btn" onclick="injectDirective('ウナ・コルダを深く踏み、反行対位法と休符の呼吸で返して')">ウナ・コルダ弱奏＋反行</button>
-        <button class="btn active" id="btn-audition" onclick="toggleAuditionPreview()">試奏オーディション音: ON</button>
+      <div class="bar-group demo-audio-player">
+        <span style="color: var(--ink-rejected);">完成作品試聴:</span>
+        <button class="btn" onclick="playDemoMasterwork('/demos/demo_mode_b_cello_dialogue.mp3', 'Mode B: チェロ対話幻想曲 (.mp3)')">Mode B 完成曲再生</button>
+        <button class="btn" onclick="playDemoMasterwork('/demos/demo_mode_a_piano_dialogue.mp3', 'Mode A: ピアノ対話変奏曲 (.mp3)')">Mode A 完成曲再生</button>
+        <audio id="masterwork-audio" controls preload="none"></audio>
+      </div>
+    </section>
+
+    <!-- Macro-Form 4-Act Architecture Bar -->
+    <section class="macro-arc-bar" id="macro-arc-bar">
+      <div class="act-steps">
+        <span class="act-pill active" id="act-pill-1">第1幕: 問いかけ (半終止)</span>
+        <span style="color: var(--ink-rejected);">&rarr;</span>
+        <span class="act-pill" id="act-pill-2">第2幕: 発展・模進・転調</span>
+        <span style="color: var(--ink-rejected);">&rarr;</span>
+        <span class="act-pill climax" id="act-pill-3">第3幕: 多声クライマックス</span>
+        <span style="color: var(--ink-rejected);">&rarr;</span>
+        <span class="act-pill" id="act-pill-4">第4幕: ウナ・コルダ回想・終止</span>
+      </div>
+      <div class="macro-work-title" id="macro-work-title">
+        主題核: <span id="val-seed-motif">--</span> | 接続: <span id="val-bridge">--</span> | 状態: <span id="val-work-status">対話進行中</span>
       </div>
     </section>
 
@@ -896,6 +978,38 @@
       ensureAudioContext();
       await postJson("/api/stage/turn", {});
       fetchStateOnce();
+    }
+
+    async function retakeLastTurn() {
+      ensureAudioContext();
+      const inp = document.getElementById("mc-input");
+      const txt = inp ? inp.value.trim() : "";
+      document.getElementById("timeline-banner").textContent = "公開推敲リハーサル: 直前フレーズを書き直し中...";
+      await postJson("/api/stage/retake", { text: txt });
+      if (inp && txt) inp.value = "";
+      fetchStateOnce();
+    }
+
+    async function synthesizeCompleteWork() {
+      ensureAudioContext();
+      document.getElementById("val-work-status").textContent = "ホール音響で1曲統合・書き出し中...";
+      const res = await postJson("/api/stage/synthesize_work", { play_audio: false });
+      if (res && res.ok) {
+        const audioUrl = (res.assets && (res.assets.mp3_url || res.assets.wav_url)) || "";
+        if (audioUrl) {
+          playDemoMasterwork(audioUrl, `${res.title_ja} (${res.total_duration_s}秒)`);
+        }
+      }
+      fetchStateOnce();
+    }
+
+    function playDemoMasterwork(url, labelText) {
+      const player = document.getElementById("masterwork-audio");
+      const statusEl = document.getElementById("val-work-status");
+      if (statusEl && labelText) statusEl.textContent = labelText;
+      if (!player || !url) return;
+      player.src = url;
+      player.play().catch(() => {});
     }
 
     async function runCalibration() {
@@ -1251,8 +1365,8 @@
 
       const posMap = {};
       nodes.forEach((n, idx) => {
-        const x = nodes.length === 1 ? w * 0.5 : 48 + (idx / (nodes.length - 1)) * (w - 96);
-        const y = n.kind === "human" ? h * 0.34 : h * 0.68;
+        const x = nodes.length === 1 ? w * 0.5 : 64 + (idx / (nodes.length - 1)) * (w - 170);
+        const y = n.kind === "human" ? h * 0.32 : h * 0.64;
         posMap[n.id] = { x, y, node: n };
       });
 
@@ -1280,8 +1394,10 @@
 
         ctx.fillStyle = isLatest ? COLOR_VERMILION : (node.kind === "human" ? COLOR_ADOPTED : COLOR_REJECTED);
         ctx.font = "10px 'JetBrains Mono', monospace";
-        const textY = node.kind === "human" ? y - 10 : y + 16;
-        ctx.fillText((node.label || node.id).slice(0, 22), x - 28, textY);
+        const lbl = (node.label || node.id).slice(0, 22);
+        const textX = Math.max(8, Math.min(w - 140, x - 34));
+        const textY = node.kind === "human" ? y - 10 : y + 15;
+        ctx.fillText(lbl, textX, textY);
       });
     }
 
@@ -1441,21 +1557,40 @@
       // Zone B
       const intent = state.intent || {};
       document.getElementById("meta-intent").textContent =
-        `${intent.llm_source || "rule"} (${intent.llm_latency_ms || 0} ms)`;
+        `${intent.act_label_ja || "第1幕"} | ${intent.llm_source || "rule"} (${intent.llm_latency_ms || 0} ms)`;
       document.getElementById("monologue-text").textContent = intent.monologue_ja || "";
-      document.getElementById("val-stance").textContent = intent.interaction_stance || "listen";
+      document.getElementById("val-stance").textContent = intent.phrase_function || intent.interaction_stance || "listen";
       document.getElementById("val-tonal").textContent = intent.tonal_center || "D_dorian";
       document.getElementById("val-chords").textContent = (intent.chord_progression || []).slice(0, 4).join(" - ");
       document.getElementById("val-voicing").textContent = (intent.voicing_structure || "LH_P5 + RH_9th").slice(0, 28);
       const econ = intent.token_economizer || {};
       document.getElementById("val-econ").textContent = `${Number(econ.compression_ratio_pct || 0).toFixed(1)}% saved`;
 
+      // Macro-Form 4-Act Architecture Bar
+      const macro = state.macro_form || {};
+      const curAct = Number(macro.current_act || intent.act_number || 1);
+      for (let a = 1; a <= 4; a++) {
+        const pill = document.getElementById(`act-pill-${a}`);
+        if (pill) pill.classList.toggle("active", a === curAct);
+      }
+      document.getElementById("val-seed-motif").textContent = macro.seed_motif || intent.seed_motif_str || "--";
+      document.getElementById("val-bridge").textContent = macro.voice_leading_bridge || intent.voice_leading_bridge || "--";
+      const syn = state.synthesized_work || macro.completed_work;
+      if (syn && syn.title_ja) {
+        document.getElementById("val-work-status").textContent = `${syn.title_ja} (${syn.total_duration_s || "--"}秒)`;
+      } else if (intent.is_retake && intent.retake_summary_ja) {
+        document.getElementById("val-work-status").textContent = intent.retake_summary_ja;
+      } else {
+        document.getElementById("val-work-status").textContent = `${macro.turns_recorded || state.turn_id || 0}ターン構成 / 推敲${macro.retake_count || 0}回`;
+      }
+
       // Zone C
       document.getElementById("meta-arena").textContent =
         `TURN #${state.turn_id || 0} | CORPUS: ${state.corpus_source || "builtin"} | PORT: ${out.connected_port || "Virtual"}`;
+      const revKey = Number(state.turn_revision || state.turn_id || 0);
       const urlParams = new URLSearchParams(window.location.search);
       if (state.turn_id > 0 && urlParams.get("snapshot") === "1") {
-        lastAnimatedTurnId = state.turn_id;
+        lastAnimatedTurnId = revKey;
         animPhaseState.turnId = state.turn_id;
         animPhaseState.rejectedIds = new Set(candsList.filter((c) => !c.adopted).map((c) => c.candidate_id));
         animPhaseState.activeRejectId = "";
@@ -1463,9 +1598,9 @@
         animPhaseState.playheadFrac = 0.56;
         const adoptedId = adoptedCand ? adoptedCand.candidate_id : "A";
         document.getElementById("timeline-banner").textContent =
-          `Step 3 確定実演: 案${adoptedId}をロックし両手ポリフォニー＋連続両ペダルを実演中`;
-      } else if (state.turn_id > 0 && state.turn_id !== lastAnimatedTurnId) {
-        lastAnimatedTurnId = state.turn_id;
+          `Step 3 確定実演: 案${adoptedId} (${intent.act_label_ja || "第1幕"}) — 両手ポリフォニー＋連続両ペダル実演中`;
+      } else if (state.turn_id > 0 && revKey !== lastAnimatedTurnId) {
+        lastAnimatedTurnId = revKey;
         startStaggeredTurnAnimation(state);
       }
       renderZoneC(state);

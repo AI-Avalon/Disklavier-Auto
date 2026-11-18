@@ -1,6 +1,6 @@
 # Disklavier-Auto 利用ガイド (`USER_GUIDE.md`)
 
-本ガイドでは、Windows 11 環境における **初回セットアップ**、**デモ・自己実演モード（PC単体試聴）**、**本番実機モード（Yamaha Disklavier ＋ Steinberg UR22）**、**舞台プロジェクション操作**、および **自動検証（Self-Check）** の手順を説明します。
+本ガイドでは、Windows 11 環境における **初回セットアップ（PyTorch CUDA・コーパス学習含む）**、**デモ・試聴モード**、**本番実機モード（Yamaha Disklavier ＋ Steinberg UR22）**、**公開リハーサル（書き直し）＆1曲完成出力**、および **自動検証** の手順を説明します。
 
 ---
 
@@ -8,8 +8,9 @@
 
 1. ローカルLLMとして [Ollama](https://ollama.com/) をインストールし、`qwen3.5:4b` 等の8GB VRAM対応モデルを取得しておきます（例：`ollama pull qwen3.5:4b`）。
 2. リポジトリ直下の **`setup_environment.bat`** をダブルクリックします。
-   - Python 仮想環境 `.venv` を自動構築し、必須ライブラリ（`fastapi`, `uvicorn`, `symusic`, `ollama`, `mido`, `python-rtmidi`, `sounddevice`, `numpy`, `pytest` 等）を導入します。
-   - `src.stage.config_scanner` が MIDI ポート、Steinberg UR22（WASAPI/ASIO優先）、Ollama モデル、および `data/` 内クラシックMIDIコーパス（`imslp_midi`, `human_references`, `maestro-v3.0.0`, `D:\Disklavier-Data`）をスキャンし、`config.local.yaml` を生成します。
+   - Python 仮想環境 `.venv` を自動構築し、必須ライブラリ（`fastapi`, `uvicorn`, `symusic`, `ollama`, `torch` CUDA 12.4, `lameenc`, `sounddevice`, `soundfile`, `scipy`, `pytest`, `ruff` 等）を導入します。
+   - `src.stage.config_scanner` が MIDI ポート、Steinberg UR22（WASAPI/ASIO優先）、Ollama モデル、および `data/` 内クラシックMIDIコーパスをスキャンし、`config.local.yaml` を生成します。
+   - `data/models/classical_phrase_model.pt` が未生成の場合、自動的に RTX 3070 CUDA で `train/train_phrase_transformer.py` を実行して学習済み重みを構築します。
 
 ---
 
@@ -17,9 +18,9 @@
 
 | 用途 | 実行ファイル | 特徴 |
 |---|---|---|
-| **PC単体での作曲デモ・試聴** | **`run_demo_showcase.bat`** | 仮想チェロ／ピアノ入力、Python 44.1kHz 直接発音シンセ（両ペダル物理模擬付き）、WebAudio、および `DEMO DECK` がすべて有効になります。 |
-| **コンサート本番・実機リハーサル** | **`start_stage.bat`** | `--production` で起動し、仮想奏者・PCモニターシンセ・試奏音・DEMO DECK をすべて強制OFFにします。実機DisklavierとUR22のみに接続します。 |
-| **自動テスト・10回反復品質検証** | **`run_self_check.bat`** | 全ユニットテスト、`validate_system_integrity.py`、および実Ollama・音響・安全ゲートの10回連続ループを自動検証します。 |
+| **PC単体での作曲デモ・完成作品試聴** | **`run_demo_showcase.bat`** | 仮想チェロ／ピアノ入力、コンサートホール物理音響シンセ、WebAudio、公開推敲・完成作品出力、およびデモ試聴プレイヤーが有効になります。 |
+| **コンサート本番・実機リハーサル** | **`start_stage.bat`** | `--production` で起動し、仮想奏者・PCモニターシンセ・試奏音・DEMO DECK を強制OFFにします。実機DisklavierとUR22のみに接続します。 |
+| **自動テスト・10回反復品質検証** | **`run_self_check.bat`** | 全ユニットテスト、`validate_system_integrity.py`、および実Ollama・4幕構成・ホール音響・安全ゲートの10回連続ループを自動検証します。 |
 
 ---
 
@@ -28,20 +29,19 @@
 起動後、ブラウザで `http://localhost:8000`（デモ時は `http://localhost:8000/?demo=1`）が開きます。
 
 1. **上部コントロールバー（`F10` で完全格納）**:
-   - `Mode A: Piano ↔ Piano` / `Mode B: Cello ↔ Disklavier` の切替。
-   - 口頭指示欄へ自然言語でリハーサル指示（例：`中音域の濁りを避け、両手開離和音とウナ・コルダ踏み替えで返す`）を入力して送信。
-   - **`30秒物理遅延＆NLMS校正`**: 開演前に VDL 打鍵遅延と 2ch NLMS エコー減衰量（ERLE dB）を確認します。
-   - **`PANIC: ALL NOTES OFF`**: 緊急時に 10ms 未満で全鍵盤・ダンパー（`CC#64=0`）・ウナ・コルダ（`CC#67=0`）を解放します。
-2. **Zone A（左上：知覚・呼吸・両ペダル）**:
-   - 人間の F0 ピッチ軌跡と、AI が駆動している **Una Corda (Left / CC#67)** および **Damper (Right / CC#64)** のリアルタイム開度バー（ハーフペダル帯マーカー付き）を表示します。
-3. **Zone B（右上：実演家の思考トレース）**:
-   - 実測音・ボツ案棄却理由・採用ボイシングとペダル操作を45〜74文字の実用メモで表示し、TokenEconomizer によるトークン削減率（`ECONOMIZER: xx% saved`）も確認できます。
-4. **Zone C（中央：公開推敲・大譜表アリーナ）**:
-   - 4候補（A/B/C/D）の **ト音＋ヘ音の大譜表**、**`MusicalityCritic` 6軸スコアバー**、および各譜面下部の **CC#64/CC#67 連続ペダルカーブ** をリアルタイム描画します。
-   - ボツ案の欠点音符はヴァーミリオン（`#C83E2B`）で囲まれ、具体的な棄却理由とともに赤線で却下されます。
-5. **Zone D（下部：公演モチーフ記憶グラフ）**:
-   - 開演時（`記憶初期化`後）はノード `0` から始まり、人間のモチーフと AI 変奏が対話順に結線されていきます。
-   - 各ターンの詳細ログとスコア内訳は自動的に `obsidian_vault/05_Stage_Session_Logs/` へ Markdown ノートとして保存されます。
+   - **`Mode A: Piano ↔ Piano` / `Mode B: Cello ↔ Disklavier`**: 演奏編成の切替。
+   - **指示・推敲入力欄 ＋ `送信` / `推敲書き直し (Retake)`**: 自然言語で演奏指示やダメ出し（例：`今のフレーズはまだ解決せず問いかけのまま、左手の10度を強調して書き直して`）を送り、その場で直前のAIフレーズを書き直せます。
+   - **`作品を完成させ通し演奏`**: これまでの全ターンの対話を1つの完結した楽曲（第1幕→第4幕＋コーダ）に統合し、作品タイトルを自動命名した上で **MP3 / WAV / MIDI / MusicXML / Obsidianノート** を生成し、HUD上部のオーディオプレイヤーで即座に再生できます。
+   - **`VDL/NLMS校正`**: 開演前に打弦遅延と 2ch NLMS エコー減衰量（ERLE dB）を検証します。
+   - **`PANIC: 全音停止`**: 緊急時に 10ms 未満で全鍵盤・ダンパー（`CC#64=0`）・ウナ・コルダ（`CC#67=0`）を解放します。
+2. **完成作品試聴プレイヤー＆4幕構成アークバー**:
+   - リポジトリ収録済みの完成デモ作品（`Mode B 完成曲再生` / `Mode A 完成曲再生`）や合成したばかりの楽曲をワンクリック試聴できます。
+   - **`第1幕: 問いかけ (半終止) → 第2幕: 発展・模進・転調 → 第3幕: 多声クライマックス → 第4幕: ウナ・コルダ回想・終止`** の現在位置、記憶中の **主題核（Seed Motif）**、**声部接続（Bridge）** を常時表示します。
+3. **Zone A〜D の表示**:
+   - **Zone A（左上）**: F0 ピッチ軌跡、Una Corda (`CC#67`) / Damper (`CC#64`) 連続開度ゲージ、呼吸終止ゲージ。
+   - **Zone B（右上）**: 実演家メモ（45〜74文字）、現在の幕、楽曲機能（`question_half_cadence` 等）、和声進行、TokenEconomizer 削減率。
+   - **Zone C（中央）**: 4候補の大譜表、`MusicalityCritic` 6軸スコアバー、赤ペン添削、連続両ペダル曲線。
+   - **Zone D（下部）**: 開演時ノード `0` から成長する公演モチーフ記憶グラフ。完成作品は `obsidian_vault/02_Hall_of_Fame_Performances/` へ自動保存されます。
 
 ---
 

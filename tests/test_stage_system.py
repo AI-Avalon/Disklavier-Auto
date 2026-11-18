@@ -420,3 +420,101 @@ def test_5_dual_pedal_physics_favicon_ascii_bats_and_production_separation() -> 
             assert st["production_mode"] is True
             assert st["demo_enabled"] is False
             assert st["monitor_audio"] is False
+
+
+def test_6_four_act_architect_phrase_model_retake_and_masterwork_export() -> None:
+    from src.stage.co_composition_architect import CoCompositionArchitect
+    from src.stage.corpus_phrase_model import CorpusPhraseModelManager
+
+    # 1. Verify trained RTX 3070 model loads cleanly and infers a PhraseBlueprint
+    pm = CorpusPhraseModelManager()
+    assert pm.model_path.exists(), f"Trained checkpoint missing: {pm.model_path}"
+    assert pm.loaded is True
+    bp = pm.predict_blueprint(
+        act_number=1,
+        phrase_function="question_half_cadence",
+        seed_intervals=[3, 4, -2],
+        prev_end_pitch=69,
+        anchor_pitch=69,
+        tonic_pc=2,
+        tension=0.5,
+        momentum=0.5,
+        articulation="legato",
+        mode="cello",
+    )
+    assert len(bp.melody_degree_offsets) == 8
+    assert bp.lh_idiom in (
+        "arpeggio_root_5th_10th",
+        "pedal_point_inner_voice",
+        "syncopated_offbeat_harmony",
+        "una_corda_choral_recall",
+    )
+
+    # 2. Verify 4-Act progression, Public Rehearsal Retake, Masterwork Synthesis & /demos/ route
+    with tempfile.TemporaryDirectory() as tmp_dir:
+        app = create_stage_app(
+            demo_enabled=False,
+            monitor_audio=True,
+            production_mode=False,
+            corpus_dirs=[Path(tmp_dir)],
+            use_ollama=False,
+            open_hardware=False,
+            play_audio_device=False,
+        )
+        with TestClient(app) as client:
+            orch = app.state.orchestrator
+            acts_seen: List[int] = []
+            for idx in range(8):
+                r = client.post("/api/stage/turn")
+                assert r.status_code == 200
+                st = r.json()["state"]
+                acts_seen.append(int(st["intent"]["act_number"]))
+                win = next(c for c in st["candidates"] if c["adopted"])
+                assert len(win.get("masterwork_pct", {})) == 4
+                assert win.get("masterwork_total", 0.0) >= 60.0
+
+                if idx == 1:
+                    r_ret = client.post(
+                        "/api/stage/retake",
+                        json={"text": "今のフレーズはまだ解決しない問いかけのまま、左手の内声を増強して書き直して"},
+                    )
+                    assert r_ret.status_code == 200
+                    st_ret = r_ret.json()["state"]
+                    assert st_ret["turn_id"] == 2
+                    assert st_ret["intent"]["is_retake"] is True
+                    assert st_ret["intent"]["phrase_function"] == "question_half_cadence"
+
+            assert set(acts_seen) == {1, 2, 3, 4}
+
+            # Synthesize complete masterwork into temp directory and test export artifacts
+            out_dir = Path(tmp_dir) / "exports"
+            summary = orch.synthesize_complete_work(
+                out_dir=out_dir,
+                basename="test_masterwork_cello",
+                play_audio=False,
+            )
+            assert summary["ok"] is True
+            assert summary["preflight_passed"] is True
+            assert summary["total_duration_s"] >= 35.0
+            assert summary["audio_metrics"]["rms"] > 0.01
+            assert summary["audio_metrics"]["clipping_count"] == 0
+            assert (out_dir / "test_masterwork_cello.wav").stat().st_size > 10000
+            assert (out_dir / "test_masterwork_cello.mp3").stat().st_size > 10000
+            assert (out_dir / "test_masterwork_cello.mid").stat().st_size > 500
+            assert (out_dir / "test_masterwork_cello.musicxml").stat().st_size > 1000
+
+            # Also verify API route /api/stage/synthesize_work & /demos/ serving + path traversal protection
+            r_syn = client.post("/api/stage/synthesize_work", json={"play_audio": False})
+            assert r_syn.status_code == 200
+            syn_json = r_syn.json()
+            assert syn_json["ok"] is True and syn_json["assets"]["mp3_url"].startswith("/demos/")
+            r_mp3 = client.get(syn_json["assets"]["mp3_url"])
+            assert r_mp3.status_code == 200 and len(r_mp3.content) > 10000
+            # Clean up exported test artifact in data/telemetry/exports
+            exp_dir = Path("data/telemetry/exports")
+            for key in ("mp3", "wav", "mid", "musicxml"):
+                fname = syn_json["assets"].get(key)
+                if fname and (exp_dir / fname).exists():
+                    (exp_dir / fname).unlink()
+            assert client.get("/demos/../../pyproject.toml").status_code in (400, 404)
+            assert isinstance(CoCompositionArchitect(), CoCompositionArchitect)

@@ -1,19 +1,21 @@
 """
-10+ Iteration Real-Ollama, TokenEconomizer, Classical MIDI Corpus, MusicalityCritic &
-Dual-Pedal Physical Synthesis Verification Loop for Disklavier-Auto Stage System.
+10+ Iteration Real-Ollama, RTX 3070 Phrase Transformer, 4-Act CoCompositionArchitect,
+MasterworkEvaluator, MusicalityCritic & Concert-Hall Dual-Pedal Verification Loop.
 
 Verifies on every single iteration (>= 10 iterations):
-1. Real local Ollama (`qwen3.5:4b`, `keep_alive=-1`) + TokenEconomizer context compression (> 0%).
+1. Real local Ollama (`qwen3.5:4b`, `keep_alive=-1`) + TokenEconomizer compression (> 0%).
 2. Zero musical contradictions, zero AI poetry clichés, zero "〇〇風" style labels,
    strict factual consistency with L1 pitches & L3 rejections.
-3. MusicalityCritic 6-Axis Pass on adopted candidate:
-   - zero monotonous >=4-note scale runs
-   - two-hand polyphony & vertical harmonies
-   - rhythmic & dynamic diversity
+3. MusicalityCritic 6-Axis & MasterworkEvaluator 4-Pillar Pass on adopted candidate:
+   - zero monotonous >=4-note scale runs & zero monophonic emptiness
+   - two-hand polyphony, thematic unity, melodic arch & gap-fill, voice-leading bridges
    - continuous Damper (CC#64) & Una Corda (CC#67) envelopes
-4. Dual-pedal physical audio synthesis (RMS > 0.01, 0 NaN/Inf, 0 clipping, active CC#64 & CC#67).
-5. Hardware safety gates (<= 30 active voices, Mode A 100% self-echo block, Mode B NLMS > 10dB,
-   < 10ms panic, /favicon.ico 200 OK, Obsidian session archival).
+4. 4-Act Macro-Form progression (Act 1 Question -> Act 2 Sequence -> Act 3 Climax -> Act 4 Coda),
+   Public Rehearsal Retake (`/api/stage/retake`), and Masterwork Synthesis (`/api/stage/synthesize_work`).
+5. Published Demo Audio Integrity (`docs/demos/demo_mode_{b_cello,a_piano}_dialogue.{wav,mp3}`):
+   45..135s musical length, RMS > 0.015, 0 clipping, 0 NaN/Inf.
+6. Hardware safety gates (<= 30 active voices, Mode A 100% self-echo block, Mode B NLMS > 10dB,
+   < 10ms panic, /favicon.ico 200 OK, Obsidian session & masterwork archival).
 """
 
 from __future__ import annotations
@@ -26,6 +28,8 @@ import time
 from typing import Any, Dict, List
 
 from fastapi.testclient import TestClient
+import numpy as np
+import soundfile as sf
 
 ROOT = Path(__file__).resolve().parents[1]
 if str(ROOT) not in sys.path:
@@ -37,19 +41,51 @@ from src.stage.layer5_disklavier_output import DisklavierStageOutputLayer
 from src.stage.stage_server import STAGE_INQUIRY_SCENARIOS, create_stage_app
 
 SCENARIOS: List[Dict[str, Any]] = [
-    {"mode": "cello", "preset": "cello_low_legato", "directive": ""},
+    {"mode": "cello", "preset": "cello_low_legato", "directive": "第1幕提示: 低音レガートに対し半終止で問いかけて"},
     {"mode": "cello", "preset": "cello_leap_spiccato", "directive": "鋭い跳躍に対し反行対位法と浅い踏み替えで応対"},
-    {"mode": "piano", "preset": "piano_chromatic_cadence", "directive": "半音階終止を受け内声掛留解決とハーフペダルで接続"},
-    {"mode": "cello", "preset": "overtone_mud_clearance", "directive": "中音域倍音濁りを避け高音開離和音と踏み替えで返す"},
-    {"mode": "piano", "preset": "piano_chromatic_cadence", "directive": "ドライで歯切れよい反行対位法とウナ・コルダで返す"},
-    {"mode": "cello", "preset": "cello_low_legato", "directive": "開放弦を生かし両手開離ボイシングとウナ・コルダで返す"},
-    {"mode": "cello", "preset": "cello_leap_spiccato", "directive": ""},
-    {"mode": "piano", "preset": "piano_chromatic_cadence", "directive": "長調終止へ向かいバス支えとハーフペダルで接続"},
-    {"mode": "cello", "preset": "overtone_mud_clearance", "directive": "チェロD3倍音帯を避け上声部と低音バスで包む"},
-    {"mode": "piano", "preset": "piano_chromatic_cadence", "directive": "踏み替えで濁りを抜き、同音反復は避ける"},
-    {"mode": "cello", "preset": "cello_low_legato", "directive": ""},
-    {"mode": "piano", "preset": "cello_leap_spiccato", "directive": "密度を上げ反行対位法と両ペダル制御で挑発する"},
+    {"mode": "cello", "preset": "overtone_mud_clearance", "directive": "第2幕発展: 相対調へ転調し上行ゼクエンツと内声対旋律で返す"},
+    {"mode": "cello", "preset": "overtone_mud_clearance", "directive": "中音域倍音濁りを避け4-3掛留解決と踏み替えで返す"},
+    {"mode": "cello", "preset": "cello_low_legato", "directive": "第2幕架橋: 10度バスと高域対旋律で属調方向へ繋ぐ"},
+    {"mode": "cello", "preset": "cello_leap_spiccato", "directive": "第3幕頂点: 低音バス保続音と3声ポリフォニーを高域頂点へ統合"},
+    {"mode": "cello", "preset": "cello_low_legato", "directive": "第3幕高揚: 両手対位法と深い響板でクライマックスを保つ"},
+    {"mode": "cello", "preset": "cello_low_legato", "directive": "第4幕回想: ウナ・コルダを深く踏み冒頭種子動機を回想し完全終止"},
+    {"mode": "piano", "preset": "piano_chromatic_cadence", "directive": "第1幕提示: 冒頭モチーフに対し半終止の問いかけと開離10度で返す"},
+    {"mode": "piano", "preset": "piano_chromatic_cadence", "directive": "踏み替えで濁りを抜き、対位法反行とウナ・コルダで返す"},
+    {"mode": "piano", "preset": "piano_chromatic_cadence", "directive": "密度を上げ跳躍回復と両ペダル制御で発展させる"},
+    {"mode": "cello", "preset": "cello_leap_spiccato", "directive": "開放弦を生かし両手開離ボイシングとウナ・コルダで返す"},
 ]
+
+
+def _verify_published_demo_audio(violations: List[str]) -> Dict[str, Any]:
+    demo_dir = ROOT / "docs" / "demos"
+    stats: Dict[str, Any] = {}
+    for stem in ("demo_mode_b_cello_dialogue", "demo_mode_a_piano_dialogue"):
+        wav_p = demo_dir / f"{stem}.wav"
+        mp3_p = demo_dir / f"{stem}.mp3"
+        mid_p = demo_dir / f"{stem}.mid"
+        xml_p = demo_dir / f"{stem}.musicxml"
+        for p in (wav_p, mp3_p, mid_p, xml_p):
+            if not p.exists() or p.stat().st_size < 1000:
+                violations.append(f"Published demo asset missing or too small: {p}")
+        if wav_p.exists():
+            data, sr = sf.read(str(wav_p), dtype="float32")
+            dur_s = len(data) / float(sr)
+            rms = float(np.sqrt(np.mean(data.astype(np.float64) ** 2)) + 1e-12)
+            peak = float(np.max(np.abs(data))) if len(data) else 0.0
+            has_bad = bool(np.any(~np.isfinite(data)))
+            if not (45.0 <= dur_s <= 135.0):
+                violations.append(f"{wav_p.name}: duration_s {dur_s:.2f} outside [45, 135]")
+            if rms <= 0.015:
+                violations.append(f"{wav_p.name}: RMS too low ({rms:.4f})")
+            if has_bad or peak > 1.0:
+                violations.append(f"{wav_p.name}: NaN/Inf or clipping peak={peak:.4f}")
+            stats[stem] = {
+                "duration_s": round(dur_s, 2),
+                "rms": round(rms, 4),
+                "peak": round(peak, 4),
+                "mp3_kb": round(mp3_p.stat().st_size / 1024.0, 1) if mp3_p.exists() else 0.0,
+            }
+    return stats
 
 
 def run_iterative_verification(iterations: int = 10, play_device_audio: bool = False) -> Dict[str, Any]:
@@ -65,8 +101,10 @@ def run_iterative_verification(iterations: int = 10, play_device_audio: bool = F
 
     records: List[Dict[str, Any]] = []
     violations: List[str] = []
+    acts_observed: set[int] = set()
+    retake_verified = False
+    synth_verified = False
 
-    # Use real classical MIDI corpora from repo (IMSLP, Human References, Maestro)
     app = create_stage_app(
         demo_enabled=False,
         monitor_audio=True,
@@ -82,6 +120,9 @@ def run_iterative_verification(iterations: int = 10, play_device_audio: bool = F
         orch.intent_engine.model_name = selected_model
         orch.intent_engine.use_ollama = True
         orch.intent_engine.timeout_s = 12.0
+
+        if not orch.phrase_model.loaded:
+            violations.append("RTX 3070 CorpusPhraseModelManager failed to load classical_phrase_model.pt")
 
         # Warm up Ollama once with keep_alive=-1
         _ = orch.execute_composition_turn(use_virtual_human=True, staggered_playback=False)
@@ -108,7 +149,34 @@ def run_iterative_verification(iterations: int = 10, play_device_audio: bool = F
                 ws_frame = ws.receive_json()
                 turn_ms = round((time.perf_counter() - t0) * 1000.0, 2)
 
+                # Exercise live Public Rehearsal Retake on Iteration 2 and Synthesize Work on Iteration 8
+                if idx == 1:
+                    r_ret = client.post(
+                        "/api/stage/retake",
+                        json={"text": "今のフレーズはまだ解決しない問いかけのまま左手を増強して書き直して"},
+                    )
+                    if r_ret.status_code == 200 and r_ret.json()["state"]["intent"].get("is_retake"):
+                        retake_verified = True
+                        st = r_ret.json()["state"]
+                    else:
+                        violations.append("Iter 2: Public Rehearsal Retake failed")
+
+                if idx == 7:
+                    r_syn = client.post("/api/stage/synthesize_work", json={"play_audio": False})
+                    syn_j = r_syn.json() if r_syn.status_code == 200 else {}
+                    if syn_j.get("ok") and float(syn_j.get("total_duration_s", 0.0)) >= 45.0:
+                        synth_verified = True
+                        # Clean up temp synthesized export so repo stays tidy
+                        exp_dir = ROOT / "data" / "telemetry" / "exports"
+                        for k in ("mp3", "wav", "mid", "musicxml"):
+                            fn = (syn_j.get("assets") or {}).get(k)
+                            if fn and (exp_dir / fn).exists():
+                                (exp_dir / fn).unlink()
+                    else:
+                        violations.append(f"Iter 8: Synthesize Complete Work failed: {syn_j}")
+
                 intent = st["intent"]
+                acts_observed.add(int(intent.get("act_number", 1)))
                 monologue = str(intent.get("monologue_ja", ""))
                 econ_stats = intent.get("token_economizer", {})
                 perc = st["perception"]
@@ -136,7 +204,7 @@ def run_iterative_verification(iterations: int = 10, play_device_audio: bool = F
                 if not ok_val:
                     violations.append(f"Iter {idx + 1}: Validator failed {val_errs} for: {monologue}")
 
-                # 2. MusicalityCritic 6-Axis & Two-Hand Polyphony Checks
+                # 2. MusicalityCritic 6-Axis & MasterworkEvaluator 4-Pillar Checks
                 adopted_list = [c for c in cands if c["adopted"]]
                 rejected_list = [c for c in cands if not c["adopted"]]
                 if len(cands) != 4 or len(adopted_list) != 1 or len(rejected_list) != 3:
@@ -152,6 +220,9 @@ def run_iterative_verification(iterations: int = 10, play_device_audio: bool = F
                         violations.append(f"Iter {idx + 1}: Adopted candidate missing two-hand polyphony ({win_pct})")
                     if int(win_pct.get("dual_pedal", 0)) < 75:
                         violations.append(f"Iter {idx + 1}: Adopted candidate missing dual pedal ({win_pct})")
+                    mw_pct = win.get("masterwork_pct", {})
+                    if len(mw_pct) != 4 or float(win.get("masterwork_total", 0.0)) < 65.0:
+                        violations.append(f"Iter {idx + 1}: MasterworkEvaluator check failed ({mw_pct})")
 
                 for rc in rejected_list:
                     if not rc["rejection_tag_ja"].startswith("[× 棄却:"):
@@ -188,6 +259,8 @@ def run_iterative_verification(iterations: int = 10, play_device_audio: bool = F
                 records.append(
                     {
                         "iteration": idx + 1,
+                        "act": int(intent.get("act_number", 1)),
+                        "phrase_function": intent.get("phrase_function"),
                         "mode": sc["mode"],
                         "articulation": perc.get("articulation"),
                         "detected_note": perc.get("note_name"),
@@ -200,6 +273,7 @@ def run_iterative_verification(iterations: int = 10, play_device_audio: bool = F
                         "monologue_ja": monologue,
                         "adopted_id": adopted_list[0]["candidate_id"] if adopted_list else "?",
                         "adopted_score": adopted_list[0]["total_score"] if adopted_list else 0.0,
+                        "masterwork_total": adopted_list[0].get("masterwork_total", 0.0) if adopted_list else 0.0,
                         "adopted_6axis": adopted_list[0]["subscores_pct"] if adopted_list else {},
                         "rejected_reasons": [
                             f"{r['candidate_id']}:{r['rejection_tag_ja']}" for r in rejected_list
@@ -217,10 +291,19 @@ def run_iterative_verification(iterations: int = 10, play_device_audio: bool = F
                     }
                 )
 
+        if acts_observed != {1, 2, 3, 4}:
+            violations.append(f"4-Act arc incomplete; observed acts={sorted(acts_observed)}")
+        if not retake_verified:
+            violations.append("Public Rehearsal Retake verification failed")
+        if not synth_verified:
+            violations.append("Masterwork Synthesis verification failed")
+
         # Verify <10ms panic
         panic_res = client.post("/api/stage/panic").json()
         if float(panic_res.get("elapsed_ms", 99.0)) >= 10.0 or panic_res.get("active_voices", 1) != 0:
             violations.append(f"Panic check failed: {panic_res}")
+
+    demo_audio_stats = _verify_published_demo_audio(violations)
 
     # Dedicated burst 30-voice check
     out_burst = DisklavierStageOutputLayer(port_name=None, start_worker=False)
@@ -238,6 +321,10 @@ def run_iterative_verification(iterations: int = 10, play_device_audio: bool = F
     report = {
         "passed": len(violations) == 0,
         "iterations_completed": len(records),
+        "acts_observed": sorted(acts_observed),
+        "retake_verified": retake_verified,
+        "synth_verified": synth_verified,
+        "demo_audio_stats": demo_audio_stats,
         "ollama_model": selected_model,
         "violations": violations,
         "records": records,
@@ -249,7 +336,7 @@ def run_iterative_verification(iterations: int = 10, play_device_audio: bool = F
 
 
 def main() -> int:
-    parser = argparse.ArgumentParser(description="10x Iterative LLM + MusicalityCritic + Dual-Pedal Verification")
+    parser = argparse.ArgumentParser(description="10x Iterative LLM + 4-Act Masterwork + Concert Hall Verification")
     parser.add_argument("--iterations", type=int, default=10)
     parser.add_argument("--no-device-audio", action="store_true")
     args = parser.parse_args()
@@ -261,17 +348,18 @@ def main() -> int:
     print(f"=== 10x Iterative Refinement Report (Model: {report['ollama_model']}) ===")
     for rec in report["records"]:
         print(
-            f"[Iter {rec['iteration']:02d} | {rec['mode']:5s} {rec['detected_note']:>3s} {rec['articulation']:8s} "
+            f"[Iter {rec['iteration']:02d} Act{rec['act']} | {rec['mode']:5s} {rec['detected_note']:>3s} {rec['articulation']:8s} "
             f"| {rec['llm_source']} {rec['llm_latency_ms']}ms | Econ={rec['token_compression_pct']}% "
-            f"| Critic={rec['adopted_score']} | CC64={rec['cc64_peak']} CC67={rec['cc67_peak']} "
+            f"| Critic={rec['adopted_score']} MW={rec['masterwork_total']} | CC64={rec['cc64_peak']} CC67={rec['cc67_peak']} "
             f"| RMS={rec['audio_rms']:.4f}] {rec['monologue_ja']}"
         )
+    print(f"Published Demo Audio: {report['demo_audio_stats']}")
     if not report["passed"]:
         print("\n[FAIL] Violations detected:")
         for v in report["violations"]:
             print("  -", v)
         return 1
-    print(f"\n[PASS] All {report['iterations_completed']} iterations passed with 0 violations.")
+    print(f"\n[PASS] All {report['iterations_completed']} iterations + 4-Act Masterwork Audio checks passed with 0 violations.")
     return 0
 
 

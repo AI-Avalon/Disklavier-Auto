@@ -2,30 +2,30 @@
 type: stage_dialogue_turn
 turn_id: 4
 mode: "cello"
-adopted_candidate: "C"
-total_score: 100.00
-token_compression_pct: 58.3
+adopted_candidate: "A"
+total_score: 98.20
+token_compression_pct: 58.5
 tags: [stage-session, musicality-critic, dual-pedal]
 ---
 
-# Stage Turn #4 (CELLO) — Adopted Candidate C (100.0 pts)
+# Stage Turn #4 (CELLO) — Adopted Candidate A (98.2 pts)
 
 ## 実演家メモ (L2 Deliberation)
-> チェロC3→G3→A#3→C4→A#3→G3のレガートを検出。案Bは短2度衝突のため捨て、案Cの両手A#1-D6をウナ・コルダで置く。
+> チェロG3からA#3へのスタカートを検出。案Bは開離余白不足のため捨て、案Aの両手D#2とC6をウナ・コルダで置く。
 
 ## 人間フレーズ知覚 ＆ TokenEconomizer 圧縮
-- **人間音列**: `C3→G3→A#3→C4→A#3→G3` (legato)
-- **和声進行設計**: `Gm9 -> EbM7#11 -> Cm11 -> D7b9` (`G_minor`)
-- **TokenEconomizer 削減率**: `58.3%` (`470 -> 196` tokens)
-- **両ペダル制御**: Damper CC#64 `0..78` (repedals=1) / Una Corda CC#67 `18..112`
+- **人間音列**: `G3→A#3→D4→F4→D#4→D4` (staccato)
+- **和声進行設計**: `Gm -> EbM7#11 -> Cm9 -> D7b9` (`G_minor`)
+- **TokenEconomizer 削減率**: `58.5%` (`550 -> 228` tokens)
+- **両ペダル制御**: Damper CC#64 `0..104` (repedals=1) / Una Corda CC#67 `18..64`
 
 ## 4候補 音楽性監査 (MusicalityCritic 6-Axis)
 | Candidate | Status | Score | Register | Rejection Reason |
 |---|---|---:|---|---|
-| A | REJECTED | 98.5 | A#1-D#5 | 1小節4拍 A#4の開離余白・内声推進が劣る (-8) |
-| B | REJECTED | 98.6 | A#1-D6 | 1小節4拍 G5の開離余白・内声推進が劣る (-8) |
-| C | ADOPTED | 100.0 | A#1-D6 | - |
-| D | REJECTED | 55.1 | G3-D#4 | 1小節1拍 G3基音とG#3が短2度衝突・低中域混濁 (-48) |
+| A | ADOPTED | 98.2 | D#2-C6 | - |
+| B | REJECTED | 96.5 | F2-D#6 | 2小節2拍 F2の開離余白・内声推進が劣る (-8) |
+| C | REJECTED | 96.3 | D#2-F6 | 2小節3拍 G2の開離余白・内声推進が劣る (-8) |
+| D | REJECTED | 54.3 | D4-A#4 | 1小節1拍 F4基音とF#4が短2度衝突・低中域混濁 (-46) |
 
 ## 知識グラフリンク
 - [[Evolution_Overview]]

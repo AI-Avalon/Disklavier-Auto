@@ -1,0 +1,47 @@
+{
+  "files_scanned": 180,
+  "files_parsed": 174,
+  "total_phrase_samples": 1975,
+  "mean_post_leap_gap_fill_rate": 0.4088,
+  "lh_idiom_distribution": {
+    "arpeggio_root_5th_10th": 617,
+    "pedal_point_inner_voice": 426,
+    "syncopated_offbeat_harmony": 325,
+    "una_corda_choral_recall": 607
+  },
+  "suspension_distribution": {
+    "none": 1626,
+    "sus4_3": 42,
+    "sus9_8": 60,
+    "sus7_6": 247
+  },
+  "device": "cuda",
+  "gpu_name": "NVIDIA GeForce RTX 3070",
+  "epochs": 20,
+  "initial_loss": 3.38126,
+  "final_loss": 1.60115,
+  "loss_history": [
+    3.38126,
+    2.78744,
+    2.66937,
+    2.58358,
+    2.45132,
+    2.26276,
+    2.11585,
+    2.01062,
+    1.92713,
+    1.86956,
+    1.81989,
+    1.777,
+    1.73673,
+    1.7048,
+    1.6773,
+    1.65143,
+    1.63406,
+    1.61509,
+    1.60258,
+    1.60115
+  ],
+  "inference_latency_ms": 8.275,
+  "training_elapsed_s": 14.36
+}

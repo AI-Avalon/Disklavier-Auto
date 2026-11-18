@@ -133,9 +133,11 @@ class TokenEconomizer:
         corpus_refs: List[Dict[str, Any]],
         directive_hints: Optional[Dict[str, Any]] = None,
         candidate_summaries: Optional[List[Dict[str, Any]]] = None,
+        macro_form_state: Optional[Dict[str, Any]] = None,
     ) -> EconomizedContext:
         h = self.extract_human_phrase_metrics(perception, human_notes)
         hints = directive_hints or {}
+        macro = macro_form_state or {}
 
         # Verbose baseline prompt (for transparent compression measurement)
         raw_obj = {
@@ -149,6 +151,16 @@ class TokenEconomizer:
                 "avoid_overtone_clash_range": h["avoid_band_str"],
                 "vibrato_cents": perception.vibrato_cents,
                 "rms_dbfs": perception.rms_dbfs,
+            },
+            "macro_composition_architecture": {
+                "act_number": macro.get("act_number", 1),
+                "act_label": macro.get("act_label_ja", "第1幕: 種子提示と問いかけ"),
+                "phrase_function": macro.get("phrase_function", "question_half_cadence"),
+                "seed_motif": macro.get("seed_motif_str", "--"),
+                "voice_leading_bridge": macro.get("voice_leading_bridge_desc", "--"),
+                "target_tonality": macro.get("target_tonality", "D_dorian"),
+                "target_apex_pitch": macro.get("target_apex_pitch", 79),
+                "is_retake": bool(macro.get("is_retake", False)),
             },
             "recent_harmonic_history": list(self.harmonic_history),
             "corpus_voicing_references": [
@@ -178,7 +190,7 @@ class TokenEconomizer:
             ref_tokens.append(f"V(lh=[{lh}],rh=[{rh}],sp={sp})")
         ref_str = ";".join(ref_tokens) or "V(lh=[0,7],rh=[0,4,9,14],sp=19)"
 
-        interventions: List[str] = ["no_scale_run>=4", "require_2hand_polyphony", "dual_pedal_cc64_cc67"]
+        interventions: List[str] = ["no_scale_run>=4", "require_2hand_polyphony", "post_leap_gap_fill", "dual_pedal_cc64_cc67"]
         if any("minor2" in f or "clash" in f for f in self.failure_ledger):
             interventions.append(f"clear_{h['avoid_band_str']}")
         if any("rhythm" in f or "uniform" in f for f in self.failure_ledger):
@@ -198,9 +210,19 @@ class TokenEconomizer:
         mc_raw = str(hints.get("raw_text") or "").strip()
         mc_str = f" MC={mc_raw}" if mc_raw else ""
 
+        form_str = ""
+        if macro:
+            retake_tok = "|RETAKE" if macro.get("is_retake") else ""
+            form_str = (
+                f"\nFORM[Act={macro.get('act_number', 1)}({macro.get('phrase_function', 'question_half_cadence')})"
+                f"|Key={macro.get('target_tonality', 'D_dorian')}|Seed={macro.get('seed_motif_str', '--')}"
+                f"|Br={macro.get('voice_leading_bridge_desc', '--')}|Apex={macro.get('target_apex_pitch', 79)}{retake_tok}]"
+            )
+
         compact_prompt = (
             f"IN[{perception.mode}|{h['articulation']}|N={h['pitches_str']}|IV={leap_sig}|"
-            f"T={h['tension']}|M={h['momentum']}|AVOID={h['avoid_band_str']}]{mc_str}\n"
+            f"T={h['tension']}|M={h['momentum']}|AVOID={h['avoid_band_str']}]{mc_str}"
+            f"{form_str}\n"
             f"HIST={hist_sig}\n"
             f"CORPUS={ref_str}\n"
             f"RULE={','.join(interventions)}"

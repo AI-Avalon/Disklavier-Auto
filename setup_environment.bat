@@ -41,13 +41,17 @@ python -m src.stage.cli_banner setup_header
 python -m src.stage.cli_banner setup_step2
 
 if defined UV_EXE (
-    "%UV_EXE%" pip install --python "%~dp0.venv\Scripts\python.exe" fastapi uvicorn websockets pydantic mido python-rtmidi sounddevice soundfile numpy scipy matplotlib requests symusic miditok ollama pyyaml httpx pytest ruff
+    "%UV_EXE%" pip install --python "%~dp0.venv\Scripts\python.exe" fastapi uvicorn websockets pydantic mido python-rtmidi sounddevice soundfile numpy scipy matplotlib requests symusic miditok ollama pyyaml httpx pytest ruff lameenc
     if errorlevel 1 goto :pip_fail
+    "%UV_EXE%" pip install --python "%~dp0.venv\Scripts\python.exe" "torch==2.6.0+cu124" --index-url https://download.pytorch.org/whl/cu124 --extra-index-url https://pypi.org/simple --index-strategy unsafe-best-match
+    if errorlevel 1 (
+        echo [WARN] CUDA torch wheel install skipped or offline; checking existing torch...
+    )
     "%UV_EXE%" pip install --python "%~dp0.venv\Scripts\python.exe" -e ".[audio,dev]" --no-deps
     if errorlevel 1 goto :pip_fail
 ) else (
     python -m pip install --upgrade pip
-    python -m pip install fastapi uvicorn websockets pydantic mido python-rtmidi sounddevice soundfile numpy scipy matplotlib requests symusic miditok ollama pyyaml httpx pytest ruff
+    python -m pip install fastapi uvicorn websockets pydantic mido python-rtmidi sounddevice soundfile numpy scipy matplotlib requests symusic miditok ollama pyyaml httpx pytest ruff lameenc
     if errorlevel 1 goto :pip_fail
     python -m pip install -e ".[audio,dev]" --no-deps
     if errorlevel 1 goto :pip_fail
@@ -59,6 +63,14 @@ if errorlevel 1 (
     echo [ERROR] Environment scan failed in src.stage.config_scanner.
     pause
     exit /b 1
+)
+
+if not exist "data\models\classical_phrase_model.pt" (
+    echo [3.5/4] Training RTX 3070 classical phrase model from data/ MIDI corpus...
+    python train/train_phrase_transformer.py
+    if errorlevel 1 (
+        echo [WARN] Phrase model training returned non-zero; falling back cleanly.
+    )
 )
 
 python -m src.stage.cli_banner setup_step4
