@@ -14,7 +14,11 @@ from xml.dom import minidom
 
 import mido
 import numpy as np
-import soundfile as sf
+
+try:
+    import soundfile as sf
+except Exception:  # pragma: no cover
+    sf = None  # type: ignore[assignment]
 
 from src.safety.preflight_checker import LocalPreflightChecker
 from src.telemetry.telemetry_store import record_caught_exception
@@ -540,7 +544,17 @@ def export_events_to_wav(
     if peak > 0.88:
         stereo = stereo * (0.88 / peak)
     out_path.parent.mkdir(parents=True, exist_ok=True)
-    sf.write(str(out_path), stereo.astype(np.float32), sample_rate, subtype="PCM_16")
+    if sf is not None:
+        sf.write(str(out_path), stereo.astype(np.float32), sample_rate, subtype="PCM_16")
+    else:
+        import wave
+
+        pcm = np.clip(stereo * 32767.0, -32768, 32767).astype(np.int16)
+        with wave.open(str(out_path), "wb") as wf:
+            wf.setnchannels(2)
+            wf.setsampwidth(2)
+            wf.setframerate(sample_rate)
+            wf.writeframes(pcm.tobytes())
     return out_path
 
 

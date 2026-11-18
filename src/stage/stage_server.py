@@ -23,11 +23,13 @@ import time
 from typing import Any, Dict, List, Optional, Set
 
 from fastapi import APIRouter, FastAPI, Request, WebSocket, WebSocketDisconnect
-from fastapi.responses import HTMLResponse, JSONResponse
+from fastapi.responses import HTMLResponse, JSONResponse, Response
 import numpy as np
 from pydantic import BaseModel
 
+from src.obsidian import ObsidianMusicalBrain
 from src.stage.config_scanner import DEFAULT_CONFIG_PATH, scan_ollama_environment
+from src.stage.favicon import PIANO_FAVICON_ICO_BYTES
 from src.stage.layer1_perception import (
     CelloAcousticPerception,
     EchoSuppressionLedger,
@@ -45,6 +47,7 @@ from src.stage.layer3_candidate_composer import (
 )
 from src.stage.layer5_disklavier_output import DisklavierStageOutputLayer
 from src.stage.local_audio_synth import LocalAudioSynthesizer
+from src.stage.token_economizer import TokenEconomizer
 
 try:
     import mido
@@ -60,38 +63,43 @@ except Exception:  # pragma: no cover
 REPO_ROOT = Path(__file__).resolve().parents[2]
 STAGE_HUD_HTML_PATH = REPO_ROOT / "src" / "ui" / "stage_hud.html"
 
-STAGE_STYLE_PRESETS: Dict[str, Dict[str, Any]] = {
-    "baroque_counterpoint": {
-        "label_ja": "バロック対位法",
-        "directive_text": "対位法でカノン風に、乾いたタッチで",
-        "tonal_hint": "D_minor",
-        "stance_hint": "counterpoint",
-        "pedal_hint": "dry",
-        "density_delta": 0.05,
-    },
-    "impressionist_modal": {
-        "label_ja": "印象派風（ドリア旋法）",
-        "directive_text": "ドリア旋法でペダルを響かせて",
+# Concrete musical inquiry scenarios (zero hardcoded "〇〇風" composer/style presets)
+STAGE_INQUIRY_SCENARIOS: Dict[str, Dict[str, Any]] = {
+    "cello_low_legato": {
+        "label_ja": "チェロ低音レガート問いかけ",
+        "directive_text": "低音レガートに対し、高音開離ボイシングとウナ・コルダ踏み替えで応答",
         "tonal_hint": "D_dorian",
         "stance_hint": "imitate",
         "pedal_hint": "resonant",
-        "density_delta": -0.08,
+        "density_delta": -0.05,
+        "mode": "cello",
     },
-    "contemporary_provoke": {
-        "label_ja": "現代音楽的挑発",
-        "directive_text": "短調で挑発して密度を上げる",
+    "cello_leap_spiccato": {
+        "label_ja": "チェロ跳躍スピッカート",
+        "directive_text": "鋭い跳躍スピッカートに対し、反行対位法と浅い踏み替えで応対",
         "tonal_hint": "G_minor",
-        "stance_hint": "provoke",
+        "stance_hint": "counterpoint",
         "pedal_hint": "dry",
-        "density_delta": 0.18,
+        "density_delta": 0.10,
+        "mode": "cello",
     },
-    "serene_chorale": {
-        "label_ja": "静謐なコラール",
-        "directive_text": "長調で落ち着いて終止へ向かう",
-        "tonal_hint": "F_major",
+    "piano_chromatic_cadence": {
+        "label_ja": "ピアノ半音階終止",
+        "directive_text": "半音階的な終止進行を受け、内声掛留解決とハーフペダルで接続",
+        "tonal_hint": "D_minor",
         "stance_hint": "cadence",
         "pedal_hint": "half_clear",
-        "density_delta": -0.14,
+        "density_delta": -0.08,
+        "mode": "piano",
+    },
+    "overtone_mud_clearance": {
+        "label_ja": "中音域倍音クリアランス検証",
+        "directive_text": "100-600Hzの濁りを完全に避け、バス支えと高域透明和音で構築",
+        "tonal_hint": "F_major",
+        "stance_hint": "provoke",
+        "pedal_hint": "half_clear",
+        "density_delta": 0.08,
+        "mode": "cello",
     },
 }
 
@@ -161,8 +169,9 @@ class StageOrchestrator:
         self.deliberation_stage: str = "idle"  # idle | step1_sketch | step2_audition_reject | step3_adopt_perform
         self.deliberation_active_reject_id: str = ""
         self.deliberation_timeline: List[Dict[str, Any]] = []
-        self.active_preset: str = "impressionist_modal"
+        self.active_preset: str = "cello_low_legato"
         self.turn_id: int = 0
+        self.obsidian_last_note: str = ""
         self.calibration_status: Dict[str, Any] = {
             "calibrated": False,
             "vdl_base_ms": 24.0,
@@ -180,17 +189,19 @@ class StageOrchestrator:
         self.pending_directive_hints: Dict[str, Any] = {}
         self.human_phrase_buffer: List[Dict[str, Any]] = []
 
-        # L2 Intent (Ollama auto-detection unless explicitly specified)
+        # L2 Intent + TokenEconomizer
         selected_model = str(llm_cfg.get("selected_model") or "qwen3.5:4b")
         if use_ollama is None:
             ollama_ready = bool(llm_cfg.get("ollama_running", False))
         else:
             ollama_ready = bool(use_ollama)
 
+        self.economizer = TokenEconomizer()
         self.intent_engine = MusicalIntentEngine(
             model_name=selected_model,
             use_ollama=ollama_ready,
-            timeout_s=6.5,
+            timeout_s=8.0,
+            economizer=self.economizer,
         )
         if use_ollama is None and not ollama_ready:
             def _probe_ollama() -> None:
@@ -201,9 +212,16 @@ class StageOrchestrator:
 
             threading.Thread(target=_probe_ollama, name="OllamaAsyncProbe", daemon=True).start()
 
-        # L3 Multiple Candidate Composer (Zero-Config Corpus)
+        # L3 Multiple Candidate Composer & MusicalityCritic
         self.corpus_loader = ZeroConfigCorpusLoader(search_dirs=corpus_dirs)
         self.composer = MultipleCandidateComposer(corpus_loader=self.corpus_loader)
+
+        # Obsidian Vault Second Brain Integration
+        self.obsidian_brain: Optional[ObsidianMusicalBrain] = None
+        try:
+            self.obsidian_brain = ObsidianMusicalBrain(on_directives_changed=self._on_obsidian_directive)
+        except Exception:
+            self.obsidian_brain = None
 
         # L5 Safe Disklavier Output
         out_port_pref = midi_cfg.get("preferred_out_port") if open_hardware else None
@@ -211,6 +229,7 @@ class StageOrchestrator:
             port_name=out_port_pref,
             midi_sink=self._on_l5_midi_event,
             echo_register_cb=self.echo_ledger.register_sent_note,
+            ai_cc67_cb=self.turn_detector.notify_ai_cc67,
             start_worker=True,
         )
 
@@ -330,6 +349,13 @@ class StageOrchestrator:
             self.latest_audio_stats = self.audio_synth.get_status()
             return {"ok": True, "monitor_audio": self.monitor_audio, **self.latest_audio_stats}
 
+    def _on_obsidian_directive(self, parsed: Dict[str, Any]) -> None:
+        raw = str(parsed.get("raw_text", "") or "").strip()
+        if raw:
+            hints = self.directive_recognizer.parse_directive(raw)
+            with self._lock:
+                self.pending_directive_hints = hints
+
     def apply_directive(self, text: str) -> Dict[str, Any]:
         hints = self.directive_recognizer.parse_directive(text)
         with self._lock:
@@ -338,9 +364,9 @@ class StageOrchestrator:
         return {"ok": True, "hints": hints}
 
     def apply_preset(self, preset_key: str) -> Dict[str, Any]:
-        preset = STAGE_STYLE_PRESETS.get(preset_key)
+        preset = STAGE_INQUIRY_SCENARIOS.get(preset_key)
         if not preset:
-            return {"ok": False, "error": f"Unknown preset: {preset_key}"}
+            return {"ok": False, "error": f"Unknown scenario: {preset_key}"}
         hints = {
             "raw_text": preset["directive_text"],
             "tonal_hint": preset["tonal_hint"],
@@ -350,6 +376,9 @@ class StageOrchestrator:
         }
         with self._lock:
             self.active_preset = preset_key
+            if preset.get("mode") in ("cello", "piano"):
+                self.mode = str(preset["mode"])
+                self.latest_perception.mode = self.mode
             self.pending_directive_hints = hints
             self.latest_perception.verbal_directive = preset["directive_text"]
         return {"ok": True, "preset": preset_key, "label_ja": preset["label_ja"], "hints": hints}
@@ -580,17 +609,27 @@ class StageOrchestrator:
             if hints.get("raw_text"):
                 snap.verbal_directive = str(hints["raw_text"])
 
-        # Step 1: L2 decides musical policy (tonality, register, pedal)
-        policy_intent = self.intent_engine.decide_policy(snap, human_notes, hints)
+        # Step 1: L2 decides autonomous musical policy via TokenEconomizer + Ollama/Rules
+        corpus_refs = self.corpus_loader.retrieve_voicing_references(
+            tension=0.5, momentum=0.5, top_k=3
+        )
+        policy_intent = self.intent_engine.decide_policy(
+            snap, human_notes, hints, corpus_refs=corpus_refs
+        )
 
-        # Step 2: L3 generates 4 candidates + scores 4 axes + isolates exact collision coordinates
+        # Step 2: L3 generates 4 two-hand polyphonic candidates + audits 6 MusicalityCritic axes
         turn_res = self.composer.compose_turn(human_notes, policy_intent, human_mode=snap.mode)
         adopted = turn_res.adopted_candidate
         rejected = [c for c in turn_res.candidates if not c.adopted]
 
-        # Step 3: L2 grounds the performer deliberation memo strictly in L1 & L3 real data (and validates via MusicalLogicValidator)
+        # Step 3: L2 grounds the performer deliberation memo strictly in L1 & L3 real data
         final_intent = self.intent_engine.finalize_deliberation_monologue(
-            snap, human_notes, policy_intent, turn_res, hints
+            snap,
+            human_notes,
+            policy_intent,
+            turn_res,
+            hints,
+            corpus_refs=turn_res.corpus_refs_used,
         )
         timeline = self._build_deliberation_timeline(
             turn_res.candidates, fast_mode=self.production_mode
@@ -617,7 +656,7 @@ class StageOrchestrator:
                 elif item["stage"] == "step1_sketch":
                     time.sleep(0.05 if self.production_mode else 0.14)
 
-        # Step 4: Synthesize Python direct audio (if monitor_audio or offline verification) & schedule L5 output
+        # Step 4: Synthesize Python direct audio (dual-pedal physics) & schedule L5 output
         audio_stats = self.audio_synth.play_turn_audio(
             human_notes=human_notes,
             human_mode=snap.mode,
@@ -627,6 +666,49 @@ class StageOrchestrator:
             play_device=(self.monitor_audio and self.play_audio_device),
         )
         self.output_layer.schedule_phrase(adopted.events, base_sound_ts=time.perf_counter() + 0.10)
+
+        # Update latest perception pedal state to reflect active dual-pedal drive for HUD gauges
+        if adopted.pedal_cc64_curve:
+            c64_vals = [int(pt["val"]) for pt in adopted.pedal_cc64_curve]
+            snap.pedal_cc64 = max(c64_vals) if max(c64_vals) > 0 else 0
+        if adopted.pedal_cc67_curve:
+            c67_vals = [int(pt["val"]) for pt in adopted.pedal_cc67_curve]
+            snap.pedal_cc67 = max(c67_vals) if max(c67_vals) > 0 else 0
+
+        # Step 5: Archive turn deliberation & voicing trace to Obsidian Vault
+        if self.obsidian_brain is not None:
+            try:
+                c64_list = [int(pt["val"]) for pt in adopted.pedal_cc64_curve] or [0]
+                c67_list = [int(pt["val"]) for pt in adopted.pedal_cc67_curve] or [0]
+                note_path = self.obsidian_brain.record_stage_dialogue_turn(
+                    turn_id=turn_res.turn_id,
+                    mode=snap.mode,
+                    human_summary=self.economizer.extract_human_phrase_metrics(snap, human_notes),
+                    token_stats=self.intent_engine.last_token_stats,
+                    intent_data=final_intent.model_dump(),
+                    candidates=[
+                        {
+                            "candidate_id": c.candidate_id,
+                            "adopted": c.adopted,
+                            "total_score": c.total_score,
+                            "pitch_range_str": c.pitch_range_str,
+                            "rejection_tag_ja": c.rejection_tag_ja,
+                            "rejection_detail": c.rejection_detail,
+                        }
+                        for c in turn_res.candidates
+                    ],
+                    pedal_summary={
+                        "cc64_min": min(c64_list),
+                        "cc64_max": max(c64_list),
+                        "cc67_min": min(c67_list),
+                        "cc67_max": max(c67_list),
+                        "repedal_count": audio_stats.get("repedal_count", 0),
+                    },
+                    session_tag="demo" if self.demo_enabled else ("prod" if self.production_mode else "stage"),
+                )
+                self.obsidian_last_note = note_path.name
+            except Exception:
+                pass
 
         with self._lock:
             self.deliberation_stage = "step3_adopt_perform"
@@ -733,6 +815,9 @@ class StageOrchestrator:
                     "sample_notes_str": c.sample_notes_str,
                     "problem_note_indices": c.problem_note_indices,
                     "rejection_detail": c.rejection_detail,
+                    "audit_passed": c.audit_passed,
+                    "pedal_cc64_curve": c.pedal_cc64_curve,
+                    "pedal_cc67_curve": c.pedal_cc67_curve,
                 }
                 for c in self.latest_candidates
             ]
@@ -794,7 +879,9 @@ class StageOrchestrator:
                     "llm_source": self.intent_engine.last_source,
                     "llm_latency_ms": self.intent_engine.last_latency_ms,
                     "validator_rewrites": self.intent_engine.last_validator_rewrites,
+                    "token_economizer": self.intent_engine.last_token_stats,
                 },
+                "obsidian_last_note": self.obsidian_last_note,
                 "candidates": candidates_list,
                 "output": {
                     "active_pitches": active_pitches,
@@ -809,6 +896,9 @@ class StageOrchestrator:
                     "panic_count": out_tel.panic_count,
                     "last_panic_elapsed_ms": out_tel.last_panic_elapsed_ms,
                     "pedal_cc64": out_tel.pedal_cc64,
+                    "pedal_cc67": out_tel.pedal_cc67,
+                    "pedal_cc64_curve": out_tel.pedal_cc64_curve,
+                    "pedal_cc67_curve": out_tel.pedal_cc67_curve,
                     "rolling_10s_energy": out_tel.rolling_10s_energy,
                     "energy_limit_10s": out_tel.energy_limit_10s,
                     "total_notes_sent": out_tel.total_notes_sent,
@@ -833,6 +923,11 @@ class StageOrchestrator:
             self.inport = None
         self.audio_synth.close()
         self.output_layer.close()
+        if self.obsidian_brain is not None:
+            try:
+                self.obsidian_brain.close()
+            except Exception:
+                pass
 
 
 class StageWSBroadcaster:
@@ -870,6 +965,10 @@ class StageWSBroadcaster:
 
 def build_stage_router(orch: StageOrchestrator, broadcaster: StageWSBroadcaster) -> APIRouter:
     router = APIRouter()
+
+    @router.get("/favicon.ico", include_in_schema=False)
+    async def serve_favicon() -> Response:
+        return Response(content=PIANO_FAVICON_ICO_BYTES, media_type="image/x-icon")
 
     @router.get("/", response_class=HTMLResponse)
     @router.get("/stage", response_class=HTMLResponse)

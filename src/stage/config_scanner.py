@@ -154,9 +154,10 @@ def scan_ollama_environment(host: str = "http://127.0.0.1:11434") -> Dict[str, A
 def scan_midi_directories(extra_dirs: Optional[List[Path]] = None) -> Dict[str, Any]:
     candidates = extra_dirs or [
         Path(r"D:\Disklavier-Data"),
-        REPO_ROOT / "data" / "midi",
         REPO_ROOT / "data" / "imslp_midi",
         REPO_ROOT / "data" / "human_references",
+        REPO_ROOT / "data" / "maestro-v3.0.0",
+        REPO_ROOT / "data" / "midi",
     ]
     found: Dict[str, Any] = {}
     active_corpus_dir: Optional[str] = None
@@ -239,13 +240,17 @@ def build_local_config(output_path: Path = DEFAULT_CONFIG_PATH) -> Dict[str, Any
             "installed_models": ollama_info["installed_models"],
             "temperature": 0.2,
             "num_ctx": 2048,
+            "keep_alive": -1,
+            "flash_attention": True,
+            "kv_cache_type": "q8_0",
         },
         "corpus": {
             "primary_dirs": [
                 r"D:\Disklavier-Data",
-                "data/midi",
                 "data/imslp_midi",
                 "data/human_references",
+                "data/maestro-v3.0.0",
+                "data/midi",
             ],
             "active_corpus_dir": corpus["active_corpus_dir"],
             "total_midi_files": corpus["total_midi_files"],

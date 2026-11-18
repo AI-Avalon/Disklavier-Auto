@@ -40,6 +40,9 @@ class OutputTelemetry:
     panic_count: int
     last_panic_elapsed_ms: float
     pedal_cc64: int
+    pedal_cc67: int
+    pedal_cc64_curve: List[Dict[str, Any]]
+    pedal_cc67_curve: List[Dict[str, Any]]
     rolling_10s_energy: float
     energy_limit_10s: float
     total_notes_sent: int
@@ -51,7 +54,7 @@ class _QueuedOutputEvent:
     send_ts: float
     priority: int
     seq: int
-    kind: str  # "note_on", "note_off", "cc64"
+    kind: str  # "note_on", "note_off", "cc64", "cc67"
     pitch: int = field(compare=False, default=60)
     velocity: int = field(compare=False, default=64)
     channel: int = field(compare=False, default=0)
@@ -83,12 +86,14 @@ class DisklavierStageOutputLayer:
         port_name: Optional[str] = None,
         midi_sink: Optional[Callable[[Dict[str, Any]], None]] = None,
         echo_register_cb: Optional[Callable[[int, float], None]] = None,
+        ai_cc67_cb: Optional[Callable[[float], None]] = None,
         start_worker: bool = True,
     ) -> None:
         self._lock = threading.RLock()
         self._cv = threading.Condition(self._lock)
         self._midi_sink = midi_sink
         self._echo_register_cb = echo_register_cb
+        self._ai_cc67_cb = ai_cc67_cb
         self.outport: Any = None
         self.connected_port_name: Optional[str] = None
 
@@ -99,9 +104,13 @@ class DisklavierStageOutputLayer:
         self.energy_history: Deque[Tuple[float, float]] = deque()
         self.rolling_energy: float = 0.0
 
-        # Pedal thinning state
+        # Dual pedal thinning state (CC#64 Damper + CC#67 Una Corda)
         self.current_pedal_val: int = 0
         self.last_pedal_sent_ts: float = 0.0
+        self.current_una_corda_val: int = 0
+        self.last_una_corda_sent_ts: float = 0.0
+        self.cc64_curve_history: Deque[Dict[str, Any]] = deque(maxlen=64)
+        self.cc67_curve_history: Deque[Dict[str, Any]] = deque(maxlen=64)
 
         # Telemetry & safety counters
         self.max_active_observed: int = 0
@@ -362,36 +371,65 @@ class DisklavierStageOutputLayer:
             self._send_note_off_locked(p, ts, channel=channel)
             return True
 
-    def send_pedal_cc64(self, value: int, channel: int = 0, now: Optional[float] = None) -> bool:
-        """
-        Continuous pedal thinning filter:
-        - Minimum 40ms send interval (unless full release to 0)
-        - Deadband +/-3 (unless boundary values 0 or 127)
-        """
-        ts = now if now is not None else time.perf_counter()
+    def _send_pedal_cc(
+        self,
+        control: int,
+        value: int,
+        channel: int,
+        ts: float,
+        cur_val_attr: str,
+        last_ts_attr: str,
+        history: Deque[Dict[str, Any]],
+        notify_ai_cb: bool = False,
+    ) -> bool:
         val = max(0, min(127, int(value)))
         with self._lock:
-            is_boundary = val in (0, 127) and val != self.current_pedal_val
-            dt = ts - self.last_pedal_sent_ts
-            diff = abs(val - self.current_pedal_val)
-
+            cur_val = getattr(self, cur_val_attr)
+            last_ts = getattr(self, last_ts_attr)
+            is_boundary = val in (0, 127) and val != cur_val
             if not is_boundary:
-                if dt < self.PEDAL_MIN_INTERVAL_S or diff < self.PEDAL_DEADBAND:
+                if (ts - last_ts) < self.PEDAL_MIN_INTERVAL_S or abs(val - cur_val) < self.PEDAL_DEADBAND:
                     self.pedal_thinned += 1
                     return False
-
-            self.current_pedal_val = val
-            self.last_pedal_sent_ts = ts
+            setattr(self, cur_val_attr, val)
+            setattr(self, last_ts_attr, ts)
+            history.append({"t": round(ts, 4), "val": val})
+            if notify_ai_cb and self._ai_cc67_cb is not None:
+                try:
+                    self._ai_cc67_cb(ts)
+                except Exception:
+                    pass
             self._emit_raw(
                 {
                     "type": "control_change",
-                    "control": 64,
+                    "control": control,
                     "value": val,
                     "channel": channel,
                     "ts": ts,
                 }
             )
             return True
+
+    def send_pedal_cc64(self, value: int, channel: int = 0, now: Optional[float] = None) -> bool:
+        """Continuous Damper (Right Pedal CC#64) thinning filter (40ms, +/-3 deadband)."""
+        ts = now if now is not None else time.perf_counter()
+        return self._send_pedal_cc(
+            64, value, channel, ts, "current_pedal_val", "last_pedal_sent_ts", self.cc64_curve_history
+        )
+
+    def send_pedal_cc67(self, value: int, channel: int = 0, now: Optional[float] = None) -> bool:
+        """Continuous Una Corda (Left Pedal CC#67) thinning filter (40ms, +/-3 deadband)."""
+        ts = now if now is not None else time.perf_counter()
+        return self._send_pedal_cc(
+            67,
+            value,
+            channel,
+            ts,
+            "current_una_corda_val",
+            "last_una_corda_sent_ts",
+            self.cc67_curve_history,
+            notify_ai_cb=True,
+        )
 
     def schedule_phrase(
         self,
@@ -400,7 +438,8 @@ class DisklavierStageOutputLayer:
         use_vdl_lookahead: bool = True,
     ) -> int:
         """
-        Schedule a list of note/CC events with physical strike lag lookahead offset_ms(pitch, velocity).
+        Schedule a list of note & dual-pedal (CC#64 Damper / CC#67 Una Corda) events
+        with physical strike lag lookahead offset_ms(pitch, velocity).
         """
         base = base_sound_ts if base_sound_ts is not None else (time.perf_counter() + 0.16)
         count = 0
@@ -409,16 +448,31 @@ class DisklavierStageOutputLayer:
                 pitch = int(ev.get("pitch", ev.get("note", 0)) or 0)
                 t_off = float(ev.get("time_offset_s", ev.get("onset_s", 0.0)))
                 if pitch <= 0:
-                    if "pedal_cc64" in ev or ev.get("control") == 64:
+                    ctrl = ev.get("control")
+                    if "pedal_cc64" in ev or ctrl == 64:
                         val = int(ev.get("pedal_cc64", ev.get("val", ev.get("value", 0))))
                         self._seq += 1
                         heapq.heappush(
                             self._heap,
                             _QueuedOutputEvent(
-                                send_ts=max(time.perf_counter(), base + t_off - 0.030),
+                                send_ts=max(time.perf_counter(), base + t_off - 0.020),
                                 priority=2,
                                 seq=self._seq,
                                 kind="cc64",
+                                cc_value=val,
+                            ),
+                        )
+                        count += 1
+                    elif "pedal_cc67" in ev or ctrl == 67:
+                        val = int(ev.get("pedal_cc67", ev.get("val", ev.get("value", 0))))
+                        self._seq += 1
+                        heapq.heappush(
+                            self._heap,
+                            _QueuedOutputEvent(
+                                send_ts=max(time.perf_counter(), base + t_off - 0.025),
+                                priority=2,
+                                seq=self._seq,
+                                kind="cc67",
                                 cc_value=val,
                             ),
                         )
@@ -470,6 +524,7 @@ class DisklavierStageOutputLayer:
             active_copy = list(self.active_notes.items())
             self.active_notes.clear()
             self.current_pedal_val = 0
+            self.current_una_corda_val = 0
 
             # Note-off all active notes immediately
             for p, info in active_copy:
@@ -483,10 +538,10 @@ class DisklavierStageOutputLayer:
                     }
                 )
 
-            # Send CC#64=0, CC#123=0 (All Notes Off), CC#120=0 (All Sound Off) on channel 0..15 if hardware connected, else channel 0
+            # Send CC#64=0, CC#67=0, CC#123=0 (All Notes Off), CC#120=0 (All Sound Off)
             channels = range(16) if self.outport is not None else (0,)
             for ch in channels:
-                for cc in (64, 123, 120):
+                for cc in (64, 67, 123, 120):
                     self._emit_raw(
                         {
                             "type": "control_change",
@@ -525,6 +580,8 @@ class DisklavierStageOutputLayer:
                         )
                     elif ev.kind == "cc64":
                         self.send_pedal_cc64(ev.cc_value, ev.channel, now=now)
+                    elif ev.kind == "cc67":
+                        self.send_pedal_cc67(ev.cc_value, ev.channel, now=now)
                     now = time.perf_counter()
 
                 if now - last_ttl >= 0.1:
@@ -558,6 +615,9 @@ class DisklavierStageOutputLayer:
                 panic_count=self.panic_count,
                 last_panic_elapsed_ms=self.last_panic_elapsed_ms,
                 pedal_cc64=self.current_pedal_val,
+                pedal_cc67=self.current_una_corda_val,
+                pedal_cc64_curve=list(self.cc64_curve_history)[-24:],
+                pedal_cc67_curve=list(self.cc67_curve_history)[-24:],
                 rolling_10s_energy=round(self.rolling_energy, 1),
                 energy_limit_10s=self.MAX_10S_ENERGY,
                 total_notes_sent=self.total_notes_sent,

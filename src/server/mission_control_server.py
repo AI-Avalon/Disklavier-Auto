@@ -49,6 +49,7 @@ import src.session.accompaniment_engine as acc_mod
 from src.midi.imslp_library import build_and_persist_imslp_library
 from src.obsidian import ObsidianMusicalBrain
 from src.safety.disklavier_safety_guard import DisklavierSafetyGuard
+from src.stage.favicon import PIANO_FAVICON_ICO_BYTES
 from src.telemetry.telemetry_store import (
     BASE_DIR,
     TELEMETRY_DIR,
@@ -336,6 +337,11 @@ class ModeSwitchReq(BaseModel):
 # -------------------------------------------------------------------------
 # REST API Endpoints
 # -------------------------------------------------------------------------
+@app.get("/favicon.ico", include_in_schema=False)
+async def serve_favicon() -> Response:
+    return Response(content=PIANO_FAVICON_ICO_BYTES, media_type="image/x-icon")
+
+
 @app.get("/", response_class=HTMLResponse)
 async def serve_index(request: Request) -> HTMLResponse:
     ui_path = BASE_DIR / "src" / "ui" / "index.html"

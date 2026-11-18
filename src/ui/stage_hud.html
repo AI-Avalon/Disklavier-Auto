@@ -3,6 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <link rel="icon" href="/favicon.ico" />
   <title>Disklavier-Auto — 舞台プロセス可視化システム</title>
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
@@ -53,25 +54,27 @@
       display: flex;
       align-items: center;
       justify-content: space-between;
-      gap: 10px;
-      padding: 7px 18px;
+      gap: 6px;
+      padding: 6px 12px;
       border-bottom: 1px solid var(--rule-hairline);
       background: #08080A;
       font-family: var(--font-mono);
-      font-size: 11px;
-      letter-spacing: 0.04em;
+      font-size: 10.5px;
+      letter-spacing: 0.02em;
+      flex-wrap: wrap;
     }
 
     .demo-deck {
       display: flex;
       align-items: center;
       justify-content: space-between;
-      gap: 12px;
-      padding: 5px 18px;
+      gap: 8px;
+      padding: 4px 12px;
       border-bottom: 1px solid #191815;
       background: #070709;
       font-family: var(--font-mono);
-      font-size: 10.5px;
+      font-size: 10px;
+      flex-wrap: wrap;
     }
 
     .hidden-bar {
@@ -81,17 +84,18 @@
     .bar-group {
       display: flex;
       align-items: center;
-      gap: 7px;
+      gap: 5px;
       flex-wrap: nowrap;
+      min-width: 0;
     }
 
     .brand-mark {
       font-family: var(--font-serif);
-      font-size: 13px;
+      font-size: 12px;
       font-weight: 600;
-      letter-spacing: 0.08em;
+      letter-spacing: 0.06em;
       color: var(--ink-adopted);
-      margin-right: 6px;
+      margin-right: 4px;
       white-space: nowrap;
     }
 
@@ -99,9 +103,9 @@
       background: transparent;
       color: var(--ink-rejected);
       border: 1px solid var(--rule-hairline);
-      padding: 4px 9px;
+      padding: 3px 7px;
       font-family: var(--font-mono);
-      font-size: 10.5px;
+      font-size: 10px;
       cursor: pointer;
       transition: border-color 0.15s ease, color 0.15s ease;
       white-space: nowrap;
@@ -171,10 +175,10 @@
       background: var(--bg-stage);
       color: var(--ink-adopted);
       border: 1px solid var(--rule-hairline);
-      padding: 4px 9px;
+      padding: 3px 7px;
       font-family: var(--font-serif);
-      font-size: 11.5px;
-      width: 195px;
+      font-size: 11px;
+      width: 155px;
       outline: none;
     }
 
@@ -189,21 +193,23 @@
     /* 4-Zone Stage Grid */
     .stage-grid {
       display: grid;
-      grid-template-columns: 1fr 1.18fr;
-      grid-template-rows: 22% 55% 23%;
+      grid-template-columns: minmax(0, 1fr) minmax(0, 1.18fr);
+      grid-template-rows: 23% 54% 23%;
       gap: 1px;
       background: var(--rule-hairline);
       width: 100%;
       height: 100%;
       min-height: 0;
+      min-width: 0;
     }
 
     .zone {
       background: var(--bg-stage);
-      padding: 10px 18px;
+      padding: 10px 14px;
       display: flex;
       flex-direction: column;
       min-height: 0;
+      min-width: 0;
       overflow: hidden;
     }
 
@@ -328,14 +334,17 @@
     /* Zone B: Thought Trace */
     .monologue-box {
       font-family: var(--font-serif);
-      font-size: clamp(15px, 1.45vw, 20px);
+      font-size: clamp(14px, 1.25vw, 17px);
       line-height: 1.5;
       color: var(--ink-adopted);
-      letter-spacing: 0.02em;
+      letter-spacing: 0.015em;
       margin-bottom: 6px;
       flex: 1;
       display: flex;
       align-items: center;
+      overflow-wrap: anywhere;
+      word-break: break-word;
+      max-width: 100%;
     }
 
     .intent-strip {
@@ -357,20 +366,23 @@
     /* Zone C: Public Pruning Arena (4 Candidates) */
     .arena-grid {
       display: grid;
-      grid-template-columns: repeat(2, 1fr);
-      grid-template-rows: repeat(2, 1fr);
-      gap: 9px;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      grid-template-rows: repeat(2, minmax(0, 1fr));
+      gap: 8px;
       flex: 1;
       min-height: 0;
+      min-width: 0;
     }
 
     .cand-card {
       border: 1px solid var(--rule-hairline);
       background: var(--bg-panel);
-      padding: 7px 11px;
+      padding: 7px 10px;
       display: flex;
       flex-direction: column;
       min-height: 0;
+      min-width: 0;
+      overflow: hidden;
       transition: border-color 0.22s ease, opacity 0.22s ease;
     }
 
@@ -394,14 +406,19 @@
       justify-content: space-between;
       align-items: baseline;
       margin-bottom: 3px;
-      gap: 8px;
+      gap: 6px;
+      min-width: 0;
     }
 
     .cand-title {
       font-family: var(--font-serif);
-      font-size: 12.5px;
+      font-size: 11.5px;
       color: var(--ink-adopted);
       white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      min-width: 0;
+      flex: 1;
     }
 
     .cand-card.rejected .cand-title {
@@ -410,13 +427,14 @@
 
     .cand-badge {
       font-family: var(--font-mono);
-      font-size: 10px;
-      padding: 1px 6px;
+      font-size: 9.5px;
+      padding: 1px 5px;
       border: 1px solid transparent;
       white-space: nowrap;
       overflow: hidden;
       text-overflow: ellipsis;
-      max-width: 68%;
+      max-width: 56%;
+      flex-shrink: 0;
     }
 
     .cand-badge.adopted {
@@ -434,15 +452,63 @@
       border-color: #2A2823;
     }
 
-    /* 4-Axis Evaluation Bars */
+    /* 6-Axis MusicalityCritic Evaluation Bars */
     .axes-strip {
       display: grid;
-      grid-template-columns: repeat(4, 1fr);
-      gap: 6px;
+      grid-template-columns: repeat(6, 1fr);
+      gap: 5px;
       margin-bottom: 4px;
       font-family: var(--font-mono);
-      font-size: 9.5px;
+      font-size: 9px;
       color: var(--ink-rejected);
+    }
+
+    .pedal-dual-row {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 8px;
+      margin-top: 3px;
+    }
+
+    .pedal-gauge-wrap {
+      display: flex;
+      flex-direction: column;
+      gap: 2px;
+      font-family: var(--font-mono);
+      font-size: 9.5px;
+    }
+
+    .pedal-track {
+      position: relative;
+      width: 100%;
+      height: 5px;
+      background: #141311;
+      border: 1px solid var(--rule-hairline);
+    }
+
+    .pedal-half-zone {
+      position: absolute;
+      left: 28%;
+      width: 35%;
+      top: 0;
+      bottom: 0;
+      border-left: 1px dashed #4E4A42;
+      border-right: 1px dashed #4E4A42;
+      pointer-events: none;
+    }
+
+    .pedal-fill-64 {
+      height: 100%;
+      width: 0%;
+      background: var(--ink-adopted);
+      transition: width 0.08s linear;
+    }
+
+    .pedal-fill-67 {
+      height: 100%;
+      width: 0%;
+      background: var(--ink-vermilion);
+      transition: width 0.08s linear;
     }
 
     .axis-item {
@@ -515,30 +581,30 @@
           type="text"
           id="mc-input"
           class="mc-input"
-          placeholder="口頭指示 (例: 短調で対位法に)"
+          placeholder="口頭指示 (例: 対位法＋踏み替え)"
           onkeydown="if (event.key === 'Enter') sendDirective()"
         />
-        <button class="btn" onclick="sendDirective()">指示送信</button>
-        <button class="btn" id="btn-calibrate" onclick="runCalibration()">30秒物理遅延＆NLMS校正</button>
-        <button class="btn" onclick="triggerTurn()">次ターン実行</button>
+        <button class="btn" onclick="sendDirective()">送信</button>
+        <button class="btn" id="btn-calibrate" onclick="runCalibration()">VDL/NLMS校正</button>
+        <button class="btn" onclick="triggerTurn()">次ターン</button>
         <button class="btn" onclick="resetGraph()">記憶初期化</button>
-        <button class="btn panic-btn" onclick="triggerPanic()">PANIC: ALL NOTES OFF</button>
+        <button class="btn panic-btn" onclick="triggerPanic()">PANIC: 全音停止</button>
       </div>
     </header>
 
     <!-- Demo Control Deck (Visible in Demo Mode, Hidden in Production or F10) -->
     <section class="demo-deck" id="demo-deck">
       <div class="bar-group">
-        <span style="color: var(--ink-rejected);">DEMO DECK / 曲想切替:</span>
-        <button class="btn" id="preset-baroque_counterpoint" onclick="applyPreset('baroque_counterpoint')">バロック対位法</button>
-        <button class="btn active" id="preset-impressionist_modal" onclick="applyPreset('impressionist_modal')">印象派風</button>
-        <button class="btn" id="preset-contemporary_provoke" onclick="applyPreset('contemporary_provoke')">現代音楽的挑発</button>
-        <button class="btn" id="preset-serene_chorale" onclick="applyPreset('serene_chorale')">静謐なコラール</button>
+        <span style="color: var(--ink-rejected);">DEMO DECK / 対話シナリオ:</span>
+        <button class="btn active" id="preset-cello_low_legato" onclick="applyPreset('cello_low_legato')">チェロ低音レガート問いかけ</button>
+        <button class="btn" id="preset-cello_leap_spiccato" onclick="applyPreset('cello_leap_spiccato')">チェロ跳躍スピッカート</button>
+        <button class="btn" id="preset-piano_chromatic_cadence" onclick="applyPreset('piano_chromatic_cadence')">ピアノ半音階終止</button>
+        <button class="btn" id="preset-overtone_mud_clearance" onclick="applyPreset('overtone_mud_clearance')">中音域倍音クリアランス検証</button>
       </div>
       <div class="bar-group">
-        <span style="color: var(--ink-rejected);">ダメ出しMC注入:</span>
-        <button class="btn" onclick="injectDirective('中音域が濁るので高音へ逃がしペダルは浅く')">中音濁り修正</button>
-        <button class="btn" onclick="injectDirective('ドライで鋭いスタッカート対位法で返して')">ドライ対位法</button>
+        <span style="color: var(--ink-rejected);">リハーサル指示注入:</span>
+        <button class="btn" onclick="injectDirective('中音濁りを避け、両手開離和音とペダル踏み替えで返して')">開離ボイシング＋踏み替え</button>
+        <button class="btn" onclick="injectDirective('ウナ・コルダを深く踏み、反行対位法と休符の呼吸で返して')">ウナ・コルダ弱奏＋反行</button>
         <button class="btn active" id="btn-audition" onclick="toggleAuditionPreview()">試奏オーディション音: ON</button>
       </div>
     </section>
@@ -548,7 +614,7 @@
       <!-- Zone A: Top-Left Perception & Breath -->
       <section class="zone zone-a" aria-label="Zone A 知覚と呼吸">
         <div class="zone-header">
-          <span class="zone-title">Zone A — 知覚と呼吸 (L1 Perception)</span>
+          <span class="zone-title">Zone A — 知覚・呼吸・両ペダル (L1 / L5 Dual Pedal)</span>
           <span class="zone-meta" id="meta-perception">MODE B / VRAM 0.0 GB</span>
         </div>
         <div class="zone-a-body">
@@ -570,12 +636,18 @@
                 <span class="metric-val" id="val-nlms">0.0 ct / 0.0 dB</span>
               </div>
               <div class="metric-row">
-                <span class="metric-key">ECHO LEDGER</span>
-                <span class="metric-val" id="val-echo">0 suppressed</span>
+                <span class="metric-key">ECHO / VOICES</span>
+                <span class="metric-val" id="val-voices">0 / 30 (0 sup)</span>
               </div>
-              <div class="metric-row">
-                <span class="metric-key">VOICES / 30 CAP</span>
-                <span class="metric-val" id="val-voices">0 / 30 (CC64: 0)</span>
+              <div class="pedal-dual-row">
+                <div class="pedal-gauge-wrap">
+                  <div class="axis-label"><span class="metric-key">UNA CORDA (L/67)</span><span class="metric-val" id="val-cc67">0</span></div>
+                  <div class="pedal-track"><div class="pedal-fill-67" id="fill-cc67"></div></div>
+                </div>
+                <div class="pedal-gauge-wrap">
+                  <div class="axis-label"><span class="metric-key">DAMPER (R/64)</span><span class="metric-val" id="val-cc64">0</span></div>
+                  <div class="pedal-track"><div class="pedal-half-zone"></div><div class="pedal-fill-64" id="fill-cc64"></div></div>
+                </div>
               </div>
             </div>
             <div>
@@ -594,32 +666,32 @@
       <!-- Zone B: Top-Right Performer Thought Trace -->
       <section class="zone zone-b" aria-label="Zone B 実演家の思考トレース">
         <div class="zone-header">
-          <span class="zone-title">Zone B — 実演家の思考トレース (L2 Factual Trace)</span>
+          <span class="zone-title">Zone B — 実演家の思考トレース (L2 TokenEconomizer &times; LLM)</span>
           <span class="zone-meta" id="meta-intent">RULE / OLLAMA</span>
         </div>
         <div class="monologue-box" id="monologue-text">
-          チェロまたはピアノの第一音を待機中。実音検出後に4案の採点と棄却理由を記録する。
+          チェロまたはピアノの第一音を待機中。実音検出後に4案の6軸音楽性監査と棄却理由を記録する。
         </div>
         <div class="intent-strip">
           <span>STANCE: <strong id="val-stance">listen</strong></span>
-          <span>TONALITY: <strong id="val-tonal">D_dorian</strong></span>
-          <span>CHORDS: <strong id="val-chords">Dm7 - G7sus4 - Am7</strong></span>
-          <span>REGISTER: <strong id="val-register">MIDI 38..60</strong></span>
-          <span>PEDAL: <strong id="val-pedal">half_clear</strong></span>
+          <span>TONAL: <strong id="val-tonal">D_dorian</strong></span>
+          <span>CHORDS: <strong id="val-chords">Dm9 - Gm11 - A7sus4</strong></span>
+          <span>VOICING: <strong id="val-voicing">LH_P5 + RH_9th</strong></span>
+          <span>ECONOMIZER: <strong id="val-econ">0% saved</strong></span>
         </div>
       </section>
 
       <!-- Zone C: Center Main Public Pruning & Score Arena -->
       <section class="zone zone-c" aria-label="Zone C 公開推敲・楽譜アリーナ">
         <div class="zone-header">
-          <span class="zone-title">Zone C — 公開推敲・楽譜アリーナ (Staggered Audition &times; 4-Axis Scoring)</span>
+          <span class="zone-title">Zone C — 公開推敲・大譜表アリーナ (MusicalityCritic 6-Axis &times; Dual-Pedal Curves)</span>
           <span class="timeline-banner" id="timeline-banner">待機中 — 人間フレーズ終止後に4候補を順次推敲する</span>
           <span class="zone-meta" id="meta-arena">TURN #0 | CORPUS: builtin_seed_dictionary</span>
         </div>
         <div class="arena-grid" id="arena-grid">
           <article class="cand-card" id="card-A">
             <div class="cand-head">
-              <span class="cand-title" id="title-A">Candidate A — 対位法的反行案</span>
+              <span class="cand-title" id="title-A">Candidate A — 対位法反行・両手開離ボイシング案</span>
               <span class="cand-badge sketching" id="badge-A">待機</span>
             </div>
             <div class="axes-strip" id="axes-A"></div>
@@ -627,7 +699,7 @@
           </article>
           <article class="cand-card" id="card-B">
             <div class="cand-head">
-              <span class="cand-title" id="title-B">Candidate B — コーパス文脈照合案</span>
+              <span class="cand-title" id="title-B">Candidate B — 掛留解決・立体内声ポリフォニー案</span>
               <span class="cand-badge sketching" id="badge-B">待機</span>
             </div>
             <div class="axes-strip" id="axes-B"></div>
@@ -635,7 +707,7 @@
           </article>
           <article class="cand-card" id="card-C">
             <div class="cand-head">
-              <span class="cand-title" id="title-C">Candidate C — 旋法声部連結案</span>
+              <span class="cand-title" id="title-C">Candidate C — 高次倍音回避・透明色彩ボイシング案</span>
               <span class="cand-badge sketching" id="badge-C">待機</span>
             </div>
             <div class="axes-strip" id="axes-C"></div>
@@ -643,7 +715,7 @@
           </article>
           <article class="cand-card" id="card-D">
             <div class="cand-head">
-              <span class="cand-title" id="title-D">Candidate D — 中音域密集対照案</span>
+              <span class="cand-title" id="title-D">Candidate D — 対照検証案（音階単調・低中域混濁）</span>
               <span class="cand-badge sketching" id="badge-D">待機</span>
             </div>
             <div class="axes-strip" id="axes-D"></div>
@@ -712,19 +784,22 @@
       return 440.0 * Math.pow(2.0, (midi - 69) / 12.0);
     }
 
-    function playMonitorPianoNote(midi, velocity, delayS, durationS, mutedAudition = false) {
+    function playMonitorPianoNote(midi, velocity, delayS, durationS, mutedAudition = false, cc64Val = 64, cc67Val = 40) {
       if (!audioEnabled) return;
       ensureAudioContext();
       if (!audioCtx || audioCtx.state !== "running") return;
 
       const now = audioCtx.currentTime + Math.max(0, delayS);
-      const dur = Math.max(0.10, Math.min(2.0, durationS || 0.4));
+      const damperExtra = (cc64Val / 127.0) * 0.45;
+      const dur = Math.max(0.10, Math.min(2.4, (durationS || 0.4) + damperExtra));
+      const veil = Math.max(0, Math.min(1, cc67Val / 127.0));
       const gainVal = mutedAudition
         ? 0.032
-        : Math.max(0.025, Math.min(0.18, (velocity / 112.0) * 0.14));
+        : Math.max(0.025, Math.min(0.18, (velocity / 112.0) * 0.14 * (1.0 - 0.16 * veil)));
 
       const osc1 = audioCtx.createOscillator();
       const osc2 = audioCtx.createOscillator();
+      const filter = audioCtx.createBiquadFilter();
       const gain = audioCtx.createGain();
       const f0 = midiToFreq(midi);
 
@@ -733,12 +808,17 @@
       osc2.type = "sine";
       osc2.frequency.setValueAtTime(f0 * 2.0, now);
 
+      // Una Corda (CC#67) attenuates upper partials continuously via lowpass filter
+      filter.type = "lowpass";
+      filter.frequency.setValueAtTime(4800 - veil * 3100, now);
+
       gain.gain.setValueAtTime(0.0001, now);
-      gain.gain.linearRampToValueAtTime(gainVal, now + 0.008);
+      gain.gain.linearRampToValueAtTime(gainVal, now + 0.006 + veil * 0.014);
       gain.gain.exponentialRampToValueAtTime(0.0008, now + dur + (mutedAudition ? 0.08 : 0.22));
 
-      osc1.connect(gain);
-      osc2.connect(gain);
+      osc1.connect(filter);
+      osc2.connect(filter);
+      filter.connect(gain);
       gain.connect(audioCtx.destination);
       osc1.start(now);
       osc2.start(now);
@@ -867,6 +947,33 @@
         ctx.stroke();
       }
 
+      // Draw continuous Dual-Pedal reference waveforms behind/below F0 trajectory
+      const cands = (state && state.candidates) || [];
+      const adopted = cands.find((c) => c.adopted) || cands[0];
+      if (adopted) {
+        const c64 = adopted.pedal_cc64_curve || [];
+        const c67 = adopted.pedal_cc67_curve || [];
+        const drawPedalTrail = (pts, strokeStyle, dashed) => {
+          if (pts.length < 2) return;
+          const tMax = Math.max(1.2, ...pts.map((p) => Number(p.t || 0)));
+          ctx.save();
+          ctx.strokeStyle = strokeStyle;
+          ctx.lineWidth = 1.1;
+          if (dashed) ctx.setLineDash([3, 3]);
+          ctx.beginPath();
+          pts.forEach((pt, idx) => {
+            const x = 8 + (Number(pt.t || 0) / tMax) * (w - 16);
+            const y = h - 6 - (Number(pt.val || 0) / 127.0) * (h * 0.34);
+            if (idx === 0) ctx.moveTo(x, y);
+            else ctx.lineTo(x, y);
+          });
+          ctx.stroke();
+          ctx.restore();
+        };
+        drawPedalTrail(c64, "rgba(234, 230, 223, 0.42)", false);
+        drawPedalTrail(c67, "rgba(200, 62, 43, 0.58)", true);
+      }
+
       const hist = (state && state.perception && state.perception.pitch_history) || [];
       if (hist.length >= 2) {
         ctx.strokeStyle = COLOR_ADOPTED;
@@ -874,9 +981,9 @@
         ctx.beginPath();
         hist.forEach((hz, idx) => {
           const midi = hz > 20 ? 69 + 12 * Math.log2(hz / 440) : 55;
-          const normY = 1 - Math.max(0.08, Math.min(0.92, (midi - 36) / 48));
+          const normY = 1 - Math.max(0.10, Math.min(0.88, (midi - 36) / 48));
           const x = (idx / Math.max(1, hist.length - 1)) * (w - 16) + 8;
-          const y = normY * (h - 14) + 7;
+          const y = normY * (h - 16) + 8;
           if (idx === 0) ctx.moveTo(x, y);
           else ctx.lineTo(x, y);
         });
@@ -884,10 +991,10 @@
 
         const lastHz = hist[hist.length - 1];
         const lastMidi = lastHz > 20 ? 69 + 12 * Math.log2(lastHz / 440) : 55;
-        const ny = 1 - Math.max(0.08, Math.min(0.92, (lastMidi - 36) / 48));
+        const ny = 1 - Math.max(0.10, Math.min(0.88, (lastMidi - 36) / 48));
         ctx.fillStyle = COLOR_VERMILION;
         ctx.beginPath();
-        ctx.arc(w - 8, ny * (h - 14) + 7, 3.2, 0, Math.PI * 2);
+        ctx.arc(w - 8, ny * (h - 16) + 8, 3.2, 0, Math.PI * 2);
         ctx.fill();
       } else {
         ctx.fillStyle = COLOR_REJECTED;
@@ -907,10 +1014,12 @@
       if (!el) return;
       const pct = cand.subscores_pct || {};
       const items = [
-        ["和声適合", pct.harmonic_fit ?? 0],
-        ["声部連結", pct.counterpoint_quality ?? 0],
-        ["倍音回避", pct.overtone_clearance ?? 0],
-        ["密度整合", pct.rhythm_density ?? 0],
+        ["反音階", pct.anti_scale ?? 0],
+        ["両手和声", pct.polyphony_harmony ?? 0],
+        ["声部進行", pct.voice_leading ?? 0],
+        ["倍音回避", pct.spectral_clearance ?? 0],
+        ["律動呼吸", pct.rhythmic_diversity ?? 0],
+        ["両ペダル", pct.dual_pedal ?? 0],
       ];
       el.innerHTML = items
         .map(
@@ -964,60 +1073,72 @@
       ctx.fillStyle = "#0A0A0D";
       ctx.fillRect(0, 0, w, h);
 
-      const trebleBaseY = h * 0.42;
-      const bassBaseY = h * 0.79;
-      const stepPx = Math.max(2.5, Math.min(3.8, h * 0.032));
+      // Reserve bottom 24px for Dual-Pedal continuous envelope curves
+      const staffBottom = h - 24;
+      const trebleBaseY = staffBottom * 0.42;
+      const bassBaseY = staffBottom * 0.85;
+      const stepPx = Math.max(2.2, Math.min(3.4, staffBottom * 0.032));
       const staffColor = isAdoptedLocked ? "#3E3C37" : "#24221E";
 
+      // Grand staff brace bar
       ctx.strokeStyle = staffColor;
+      ctx.lineWidth = 1.2;
+      ctx.beginPath();
+      ctx.moveTo(24, trebleBaseY - stepPx * 8);
+      ctx.lineTo(24, bassBaseY);
+      ctx.stroke();
+
       ctx.lineWidth = 1;
       for (const baseY of [trebleBaseY, bassBaseY]) {
         for (let line = 0; line < 5; line++) {
           const y = Math.round(baseY - line * stepPx * 2) + 0.5;
           ctx.beginPath();
-          ctx.moveTo(26, y);
+          ctx.moveTo(24, y);
           ctx.lineTo(w - 10, y);
           ctx.stroke();
         }
       }
 
       ctx.fillStyle = isAdoptedLocked ? COLOR_ADOPTED : COLOR_REJECTED;
-      ctx.font = "italic 15px 'Cormorant Garamond', Georgia, serif";
+      ctx.font = "italic 14px 'Cormorant Garamond', Georgia, serif";
       ctx.fillText("G", 8, trebleBaseY - stepPx * 2);
       ctx.fillText("F", 8, bassBaseY - stepPx * 3);
 
       const noteEvs = (cand.events || []).filter((e) => Number(e.pitch || 0) > 0);
-      if (noteEvs.length === 0) return;
-
-      const maxT = Math.max(1.2, ...noteEvs.map((e) => Number(e.onset_s || 0) + Number(e.duration_s || 0.2)));
-      const drawW = w - 56;
+      const maxT = Math.max(
+        1.2,
+        ...(noteEvs.length ? noteEvs.map((e) => Number(e.onset_s || 0) + Number(e.duration_s || 0.2)) : [1.2])
+      );
+      const drawW = w - 54;
       const probSet = new Set(cand.problem_note_indices || []);
 
-      // Playhead bar on locked adopted staff during Step 3
       if (isAdoptedLocked && animPhaseState.playheadFrac > 0 && animPhaseState.playheadFrac <= 1.05) {
-        const px = 36 + Math.min(1.0, animPhaseState.playheadFrac) * drawW;
+        const px = 34 + Math.min(1.0, animPhaseState.playheadFrac) * drawW;
         ctx.strokeStyle = "rgba(200, 62, 43, 0.55)";
         ctx.lineWidth = 1.5;
         ctx.beginPath();
-        ctx.moveTo(px, 6);
-        ctx.lineTo(px, h - 6);
+        ctx.moveTo(px, 4);
+        ctx.lineTo(px, h - 4);
         ctx.stroke();
       }
 
       noteEvs.forEach((ev, idx) => {
         const pitch = Number(ev.pitch);
         const onset = Number(ev.onset_s || 0);
-        const x = 36 + (onset / maxT) * drawW;
+        const hand = String(ev.hand || "").toLowerCase();
+        const x = 34 + (onset / maxT) * drawW;
 
         let y;
-        if (pitch >= 60) {
+        const isBass = hand === "lh" || (hand !== "rh" && pitch < 60);
+        if (!isBass) {
           const stepOffset = midiToStaffStep(pitch) - 2;
           y = trebleBaseY - stepOffset * stepPx;
+          y = Math.max(6, Math.min(trebleBaseY + stepPx * 4, y));
         } else {
           const stepOffset = midiToStaffStep(pitch) - (-10);
           y = bassBaseY - stepOffset * stepPx;
+          y = Math.max(trebleBaseY + stepPx * 5, Math.min(staffBottom - 4, y));
         }
-        y = Math.max(8, Math.min(h - 8, y));
 
         const isProblemNote = !cand.adopted && (isActiveReject || isRejectedVisible) && probSet.has(idx);
         const fracNote = onset / maxT;
@@ -1033,33 +1154,72 @@
 
         ctx.fillStyle = noteColor;
         ctx.strokeStyle = noteColor;
-        ctx.lineWidth = (isSounding || isProblemNote) ? 1.8 : 1.1;
+        ctx.lineWidth = (isSounding || isProblemNote) ? 1.7 : 1.0;
 
         ctx.beginPath();
-        ctx.ellipse(x, y, 4.3, 3.0, -0.25, 0, Math.PI * 2);
+        ctx.ellipse(x, y, 4.0, 2.8, -0.25, 0, Math.PI * 2);
         ctx.fill();
 
-        const stemUp = pitch < 71;
+        const stemUp = isBass ? pitch < 48 : pitch < 71;
         ctx.beginPath();
-        ctx.moveTo(x + (stemUp ? 4 : -4), y);
-        ctx.lineTo(x + (stemUp ? 4 : -4), y + (stemUp ? -15 : 15));
+        ctx.moveTo(x + (stemUp ? 3.8 : -3.8), y);
+        ctx.lineTo(x + (stemUp ? 3.8 : -3.8), y + (stemUp ? -13 : 13));
         ctx.stroke();
 
-        // Vermilion ring around conflicting note during Step 2 audition
         if (isProblemNote) {
           ctx.beginPath();
-          ctx.arc(x, y, 7.5, 0, Math.PI * 2);
+          ctx.arc(x, y, 7.2, 0, Math.PI * 2);
           ctx.stroke();
         }
       });
+
+      // Dual-Pedal Continuous Envelope Strip at bottom of each candidate staff
+      const pedTop = staffBottom + 3;
+      const pedBot = h - 3;
+      const pedH = Math.max(12, pedBot - pedTop);
+      ctx.strokeStyle = "#1E1D19";
+      ctx.lineWidth = 1;
+      ctx.beginPath();
+      ctx.moveTo(24, pedTop);
+      ctx.lineTo(w - 10, pedTop);
+      ctx.stroke();
+
+      // Half-pedal sweet spot band (CC#64: 35..80)
+      ctx.fillStyle = "rgba(234, 230, 223, 0.04)";
+      ctx.fillRect(34, pedTop + pedH * 0.37, drawW, pedH * 0.35);
+
+      const c64 = cand.pedal_cc64_curve || [];
+      const c67 = cand.pedal_cc67_curve || [];
+      const drawCurve = (pts, color, dashed) => {
+        if (pts.length < 2) return;
+        ctx.save();
+        ctx.strokeStyle = color;
+        ctx.lineWidth = dashed ? 1.1 : 1.35;
+        if (dashed) ctx.setLineDash([3, 2]);
+        ctx.beginPath();
+        pts.forEach((pt, idx) => {
+          const x = 34 + Math.min(1.0, Number(pt.t || 0) / maxT) * drawW;
+          const y = pedBot - (Number(pt.val || 0) / 127.0) * (pedH - 2);
+          if (idx === 0) ctx.moveTo(x, y);
+          else ctx.lineTo(x, y);
+        });
+        ctx.stroke();
+        ctx.restore();
+      };
+      drawCurve(c64, isAdoptedLocked ? COLOR_ADOPTED : "#6E6B63", false);
+      drawCurve(c67, isAdoptedLocked ? COLOR_VERMILION : "#683028", true);
+
+      ctx.fillStyle = "#5A5852";
+      ctx.font = "8.5px 'JetBrains Mono', monospace";
+      ctx.fillText("64/67", 4, pedBot - 3);
 
       // Red strikethrough line across rejected staff once discarded
       if (!cand.adopted && isRejectedVisible && !isActiveReject) {
         ctx.strokeStyle = "rgba(200, 62, 43, 0.72)";
         ctx.lineWidth = 1.6;
         ctx.beginPath();
-        ctx.moveTo(28, h * 0.25);
-        ctx.lineTo(w - 14, h * 0.82);
+        ctx.moveTo(28, staffBottom * 0.22);
+        ctx.lineTo(w - 14, staffBottom * 0.88);
         ctx.stroke();
       }
     }
@@ -1169,6 +1329,10 @@
             animPhaseState.turnStartPerf = performance.now();
             const adopted = cands.find((c) => c.adopted);
             if (adopted && audioEnabled) {
+              const cc64Pts = adopted.pedal_cc64_curve || [];
+              const cc67Pts = adopted.pedal_cc67_curve || [];
+              const c64Peak = cc64Pts.length ? Math.max(...cc64Pts.map((x) => Number(x.val || 0))) : 64;
+              const c67Peak = cc67Pts.length ? Math.max(...cc67Pts.map((x) => Number(x.val || 0))) : 40;
               (adopted.events || []).forEach((ev) => {
                 if (Number(ev.pitch || 0) > 0) {
                   playMonitorPianoNote(
@@ -1176,7 +1340,9 @@
                     Number(ev.velocity || 64),
                     Number(ev.onset_s || 0),
                     Number(ev.duration_s || 0.35),
-                    false
+                    false,
+                    c64Peak,
+                    c67Peak
                   );
                 }
               });
@@ -1250,12 +1416,20 @@
       document.getElementById("val-art").textContent = p.articulation || "legato";
       document.getElementById("val-nlms").textContent =
         `${Number(p.vibrato_cents || 0).toFixed(1)} ct / ${Number(p.nlms_erle_db || 0).toFixed(1)} dB`;
-      document.getElementById("val-echo").textContent = `${p.echo_suppressed_count || 0} suppressed`;
 
       const out = state.output || {};
       const vEl = document.getElementById("val-voices");
-      vEl.textContent = `${out.active_voices || 0} / ${out.hard_limit || 30} (CC64: ${out.pedal_cc64 || 0})`;
+      vEl.textContent = `${out.active_voices || 0} / ${out.hard_limit || 30} (${p.echo_suppressed_count || 0} sup)`;
       vEl.classList.toggle("vermilion", (out.active_voices || 0) >= 25);
+
+      const candsList = state.candidates || [];
+      const adoptedCand = candsList.find((c) => c.adopted);
+      const cc64Live = out.pedal_cc64 || p.pedal_cc64 || (adoptedCand && adoptedCand.pedal_cc64_curve && adoptedCand.pedal_cc64_curve[2] ? adoptedCand.pedal_cc64_curve[2].val : 0);
+      const cc67Live = out.pedal_cc67 || p.pedal_cc67 || (adoptedCand && adoptedCand.pedal_cc67_curve && adoptedCand.pedal_cc67_curve[1] ? adoptedCand.pedal_cc67_curve[1].val : 0);
+      document.getElementById("val-cc64").textContent = `${cc64Live}`;
+      document.getElementById("val-cc67").textContent = `${cc67Live}`;
+      document.getElementById("fill-cc64").style.width = `${Math.round((cc64Live / 127) * 100)}%`;
+      document.getElementById("fill-cc67").style.width = `${Math.round((cc67Live / 127) * 100)}%`;
 
       const breathPct = Math.round(Number(p.breath_gauge || 0) * 100);
       document.getElementById("val-breath").textContent = `${breathPct}%`;
@@ -1271,15 +1445,26 @@
       document.getElementById("monologue-text").textContent = intent.monologue_ja || "";
       document.getElementById("val-stance").textContent = intent.interaction_stance || "listen";
       document.getElementById("val-tonal").textContent = intent.tonal_center || "D_dorian";
-      document.getElementById("val-chords").textContent = (intent.chord_progression || []).join(" - ");
-      const reg = intent.register_range || [38, 60];
-      document.getElementById("val-register").textContent = `MIDI ${reg[0]}..${reg[1]}`;
-      document.getElementById("val-pedal").textContent = intent.pedal_strategy || "half_clear";
+      document.getElementById("val-chords").textContent = (intent.chord_progression || []).slice(0, 4).join(" - ");
+      document.getElementById("val-voicing").textContent = (intent.voicing_structure || "LH_P5 + RH_9th").slice(0, 28);
+      const econ = intent.token_economizer || {};
+      document.getElementById("val-econ").textContent = `${Number(econ.compression_ratio_pct || 0).toFixed(1)}% saved`;
 
       // Zone C
       document.getElementById("meta-arena").textContent =
         `TURN #${state.turn_id || 0} | CORPUS: ${state.corpus_source || "builtin"} | PORT: ${out.connected_port || "Virtual"}`;
-      if (state.turn_id > 0 && state.turn_id !== lastAnimatedTurnId) {
+      const urlParams = new URLSearchParams(window.location.search);
+      if (state.turn_id > 0 && urlParams.get("snapshot") === "1") {
+        lastAnimatedTurnId = state.turn_id;
+        animPhaseState.turnId = state.turn_id;
+        animPhaseState.rejectedIds = new Set(candsList.filter((c) => !c.adopted).map((c) => c.candidate_id));
+        animPhaseState.activeRejectId = "";
+        animPhaseState.adoptedLocked = true;
+        animPhaseState.playheadFrac = 0.56;
+        const adoptedId = adoptedCand ? adoptedCand.candidate_id : "A";
+        document.getElementById("timeline-banner").textContent =
+          `Step 3 確定実演: 案${adoptedId}をロックし両手ポリフォニー＋連続両ペダルを実演中`;
+      } else if (state.turn_id > 0 && state.turn_id !== lastAnimatedTurnId) {
         lastAnimatedTurnId = state.turn_id;
         startStaggeredTurnAnimation(state);
       }

@@ -2,9 +2,11 @@
 chcp 65001 >nul
 setlocal EnableDelayedExpansion
 cd /d "%~dp0"
+set "PYTHONIOENCODING=utf-8"
+set "PYTHONUTF8=1"
 
 echo ============================================================================
-echo  Disklavier-Auto 初回セットアップ ＆ 環境診断 (Windows 11 / RTX 3070)
+echo  Disklavier-Auto Environment Setup (Windows 11 / RTX 3070)
 echo ============================================================================
 
 set "UV_EXE="
@@ -14,14 +16,14 @@ if not defined UV_EXE if exist "%LOCALAPPDATA%\hermes\tools\uv-0.13.5-win32-x64\
 )
 
 if not exist ".venv\Scripts\python.exe" (
-    echo [1/4] Python 仮想環境 (.venv) を作成しています...
+    echo [1/4] Creating Python virtual environment .venv ...
     if defined UV_EXE (
         "%UV_EXE%" venv .venv --python 3.12
     ) else (
         python -m venv .venv
     )
     if errorlevel 1 (
-        echo [ERROR] .venv の作成に失敗しました。Python 3.11+ または uv を確認してください。
+        echo [ERROR] Failed to create .venv. Check Python 3.11+ or uv.
         pause
         exit /b 1
     )
@@ -29,12 +31,15 @@ if not exist ".venv\Scripts\python.exe" (
 
 call "%~dp0.venv\Scripts\activate.bat"
 if errorlevel 1 (
-    echo [ERROR] .venv の有効化に失敗しました。
+    echo [ERROR] Failed to activate .venv.
     pause
     exit /b 1
 )
 
-echo [2/4] 必須パッケージをインストールしています...
+set "PYTHONPATH=%~dp0"
+python -m src.stage.cli_banner setup_header
+python -m src.stage.cli_banner setup_step2
+
 if defined UV_EXE (
     "%UV_EXE%" pip install --python "%~dp0.venv\Scripts\python.exe" fastapi uvicorn websockets pydantic mido python-rtmidi sounddevice soundfile numpy scipy matplotlib requests symusic miditok ollama pyyaml httpx pytest ruff
     if errorlevel 1 goto :pip_fail
@@ -48,21 +53,19 @@ if defined UV_EXE (
     if errorlevel 1 goto :pip_fail
 )
 
-echo [3/4] MIDI / オーディオ / Ollama / MIDIコーパス環境を自動スキャンしています...
-set "PYTHONPATH=%~dp0"
+python -m src.stage.cli_banner setup_step3
 python -m src.stage.config_scanner
 if errorlevel 1 (
-    echo [ERROR] 環境スキャン (config_scanner) でエラーが発生しました。
+    echo [ERROR] Environment scan failed in src.stage.config_scanner.
     pause
     exit /b 1
 )
 
-echo [4/4] セットアップ完了。config.local.yaml を生成しました。
-echo ============================================================================
+python -m src.stage.cli_banner setup_step4
 pause
 exit /b 0
 
 :pip_fail
-echo [ERROR] パッケージのインストールに失敗しました。ネットワーク接続または依存関係を確認してください。
+echo [ERROR] Package installation failed. Check network connection or dependencies.
 pause
 exit /b 1

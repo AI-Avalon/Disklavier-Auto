@@ -1,14 +1,15 @@
 """
-Comprehensive Verification Suite for Disklavier-Auto Stage Process Visualization System.
+Comprehensive Verification Suite for Disklavier-Auto Rebuilt Stage System.
 
 Verifies:
-1. 30-Note Crash Prevention & <10ms Panic under 200 notes/sec burst.
-2. Mode A Self-Strike Echo Loop Suppression (100% AI echo rejection, human pass-through).
-3. Mode B Cello Acoustic Perception & 2ch NLMS Echo Cancellation (F0 + staccato/legato).
-4. MusicalLogicValidator (rejecting musical contradictions & AI poetry clichés),
-   4-Axis Scoring, Problem Note Coordinates, and Anti-AI Slop check.
-5. Python Direct Audio Synthesizer (RMS > 0.01, 0 NaN/Inf, 0 clipping),
-   Staggered Deliberation Timeline, Production vs Demo isolation, and WebSocket streaming.
+1. 30-Note Crash Prevention, Dual-Pedal (CC#64/CC#67) Thinning, & <10ms Panic.
+2. Mode A Self-Strike Echo Suppression & AI CC#67 Turn-Detector Isolation.
+3. Mode B Cello Acoustic Perception & 2ch NLMS Echo Cancellation.
+4. TokenEconomizer, MusicalityCritic (Anti-Scale / Two-Hand Polyphony / 6-Axis Audit),
+   and MusicalLogicValidator (blocking contradictions, AI poetry, and "〇〇風" presets).
+5. Dual-Pedal Physical Audio Simulation (CC#64 damper tail + CC#67 upper partial veil),
+   /favicon.ico 200 OK (Stage & Mission Control), pure-ASCII .bat integrity,
+   Obsidian Stage Turn Logging, and Production vs Demo isolation.
 """
 
 from __future__ import annotations
@@ -42,10 +43,12 @@ from src.stage.layer3_candidate_composer import (
 )
 from src.stage.layer5_disklavier_output import DisklavierStageOutputLayer
 from src.stage.local_audio_synth import LocalAudioSynthesizer
+from src.stage.musicality_critic import MusicalityCritic
 from src.stage.stage_server import create_stage_app
+from src.stage.token_economizer import TokenEconomizer
 
 
-def test_1_thirty_voice_crash_prevention_and_fast_panic() -> None:
+def test_1_thirty_voice_crash_prevention_dual_pedal_and_fast_panic() -> None:
     emitted: List[Dict[str, Any]] = []
     out = DisklavierStageOutputLayer(
         port_name=None,
@@ -69,26 +72,35 @@ def test_1_thirty_voice_crash_prevention_and_fast_panic() -> None:
         note_ons = [e for e in emitted if e["type"] == "note_on"]
         assert all(18 <= e["velocity"] <= 112 for e in note_ons)
 
+        # CC#64 Damper & CC#67 Una Corda thinning (40ms interval, +/-3 deadband)
         assert out.send_pedal_cc64(50, now=200.000) is True
         assert out.send_pedal_cc64(52, now=200.050) is False
         assert out.send_pedal_cc64(64, now=200.015) is False
         assert out.send_pedal_cc64(64, now=200.060) is True
+
+        assert out.send_pedal_cc67(72, now=200.000) is True
+        assert out.send_pedal_cc67(73, now=200.050) is False
+        assert out.send_pedal_cc67(96, now=200.015) is False
+        assert out.send_pedal_cc67(96, now=200.060) is True
+        assert out.get_telemetry().pedal_cc67 == 96
 
         emitted.clear()
         panic_res = out.panic()
         assert panic_res["active_voices"] == 0
         assert panic_res["elapsed_ms"] < 10.0
         ccs = {(e["control"], e["value"]) for e in emitted if e["type"] == "control_change"}
-        assert (64, 0) in ccs and (123, 0) in ccs and (120, 0) in ccs
+        assert (64, 0) in ccs and (67, 0) in ccs and (123, 0) in ccs and (120, 0) in ccs
     finally:
         out.close()
 
 
-def test_2_mode_a_self_echo_loop_suppression() -> None:
+def test_2_mode_a_self_echo_and_una_corda_isolation() -> None:
     ledger = EchoSuppressionLedger(min_lag_s=0.0, max_lag_s=0.250)
+    detector = TurnTakingDetector(silence_threshold_s=0.6)
     out = DisklavierStageOutputLayer(
         port_name=None,
         echo_register_cb=ledger.register_sent_note,
+        ai_cc67_cb=detector.notify_ai_cc67,
         start_worker=False,
     )
     try:
@@ -96,6 +108,12 @@ def test_2_mode_a_self_echo_loop_suppression() -> None:
         ai_pitches = [48, 55, 60, 64, 72]
         for idx, p in enumerate(ai_pitches):
             assert out.send_note_on_immediate(pitch=p, velocity=74, duration_s=0.5, now=t0 + idx * 0.01)
+
+        # AI driving CC#67 must NOT trigger human turn-taking cue immediately
+        assert out.send_pedal_cc67(95, now=t0 + 0.05) is True
+        detector.push_cc(67, 95, t0 + 0.08)
+        _, ready_ai_cc, _ = detector.evaluate(now=t0 + 0.12)
+        assert ready_ai_cc is False
 
         for idx, p in enumerate(ai_pitches):
             echo_recv = ledger.filter_incoming_note(pitch=p, velocity=70, recv_ts=t0 + idx * 0.01 + 0.045)
@@ -110,7 +128,6 @@ def test_2_mode_a_self_echo_loop_suppression() -> None:
         assert [n["pitch"] for n in extracted] == human_pitches
         assert ledger.suppressed_count == len(ai_pitches)
 
-        detector = TurnTakingDetector(silence_threshold_s=0.6)
         detector.push_note(62, 10.0)
         detector.push_note(65, 10.25)
         detector.push_note(69, 10.55)
@@ -164,14 +181,27 @@ def test_3_mode_b_cello_nlms_pitch_and_articulation() -> None:
     assert snap_stacc.articulation == "staccato"
 
 
-def test_4_multiple_candidates_pruning_and_musical_logic_validator() -> None:
+def test_4_musicality_critic_token_economizer_and_logic_validator() -> None:
+    # 1. Verify MusicalityCritic explicitly catches and rejects monotonous scale runs & monophony
+    scale_only = [
+        {"pitch": 60 + iv, "onset_s": i * 0.25, "duration_s": 0.24, "velocity": 70, "hand": "rh"}
+        for i, iv in enumerate([0, 2, 4, 5, 7, 9])
+    ]
+    scale_audit = MusicalityCritic.audit_candidate(scale_only, [{"pitch": 50}])
+    assert scale_audit.passed is False
+    assert "monotonic_scale_run" in scale_audit.failures
+    assert "monophonic_single_hand" in scale_audit.failures
+    assert "単調な順次音階" in scale_audit.rejection_tag_ja
+
+    # 2. Verify Zero-Config fallback, TokenEconomizer, and 6-axis polyphonic composition
     with tempfile.TemporaryDirectory() as empty_dir:
         loader = ZeroConfigCorpusLoader(search_dirs=[Path(empty_dir)])
         assert loader.loaded_file_count == 0
         assert loader.source_mode == "builtin_seed_dictionary"
         assert len(loader.patterns) >= 4
 
-        engine = MusicalIntentEngine(use_ollama=False)
+        econ = TokenEconomizer()
+        engine = MusicalIntentEngine(use_ollama=False, economizer=econ)
         composer = MultipleCandidateComposer(corpus_loader=loader)
 
         snap = PerceptionSnapshot(
@@ -189,68 +219,123 @@ def test_4_multiple_candidates_pruning_and_musical_logic_validator() -> None:
             {"pitch": 51, "onset_s": 0.2, "duration_s": 0.12, "velocity": 78},
             {"pitch": 53, "onset_s": 0.4, "duration_s": 0.14, "velocity": 82},
         ]
-        hints = VerbalDirectiveRecognizer().parse_directive("対位法で挑発して、ペダルを浅く、乾いた音で")
-        policy = engine.decide_policy(snap, human_notes, hints)
+        hints = VerbalDirectiveRecognizer().parse_directive("対位法で挑発して、ペダル踏み替えと浅いタッチで")
+        policy = engine.decide_policy(snap, human_notes, hints, corpus_refs=loader.patterns[:3])
+        assert econ.last_stats["compression_ratio_pct"] > 0.0
+
         turn = composer.compose_turn(human_notes, policy, human_mode="cello")
-        intent = engine.finalize_deliberation_monologue(snap, human_notes, policy, turn, hints)
+        intent = engine.finalize_deliberation_monologue(
+            snap, human_notes, policy, turn, hints, corpus_refs=turn.corpus_refs_used
+        )
 
         adopted = [c for c in turn.candidates if c.adopted]
         rejected = [c for c in turn.candidates if not c.adopted]
         assert len(adopted) == 1
         assert len(rejected) == 3
 
-        # Verify 4-axis percentages and exact problem note coordinates
+        win = adopted[0]
+        assert win.audit_passed is True
+        win_notes = [e for e in win.events if int(e.get("pitch", 0)) > 0]
+        assert any(e.get("hand") == "lh" or int(e["pitch"]) < 60 for e in win_notes)
+        assert any(e.get("hand") == "rh" or int(e["pitch"]) >= 60 for e in win_notes)
+        assert len(win.pedal_cc64_curve) >= 3 and len(win.pedal_cc67_curve) >= 2
+
+        expected_axes = {
+            "anti_scale",
+            "polyphony_harmony",
+            "voice_leading",
+            "spectral_clearance",
+            "rhythmic_diversity",
+            "dual_pedal",
+        }
         for rej in rejected:
-            assert rej.rejection_tag_ja.startswith("[棄却:")
+            assert rej.rejection_tag_ja.startswith("[× 棄却:")
             assert len(rej.problem_note_indices) >= 1
-            assert set(rej.subscores_pct.keys()) == {
-                "harmonic_fit",
-                "counterpoint_quality",
-                "overtone_clearance",
-                "rhythm_density",
-            }
+            assert set(rej.subscores_pct.keys()) == expected_axes
             assert "hud_badge_ja" in rej.rejection_detail
 
-        # Verify MusicalLogicValidator passes factual post-L3 memo and blocks contradictions/clichés
         ok, errs = MusicalLogicValidator.check_text(
             intent.monologue_ja,
             perception=snap,
-            adopted_candidate=adopted[0],
+            adopted_candidate=win,
             rejected_candidates=rejected,
         )
         assert ok, f"Factual memo failed validation ({errs}): {intent.monologue_ja}"
-        assert 40 <= len(intent.monologue_ja) <= 75
+        assert 45 <= len(intent.monologue_ja) <= 75
         for bad in BANNED_PHRASES:
             assert bad not in intent.monologue_ja
 
-        # Ensure known contradiction & AI poetry samples are strictly rejected
+        # Ensure contradictions, AI poetry, and "〇〇風" labels are strictly rejected
         contradictions = [
             "チェロのD3が半音階で上昇し、長三度の空虚五度で緊張を高める。ダンパー操作で余白を残して解決を待つ。",
             "チェロの演奏が素晴らしい！あなたの魂に共鳴しました🎹✨",
             "スタッカートのレガートを無音の強奏でペダル無しの深い残響にするだろう。",
+            "チェロD3のレガートを検出。案Dを捨て、ドビュッシー風かつバロック風の案Aをペダルで置く。",
         ]
         for bad_txt in contradictions:
             assert not validate_chamber_music_monologue(bad_txt), f"Failed to block NG text: {bad_txt}"
             sanitized = sanitize_monologue_ja(bad_txt, intent.monologue_ja, perception=snap)
             assert validate_chamber_music_monologue(sanitized, perception=snap)
 
-        # Verify Stage HUD adheres to Editorial Dark palette
+        # Verify Stage HUD editorial palette & zero "〇〇風" buttons
         hud_html = Path("src/ui/stage_hud.html").read_text(encoding="utf-8")
         assert "#060608" in hud_html and "#EAE6DF" in hud_html and "#5A5852" in hud_html and "#C83E2B" in hud_html
-        for forbidden in ("AI THINKING", "#00ffff", "#ff00ff", "素晴らしい演奏", "共鳴しました"):
+        assert "UNA CORDA" in hud_html and "DAMPER" in hud_html
+        for forbidden in ("AI THINKING", "#00ffff", "#ff00ff", "素晴らしい演奏", "共鳴しました", "印象派風", "バロック風"):
             assert forbidden not in hud_html
 
 
-def test_5_demo_audio_synth_staggered_timeline_and_production_separation() -> None:
-    # 1. Verify LocalAudioSynthesizer RMS > 0.01, zero NaN/Inf, zero clipping
+def test_5_dual_pedal_physics_favicon_ascii_bats_and_production_separation() -> None:
+    # 1. Verify Dual-Pedal Physical Acoustic Simulation in LocalAudioSynthesizer
     synth = LocalAudioSynthesizer(enabled=True)
+    dry_evs = [
+        {"pitch": 60, "onset_s": 0.0, "duration_s": 0.25, "velocity": 80, "hand": "rh"},
+        {"pitch": 0, "onset_s": 0.0, "control": 64, "value": 0},
+        {"pitch": 0, "onset_s": 0.0, "control": 67, "value": 0},
+    ]
+    damper_evs = [
+        {"pitch": 60, "onset_s": 0.0, "duration_s": 0.25, "velocity": 80, "hand": "rh"},
+        {"pitch": 0, "onset_s": 0.0, "control": 64, "value": 115},
+        {"pitch": 0, "onset_s": 0.9, "control": 64, "value": 115},
+        {"pitch": 0, "onset_s": 0.0, "control": 67, "value": 0},
+    ]
+    una_evs = [
+        {"pitch": 60, "onset_s": 0.0, "duration_s": 0.25, "velocity": 80, "hand": "rh"},
+        {"pitch": 0, "onset_s": 0.0, "control": 64, "value": 0},
+        {"pitch": 0, "onset_s": 0.0, "control": 67, "value": 122},
+    ]
+    w_dry = synth.synthesize_phrase_events(dry_evs)
+    w_damper = synth.synthesize_phrase_events(damper_evs)
+    w_una = synth.synthesize_phrase_events(una_evs)
+
+    # Tail energy after note-off (0.45s..0.95s) must be significantly larger with Damper CC#64=115
+    sr = 44100
+    tail_dry = float(np.mean(w_dry[int(0.45 * sr) : int(0.95 * sr)] ** 2))
+    tail_damper = float(np.mean(w_damper[int(0.45 * sr) : int(0.95 * sr)] ** 2))
+    assert tail_damper > tail_dry * 3.0, f"Damper sustain too weak: {tail_damper} vs {tail_dry}"
+
+    # Una Corda CC#67=122 must attenuate upper partials (> 900 Hz) relative to dry strike
+    spec_dry = np.abs(np.fft.rfft(w_dry[: int(0.25 * sr)]))
+    spec_una = np.abs(np.fft.rfft(w_una[: int(0.25 * sr)]))
+    freqs = np.fft.rfftfreq(int(0.25 * sr), d=1.0 / sr)
+    hi_mask = freqs > 900.0
+    assert float(np.sum(spec_una[hi_mask])) < float(np.sum(spec_dry[hi_mask])) * 0.70
+
+    # Full turn audio check
     human_notes = [
         {"pitch": 50, "onset_s": 0.0, "duration_s": 0.25, "velocity": 74},
         {"pitch": 53, "onset_s": 0.28, "duration_s": 0.25, "velocity": 78},
     ]
     adopted_evs = [
-        {"pitch": 69, "onset_s": 0.0, "duration_s": 0.35, "velocity": 72},
-        {"pitch": 74, "onset_s": 0.32, "duration_s": 0.45, "velocity": 76},
+        {"pitch": 38, "onset_s": 0.0, "duration_s": 0.85, "velocity": 62, "hand": "lh"},
+        {"pitch": 69, "onset_s": 0.0, "duration_s": 0.35, "velocity": 72, "hand": "rh"},
+        {"pitch": 74, "onset_s": 0.32, "duration_s": 0.45, "velocity": 76, "hand": "rh"},
+        {"pitch": 0, "onset_s": 0.0, "control": 64, "value": 0},
+        {"pitch": 0, "onset_s": 0.08, "control": 64, "value": 92},
+        {"pitch": 0, "onset_s": 0.40, "control": 64, "value": 0},
+        {"pitch": 0, "onset_s": 0.48, "control": 64, "value": 84},
+        {"pitch": 0, "onset_s": 0.0, "control": 67, "value": 24},
+        {"pitch": 0, "onset_s": 0.30, "control": 67, "value": 86},
     ]
     rej_dummy = [{"events": [{"pitch": 51, "onset_s": 0.0, "duration_s": 0.2, "velocity": 70}]}]
     audio_stats = synth.play_turn_audio(
@@ -264,9 +349,19 @@ def test_5_demo_audio_synth_staggered_timeline_and_production_separation() -> No
     assert audio_stats["rms"] > 0.01
     assert audio_stats["has_nan_or_inf"] is False
     assert audio_stats["clipping_count"] == 0
+    assert audio_stats["pedal_cc64_active"] is True
+    assert audio_stats["pedal_cc67_active"] is True
+    assert audio_stats["repedal_count"] >= 1
+    assert audio_stats["una_corda_veil_db"] < 0.0
     synth.close()
 
-    # 2. Verify Demo Mode (monitor_audio=True, staggered timeline, WS streaming, presets)
+    # 2. Verify all .bat launchers contain pure ASCII only (prevents Windows chcp 65001 char doubling)
+    for bat_name in ("setup_environment.bat", "start_stage.bat", "run_demo_showcase.bat", "run_self_check.bat"):
+        bat_text = Path(bat_name).read_text(encoding="utf-8")
+        non_ascii = [ch for ch in bat_text if ord(ch) > 127]
+        assert not non_ascii, f"{bat_name} contains non-ASCII characters: {non_ascii[:5]}"
+
+    # 3. Verify Stage Server + /favicon.ico 200 OK + Scenario Execution + Obsidian Note Archival
     with tempfile.TemporaryDirectory() as empty_dir:
         app = create_stage_app(
             demo_enabled=True,
@@ -279,6 +374,8 @@ def test_5_demo_audio_synth_staggered_timeline_and_production_separation() -> No
         )
         with TestClient(app) as client:
             assert client.get("/").status_code == 200
+            fav = client.get("/favicon.ico")
+            assert fav.status_code == 200 and len(fav.content) > 100
             assert client.post("/api/stage/reset").json()["motif_nodes"] == 0
 
             with client.websocket_connect("/ws/stage") as ws:
@@ -286,12 +383,13 @@ def test_5_demo_audio_synth_staggered_timeline_and_production_separation() -> No
                 assert init_st["monitor_audio"] is True
                 assert init_st["production_mode"] is False
 
-                r_preset = client.post("/api/stage/preset", json={"preset": "baroque_counterpoint"})
+                r_preset = client.post("/api/stage/preset", json={"preset": "cello_leap_spiccato"})
                 assert r_preset.status_code == 200
                 st1 = r_preset.json()["state"]
                 assert len(st1["deliberation_timeline"]) >= 5
                 assert st1["audio_status"]["rms"] > 0.01
                 assert len(st1["candidates"]) == 4
+                assert st1.get("obsidian_last_note", "").endswith(".md")
 
                 assert client.post("/api/stage/mode", json={"mode": "piano"}).status_code == 200
                 r_turn2 = client.post("/api/stage/turn")
@@ -306,10 +404,10 @@ def test_5_demo_audio_synth_staggered_timeline_and_production_separation() -> No
                 r_panic = client.post("/api/stage/panic")
                 assert r_panic.status_code == 200 and r_panic.json()["active_voices"] == 0
 
-    # 3. Verify Production Mode strictly disables virtual demo and python monitor synth
+    # 4. Verify Production Mode strictly disables virtual demo and python monitor synth
     with tempfile.TemporaryDirectory() as empty_dir:
         prod_app = create_stage_app(
-            demo_enabled=True,  # Must be overridden to False in production mode
+            demo_enabled=True,
             monitor_audio=True,
             production_mode=True,
             corpus_dirs=[Path(empty_dir)],

@@ -4,11 +4,13 @@
     "GiantMIDI-Piano / Maestro / ATEPP Empirical Expressive Distributions"
   ],
   "hardware_acceleration": {
-    "arch": "arm64",
-    "cpu_cores": 8,
+    "arch": "AMD64",
+    "cpu_cores": 20,
     "worker_count": 8,
+    "cuda_available": false,
+    "gpu_name": null,
     "mps_available": false,
-    "vector_backend": "Apple Accelerate SIMD (NumPy Vectorized)"
+    "vector_backend": "Multi-Core SIMD (NumPy Vectorized)"
   },
   "lineages": {
     "tchaikovsky": {

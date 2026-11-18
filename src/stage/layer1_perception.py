@@ -156,6 +156,10 @@ class TurnTakingDetector:
         self.last_note_ts: float = 0.0
         self.prev_pedal_cc64: int = 0
         self.last_turn_emit_ts: float = 0.0
+        self.last_ai_cc67_ts: float = -999.0
+
+    def notify_ai_cc67(self, ts: Optional[float] = None) -> None:
+        self.last_ai_cc67_ts = ts if ts is not None else time.perf_counter()
 
     def push_note(self, pitch: int, ts: float) -> None:
         self.note_times.append(ts)
@@ -167,11 +171,17 @@ class TurnTakingDetector:
             self.prev_pedal_cc64 = self.pedal_cc64
             self.pedal_cc64 = int(value)
         elif control == 67:
-            self.pedal_cc67 = int(value)
+            # Ignore AI's own physical Una Corda drive window
+            if (ts - self.last_ai_cc67_ts) >= 0.35:
+                self.pedal_cc67 = int(value)
 
     def evaluate(self, now: Optional[float] = None) -> Tuple[float, bool, str]:
         ts = now if now is not None else time.perf_counter()
-        if self.pedal_cc67 >= 64 and (ts - self.last_turn_emit_ts) >= 0.4:
+        if (
+            self.pedal_cc67 >= 64
+            and (ts - self.last_ai_cc67_ts) >= 0.35
+            and (ts - self.last_turn_emit_ts) >= 0.4
+        ):
             self.last_turn_emit_ts = ts
             return 1.0, True, "una_corda_cue"
 
@@ -578,7 +588,7 @@ class VerbalDirectiveRecognizer:
 
         if any(k in clean for k in ("短調", "マイナー", "暗く", "悲劇")):
             hints["tonal_hint"] = "D_minor"
-        elif any(k in clean for k in ("ドリア", "旋法", "古風")):
+        elif any(k in clean for k in ("ドリア", "旋法", "教会旋法")):
             hints["tonal_hint"] = "D_dorian"
         elif any(k in clean for k in ("長調", "明るく", "解放")):
             hints["tonal_hint"] = "F_major"
@@ -586,13 +596,13 @@ class VerbalDirectiveRecognizer:
         if any(k in clean for k in ("乾いた", "浅く", "ドライ", "スタッカート", "キレ")):
             hints["pedal_hint"] = "dry"
             hints["density_delta"] = -0.15
-        elif any(k in clean for k in ("深く", "残響", "ペダル", "豊か")):
+        elif any(k in clean for k in ("深く", "残響", "ペダル", "豊か", "踏み替え", "ウナ")):
             hints["pedal_hint"] = "resonant"
 
         if any(k in clean for k in ("挑発", "緊張", "激しく", "攻め")):
             hints["stance_hint"] = "provoke"
             hints["density_delta"] = 0.20
-        elif any(k in clean for k in ("対位法", "カノン", "バッハ", "ポリフォニー")):
+        elif any(k in clean for k in ("対位法", "カノン", "反行", "ポリフォニー")):
             hints["stance_hint"] = "counterpoint"
         elif any(k in clean for k in ("終止", "締め", "落ち着", "コーダ")):
             hints["stance_hint"] = "cadence"

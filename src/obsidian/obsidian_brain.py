@@ -81,6 +81,7 @@ class ObsidianMusicalBrain:
         self.hof_dir = self.vault_dir / "02_Hall_of_Fame_Performances"
         self.hof_midi_dir = self.hof_dir / "midi"
         self.discovery_dir = self.vault_dir / "03_Harmonic_Discoveries"
+        self.stage_logs_dir = self.vault_dir / "05_Stage_Session_Logs"
         self.directives_path = self.vault_dir / "04_Human_Directives.md"
 
         self.on_directives_changed = on_directives_changed
@@ -112,6 +113,7 @@ class ObsidianMusicalBrain:
             self.hof_dir,
             self.hof_midi_dir,
             self.discovery_dir,
+            self.stage_logs_dir,
         ):
             d.mkdir(parents=True, exist_ok=True)
 
@@ -648,7 +650,7 @@ class ObsidianMusicalBrain:
                 {
                     "rank": idx + 1,
                     "generation": rec.get("generation", idx + 1),
-                    "score": rec.get("score", 85.0),
+                    "score": rec.get("total_score", rec.get("score", 85.0)),
                     "note_id": rec.get("note_id", ""),
                     "title": rec.get("title", f"Generation {rec.get('generation', idx + 1)}"),
                     "midi_rel": rec.get("midi_rel"),
@@ -660,6 +662,87 @@ class ObsidianMusicalBrain:
             "phylogenetic_tree": phylo_tree,
             "recent_notes_full": recent_notes_full,
         }
+
+    def record_stage_dialogue_turn(
+        self,
+        turn_id: int,
+        mode: str,
+        human_summary: Dict[str, Any],
+        token_stats: Dict[str, Any],
+        intent_data: Dict[str, Any],
+        candidates: List[Dict[str, Any]],
+        pedal_summary: Dict[str, Any],
+        session_tag: str = "stage",
+    ) -> Path:
+        """
+        Records a live stage / demo turn (human phrase analysis, TokenEconomizer metrics,
+        MusicalityCritic 6-axis scores & rejection reasons, adopted two-hand voicing,
+        dual pedal curves, and performer memo) to `obsidian_vault/05_Stage_Session_Logs/`.
+        """
+        with self._lock:
+            self.stage_logs_dir.mkdir(parents=True, exist_ok=True)
+            safe_tag = _slugify(session_tag)
+            note_id = f"StageTurn_{safe_tag}_{int(turn_id):04d}_{mode}"
+            md_path = self.stage_logs_dir / f"{note_id}.md"
+
+            adopted = next((c for c in candidates if c.get("adopted")), None)
+            adopted_id = adopted.get("candidate_id", "A") if adopted else "A"
+            adopted_score = float(adopted.get("total_score", 0.0)) if adopted else 0.0
+
+            cand_rows = []
+            for c in candidates:
+                cid = c.get("candidate_id", "?")
+                status = "ADOPTED" if c.get("adopted") else "REJECTED"
+                reason = (c.get("rejection_detail") or {}).get("reason_core_ja") or c.get("rejection_tag_ja") or "-"
+                cand_rows.append(
+                    f"| {cid} | {status} | {float(c.get('total_score', 0.0)):.1f} | "
+                    f"{c.get('pitch_range_str', '--')} | {reason} |"
+                )
+
+            cand_table = "\n".join(cand_rows) or "| - | - | 0.0 | -- | - |"
+            monologue = str(intent_data.get("monologue_ja", ""))
+            chords = " -> ".join(intent_data.get("chord_progression", []) or [])
+            ratio = float(token_stats.get("compression_ratio_pct", 0.0))
+
+            md_content = (
+                "---\n"
+                "type: stage_dialogue_turn\n"
+                f"turn_id: {int(turn_id)}\n"
+                f"mode: \"{mode}\"\n"
+                f"adopted_candidate: \"{adopted_id}\"\n"
+                f"total_score: {adopted_score:.2f}\n"
+                f"token_compression_pct: {ratio:.1f}\n"
+                "tags: [stage-session, musicality-critic, dual-pedal]\n"
+                "---\n\n"
+                f"# Stage Turn #{int(turn_id)} ({mode.upper()}) — Adopted Candidate {adopted_id} ({adopted_score:.1f} pts)\n\n"
+                f"## 実演家メモ (L2 Deliberation)\n"
+                f"> {monologue}\n\n"
+                f"## 人間フレーズ知覚 ＆ TokenEconomizer 圧縮\n"
+                f"- **人間音列**: `{human_summary.get('pitches_str', '--')}` ({human_summary.get('articulation', '--')})\n"
+                f"- **和声進行設計**: `{chords}` (`{intent_data.get('tonal_center', '--')}`)\n"
+                f"- **TokenEconomizer 削減率**: `{ratio:.1f}%` (`{token_stats.get('raw_tokens_est', 0)} -> {token_stats.get('compressed_tokens_est', 0)}` tokens)\n"
+                f"- **両ペダル制御**: Damper CC#64 `{pedal_summary.get('cc64_min', 0)}..{pedal_summary.get('cc64_max', 0)}` (repedals={pedal_summary.get('repedal_count', 0)}) / "
+                f"Una Corda CC#67 `{pedal_summary.get('cc67_min', 0)}..{pedal_summary.get('cc67_max', 0)}`\n\n"
+                f"## 4候補 音楽性監査 (MusicalityCritic 6-Axis)\n"
+                f"| Candidate | Status | Score | Register | Rejection Reason |\n"
+                f"|---|---|---:|---|---|\n"
+                f"{cand_table}\n\n"
+                f"## 知識グラフリンク\n"
+                f"- [[Evolution_Overview]]\n"
+                f"- [[04_Human_Directives]]\n"
+            )
+            md_path.write_text(md_content, encoding="utf-8")
+
+            # Prune oldest stage turn logs beyond 48 files to keep vault crisp
+            existing = sorted(self.stage_logs_dir.glob("StageTurn_*.md"), key=lambda p: p.stat().st_mtime)
+            while len(existing) > 48:
+                victim = existing.pop(0)
+                try:
+                    victim.unlink()
+                except OSError:
+                    pass
+            self._graph_version += 1
+            return md_path
 
     def close(self) -> None:
         self._running = False

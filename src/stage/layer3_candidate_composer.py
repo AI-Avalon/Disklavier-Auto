@@ -1,17 +1,19 @@
 r"""
-Layer 3: Multiple Candidate Composition, Scoring & Pruning Layer (symusic + Zero-Config Corpus).
+Layer 3: Polyphonic Two-Hand Composition, Classical Corpus Grammar Indexing,
+MusicalityCritic 6-Axis Auditing & Dual-Pedal Curve Generation.
 
-Core Process Visualization Mechanism:
-- Scans `D:\Disklavier-Data` or `data/midi/` via `symusic` when MIDI files exist.
-- Automatically falls back to built-in Classical Chamber Music & Counterpoint Seed Dictionary
-  (Bach, Fauré, Brahms, Debussy) when zero MIDI files are present (Zero-Config).
-- Per turn, generates 4 distinct candidate phrases (Candidate A/B/C/D) using `symusic`:
-  1. Contrary Counterpoint Variation (clean register separation & open-fifth support)
-  2. Contextual Corpus / Seed Accompaniment Matching (Somax2-style)
-  3. Lightweight Modal Voice-Leading Continuation
-  4. Contrastive Draft exposing middle-register muddiness / minor-2nd clash / repetition
-- Computes 4-axis normalized scores (harmonic fit, counterpoint motion, cello overtone clearance,
-  rhythm density), exact problem note indices, measure/beat coordinates, and acoustic penalty tags.
+Core Architecture:
+- Scans classical MIDI corpora (`D:\Disklavier-Data`, `data/imslp_midi`, `data/human_references`,
+  `data/maestro-v3.0.0`, `data/midi`) via `symusic`, indexing universal acoustic/voicing laws
+  (LH/RH spacing, contrary motion ratio, suspension patterns, agogic rhythm contrast, pedal curves)
+  rather than composer imitation labels.
+- Uses CUDA (RTX 3070) or NumPy vectorized cosine similarity to retrieve top voicing references
+  matching current tension, momentum, and overtone clearance constraints.
+- Generates 4 distinct two-hand polyphonic candidates (Candidate A/B/C/D) using `symusic` +
+  LLM autonomous compositional intent + corpus voicings, with continuous Damper (CC#64) &
+  Una Corda (CC#67) envelopes.
+- Audits all 4 candidates with `MusicalityCritic` (6 pillars), automatically repairing any
+  accidental scale run or monophonic artifact in A/B/C before selecting the winner.
 """
 
 from __future__ import annotations
@@ -20,10 +22,20 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple
 
+import numpy as np
 from symusic import Note, Score, Track
 
 from src.stage.layer1_perception import midi_to_note_name
 from src.stage.layer2_intent_llm import MusicalIntentSchema
+from src.stage.musicality_critic import MusicalityAuditReport, MusicalityCritic
+
+try:
+    import torch
+
+    _HAS_CUDA = bool(torch.cuda.is_available())
+except Exception:  # pragma: no cover
+    torch = None  # type: ignore[assignment]
+    _HAS_CUDA = False
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 
@@ -36,42 +48,59 @@ SCALE_INTERVALS: Dict[str, Tuple[int, List[int]]] = {
     "A_minor": (9, [0, 2, 3, 5, 7, 8, 10]),
 }
 
+# Universal polyphonic voicing & voice-leading seed grammar (no composer-imitation presets)
 BUILTIN_CHAMBER_SEED_DICTIONARY: List[Dict[str, Any]] = [
     {
-        "id": "seed_bach_counterpoint",
-        "composer": "J.S. Bach",
-        "title": "Two-Part Contrapuntal Inversion",
-        "intervals": [0, 7, 5, 4, 2, 0, -1, 0],
-        "rhythm_beats": [0.5, 0.5, 0.5, 0.5, 0.5, 0.5, 0.5, 1.0],
-        "velocities": [66, 70, 72, 74, 70, 68, 64, 62],
-        "pedal_cc64": 24,
+        "id": "grammar_contrary_open_fifth",
+        "title": "Open Fifth Bass & Contrary Soprano Leap Grammar",
+        "lh_intervals": [0, 7, 12, 16],
+        "rh_intervals": [0, 5, 12, 10, 7, 14],
+        "rhythm_beats": [0.75, 0.35, 0.65, 0.45, 0.85, 1.15],
+        "velocities": [58, 68, 76, 72, 64, 56],
+        "voicing_spread": 24,
+        "contrary_ratio": 0.78,
+        "tension_level": 0.42,
+        "momentum": 0.55,
+        "pedal_curve_summary": "delayed_half_repedal",
     },
     {
-        "id": "seed_faure_elegy",
-        "composer": "G. Fauré",
-        "title": "Syncopated Chamber Arpeggio",
-        "intervals": [0, 7, 12, 14, 15, 12, 7, 10],
-        "rhythm_beats": [0.75, 0.5, 0.75, 0.5, 0.75, 0.5, 0.75, 1.0],
-        "velocities": [54, 58, 64, 68, 70, 62, 56, 52],
-        "pedal_cc64": 54,
+        "id": "grammar_suspension_inner_voice",
+        "title": "4-3 / 9-8 Suspension & Tenor Counterline Grammar",
+        "lh_intervals": [0, 7, 14, 15],
+        "rh_intervals": [5, 4, 9, 7, 11, 12],
+        "rhythm_beats": [1.0, 0.5, 0.35, 0.65, 0.5, 1.2],
+        "velocities": [54, 64, 72, 66, 70, 58],
+        "voicing_spread": 21,
+        "contrary_ratio": 0.68,
+        "tension_level": 0.62,
+        "momentum": 0.48,
+        "pedal_curve_summary": "syncopated_repedal_shift",
     },
     {
-        "id": "seed_brahms_op38",
-        "composer": "J. Brahms",
-        "title": "Open Fifth Bass & Tenor Arch",
-        "intervals": [0, 7, 10, 12, 7, 3, 2, 0],
-        "rhythm_beats": [1.0, 0.5, 0.5, 1.0, 0.5, 0.5, 0.5, 1.0],
-        "velocities": [62, 66, 70, 76, 72, 66, 62, 58],
-        "pedal_cc64": 48,
+        "id": "grammar_quartal_spectral_spread",
+        "title": "Mid-Clearance Quartal & Ninth Resonance Grammar",
+        "lh_intervals": [0, 7, 19],
+        "rh_intervals": [0, 5, 10, 14, 17, 12],
+        "rhythm_beats": [0.85, 0.45, 0.75, 0.55, 0.90, 1.25],
+        "velocities": [46, 56, 64, 60, 52, 44],
+        "voicing_spread": 29,
+        "contrary_ratio": 0.62,
+        "tension_level": 0.52,
+        "momentum": 0.42,
+        "pedal_curve_summary": "una_corda_half_pedal",
     },
     {
-        "id": "seed_debussy_planing",
-        "composer": "C. Debussy",
-        "title": "Modal Quartal & Ninth Resonance",
-        "intervals": [0, 5, 10, 14, 12, 7, 5, 2],
-        "rhythm_beats": [0.75, 0.75, 0.75, 1.0, 0.75, 0.75, 0.75, 1.25],
-        "velocities": [46, 52, 58, 62, 58, 52, 48, 42],
-        "pedal_cc64": 62,
+        "id": "grammar_staccato_polyrhythm_exchange",
+        "title": "Crisp Antiphonal Tenth Bass & Dotted Upper Exchange",
+        "lh_intervals": [0, 10, 7, 12],
+        "rh_intervals": [0, -3, 4, -5, 7, 2],
+        "rhythm_beats": [0.30, 0.22, 0.48, 0.24, 0.52, 0.70],
+        "velocities": [66, 78, 70, 84, 74, 64],
+        "voicing_spread": 22,
+        "contrary_ratio": 0.74,
+        "tension_level": 0.68,
+        "momentum": 0.78,
+        "pedal_curve_summary": "short_release_una_corda",
     },
 ]
 
@@ -92,6 +121,9 @@ class CandidatePhrase:
     sample_notes_str: str = "--"
     problem_note_indices: List[int] = field(default_factory=list)
     rejection_detail: Dict[str, Any] = field(default_factory=dict)
+    audit_passed: bool = False
+    pedal_cc64_curve: List[Dict[str, Any]] = field(default_factory=list)
+    pedal_cc67_curve: List[Dict[str, Any]] = field(default_factory=list)
 
 
 @dataclass
@@ -101,38 +133,54 @@ class CompositionTurnResult:
     candidates: List[CandidatePhrase]
     adopted_candidate: CandidatePhrase
     corpus_source: str
+    corpus_refs_used: List[Dict[str, Any]] = field(default_factory=list)
 
 
 class ZeroConfigCorpusLoader:
     """
-    Scans `D:\\Disklavier-Data` and `data/midi/` with `symusic`.
-    Never fails when MIDI directories are empty or missing: falls back immediately
-    to `BUILTIN_CHAMBER_SEED_DICTIONARY`.
+    Indexes classical MIDI corpora via `symusic` into universal acoustic & voicing vectors
+    (LH/RH spacing, contrary motion, tension, momentum, pedal curve) without style-imitation labels.
+    Falls back cleanly to `BUILTIN_CHAMBER_SEED_DICTIONARY` when directories are empty.
     """
 
-    def __init__(self, search_dirs: Optional[List[Path]] = None, max_files: int = 24) -> None:
+    def __init__(self, search_dirs: Optional[List[Path]] = None, max_files: int = 36) -> None:
         self.search_dirs = (
             search_dirs
             if search_dirs is not None
             else [
                 Path(r"D:\Disklavier-Data"),
+                REPO_ROOT / "data" / "imslp_midi",
+                REPO_ROOT / "data" / "human_references",
+                REPO_ROOT / "data" / "maestro-v3.0.0",
                 REPO_ROOT / "data" / "midi",
             ]
         )
         self.max_files = max_files
         self.patterns: List[Dict[str, Any]] = []
+        self.feature_matrix: np.ndarray = np.zeros((0, 4), dtype=np.float32)
         self.source_mode: str = "builtin_seed_dictionary"
         self.loaded_file_count: int = 0
         self.load()
 
     def load(self) -> List[Dict[str, Any]]:
         midi_files: List[Path] = []
+        per_dir_cap = max(6, self.max_files // max(1, len(self.search_dirs)))
         for d in self.search_dirs:
-            if d.exists() and d.is_dir():
-                for ext in ("*.mid", "*.midi"):
-                    midi_files.extend(sorted(d.rglob(ext)))
-                    if len(midi_files) >= self.max_files:
+            if not (d.exists() and d.is_dir()):
+                continue
+            found_dir: List[Path] = []
+            for ext in ("*.mid", "*.midi"):
+                for p in d.rglob(ext):
+                    found_dir.append(p)
+                    if len(found_dir) >= per_dir_cap * 3:
                         break
+                if len(found_dir) >= per_dir_cap * 3:
+                    break
+            found_dir.sort()
+            if len(found_dir) > per_dir_cap:
+                step = max(1, len(found_dir) // per_dir_cap)
+                found_dir = found_dir[::step][:per_dir_cap]
+            midi_files.extend(found_dir)
             if len(midi_files) >= self.max_files:
                 break
 
@@ -141,28 +189,70 @@ class ZeroConfigCorpusLoader:
             try:
                 sc = Score(str(mf))
                 tpq = max(1, int(sc.ticks_per_quarter))
-                all_notes = []
+                all_notes: List[Tuple[int, int, int, int]] = []
                 for tr in sc.tracks:
                     for n in tr.notes:
                         all_notes.append((int(n.time), int(n.pitch), int(n.duration), int(n.velocity)))
                 all_notes.sort(key=lambda x: x[0])
-                if len(all_notes) >= 6:
-                    slice_notes = all_notes[:12]
-                    base_p = slice_notes[0][1]
-                    intervals = [p - base_p for _, p, _, _ in slice_notes]
-                    beats = [max(0.25, min(2.0, round(d / tpq, 2))) for _, _, d, _ in slice_notes]
-                    vels = [max(24, min(105, v)) for _, _, _, v in slice_notes]
-                    extracted.append(
-                        {
-                            "id": f"corpus_{mf.stem}",
-                            "composer": "Corpus MIDI",
-                            "title": mf.stem,
-                            "intervals": intervals[:8],
-                            "rhythm_beats": beats[:8],
-                            "velocities": vels[:8],
-                            "pedal_cc64": 46,
-                        }
+                if len(all_notes) < 8:
+                    continue
+
+                # Focus on an expressive phrase excerpt
+                slice_notes = all_notes[:24]
+                lh_notes = [n for n in slice_notes if n[1] < 60]
+                rh_notes = [n for n in slice_notes if n[1] >= 60]
+                if not lh_notes:
+                    lh_notes = slice_notes[:4]
+                if not rh_notes:
+                    rh_notes = slice_notes[-6:]
+
+                lh_base = lh_notes[0][1]
+                rh_base = rh_notes[0][1]
+                lh_ivs = [int(n[1] - lh_base) for n in lh_notes[:6]]
+                rh_ivs = [int(n[1] - rh_base) for n in rh_notes[:8]]
+                spread = int(
+                    round(
+                        float(np.median([n[1] for n in rh_notes]))
+                        - float(np.median([n[1] for n in lh_notes]))
                     )
+                )
+                spread = max(12, min(42, spread))
+
+                beats = [max(0.20, min(1.8, round(n[2] / tpq, 2))) for n in rh_notes[:6]]
+                vels = [max(24, min(102, n[3])) for n in rh_notes[:6]]
+                avg_dur = float(np.mean(beats)) if beats else 0.5
+                momentum = round(min(1.0, 0.35 / max(0.15, avg_dur)), 2)
+
+                # Measure contrary motion between LH and RH contours
+                k_cmp = min(len(lh_notes), len(rh_notes))
+                contrary = 0
+                for i in range(1, k_cmp):
+                    dl = lh_notes[i][1] - lh_notes[i - 1][1]
+                    dr = rh_notes[i][1] - rh_notes[i - 1][1]
+                    if dl * dr < 0:
+                        contrary += 1
+                contrary_ratio = round(contrary / max(1, k_cmp - 1), 2)
+
+                rh_leaps = [abs(rh_ivs[i] - rh_ivs[i - 1]) for i in range(1, len(rh_ivs))]
+                diss = sum(1 for iv in rh_leaps if iv % 12 in (1, 2, 6, 11))
+                tension = round(min(1.0, 0.25 + 0.14 * diss), 2)
+
+                extracted.append(
+                    {
+                        "id": f"corpus_{mf.stem[:24]}",
+                        "title": f"Structural Voicing Grammar ({mf.parent.name}/{mf.stem[:20]})",
+                        "lh_intervals": lh_ivs[:4],
+                        "rh_intervals": rh_ivs[:6],
+                        "intervals": rh_ivs[:6],
+                        "rhythm_beats": beats,
+                        "velocities": vels,
+                        "voicing_spread": spread,
+                        "contrary_ratio": contrary_ratio,
+                        "tension_level": tension,
+                        "momentum": momentum,
+                        "pedal_curve_summary": "delayed_half_repedal",
+                    }
+                )
             except Exception:
                 continue
 
@@ -174,14 +264,53 @@ class ZeroConfigCorpusLoader:
             self.patterns = list(BUILTIN_CHAMBER_SEED_DICTIONARY)
             self.source_mode = "builtin_seed_dictionary"
             self.loaded_file_count = 0
+
+        feats = [
+            [
+                float(p.get("tension_level", 0.5)),
+                float(p.get("momentum", 0.5)),
+                float(p.get("voicing_spread", 22)) / 42.0,
+                float(p.get("contrary_ratio", 0.6)),
+            ]
+            for p in self.patterns
+        ]
+        self.feature_matrix = np.asarray(feats, dtype=np.float32)
         return self.patterns
+
+    def retrieve_voicing_references(
+        self,
+        tension: float,
+        momentum: float,
+        target_spread_norm: float = 0.62,
+        contrary_pref: float = 0.72,
+        top_k: int = 3,
+    ) -> List[Dict[str, Any]]:
+        if not self.patterns or len(self.feature_matrix) == 0:
+            return list(BUILTIN_CHAMBER_SEED_DICTIONARY[:top_k])
+
+        query = np.array([tension, momentum, target_spread_norm, contrary_pref], dtype=np.float32)
+        if _HAS_CUDA and torch is not None:
+            try:
+                mat_t = torch.tensor(self.feature_matrix, device="cuda")
+                q_t = torch.tensor(query, device="cuda").unsqueeze(0)
+                sims = torch.nn.functional.cosine_similarity(mat_t, q_t, dim=1)
+                idx_top = torch.argsort(sims, descending=True)[:top_k].detach().cpu().tolist()
+                return [self.patterns[i] for i in idx_top]
+            except Exception:
+                pass
+
+        q_norm = np.linalg.norm(query) + 1e-8
+        m_norms = np.linalg.norm(self.feature_matrix, axis=1) + 1e-8
+        sims = (self.feature_matrix @ query) / (m_norms * q_norm)
+        idx_top = np.argsort(sims)[::-1][:top_k]
+        return [self.patterns[int(i)] for i in idx_top]
 
 
 def _quantize_to_scale(pitch: int, tonal_center: str, min_midi: int, max_midi: int) -> int:
     tonic_pc, intervals = SCALE_INTERVALS.get(tonal_center, (2, [0, 2, 3, 5, 7, 9, 10]))
     best_p = max(min_midi, min(max_midi, int(pitch)))
     best_dist = 999
-    for candidate in range(max(21, best_p - 4), min(108, best_p + 5)):
+    for candidate in range(max(21, best_p - 5), min(108, best_p + 6)):
         if candidate < min_midi or candidate > max_midi:
             continue
         pc = (candidate - tonic_pc) % 12
@@ -195,327 +324,409 @@ def _quantize_to_scale(pitch: int, tonal_center: str, min_midi: int, max_midi: i
 
 def _events_to_symusic_score(events: List[Dict[str, Any]], tpq: int = 480) -> Score:
     sc = Score(tpq)
-    tr = Track(name="Candidate")
+    tr_rh = Track(name="Piano_RH")
+    tr_lh = Track(name="Piano_LH")
     for ev in events:
         p = int(ev.get("pitch", ev.get("note", 0)) or 0)
         if p <= 0:
             continue
-        t_tick = max(0, int(round(float(ev["onset_s"]) * tpq * 2)))  # 120 bpm mapping
+        t_tick = max(0, int(round(float(ev["onset_s"]) * tpq * 2)))
         d_tick = max(48, int(round(float(ev["duration_s"]) * tpq * 2)))
         vel = max(18, min(112, int(ev.get("velocity", 64))))
-        tr.notes.append(Note(time=t_tick, duration=d_tick, pitch=p, velocity=vel))
-    sc.tracks.append(tr)
+        hand = str(ev.get("hand", "")).lower()
+        n_obj = Note(time=t_tick, duration=d_tick, pitch=p, velocity=vel)
+        if hand == "lh" or p < 60:
+            tr_lh.notes.append(n_obj)
+        else:
+            tr_rh.notes.append(n_obj)
+    sc.tracks.append(tr_rh)
+    sc.tracks.append(tr_lh)
     return sc
 
 
-def _onset_to_measure_beat(onset_s: float, beat_s: float = 0.5) -> Tuple[int, int]:
-    total_beats = max(0.0, float(onset_s) / beat_s)
-    measure = int(total_beats // 4) + 1
-    beat = int(total_beats % 4) + 1
-    return measure, beat
+def _build_continuous_pedal_events(
+    total_dur_s: float,
+    damper_plan: List[int],
+    una_corda_plan: List[int],
+    strategy: str,
+) -> Tuple[List[Dict[str, Any]], List[Dict[str, Any]], List[Dict[str, Any]]]:
+    """
+    Generates continuous time-series CC#64 (Damper) and CC#67 (Una Corda) curves:
+    - Delayed depression after attack, half-pedal clarity (35..80), sharp chord-change
+      repedaling dip (110 -> 0 -> 92), and clean end release to 0.
+    - Continuous Una Corda lateral hammer shift curve matching dynamic contour.
+    """
+    dur = max(1.2, float(total_dur_s))
+    cc64_pts: List[Tuple[float, int]]
+    cc67_pts: List[Tuple[float, int]]
+
+    if strategy == "contrastive_flaw":
+        # Deliberately poor/missing dual pedal for Candidate D
+        return (
+            [{"pitch": 0, "onset_s": 0.0, "control": 64, "value": 100, "voice": "pedal"}],
+            [{"t": 0.0, "val": 100}],
+            [{"t": 0.0, "val": 0}],
+        )
+
+    plan64 = [max(0, min(127, int(v))) for v in (damper_plan or [0, 74, 112, 8, 86, 0])]
+    plan67 = [max(0, min(127, int(v))) for v in (una_corda_plan or [24, 76, 94, 48, 16])]
+
+    if strategy == "overtone_clear_high_spread":
+        # Deeper Una Corda veil + floating half-pedal with repedal
+        cc64_pts = [
+            (0.00, 0),
+            (0.08, min(78, max(44, plan64[1] if len(plan64) > 1 else 62))),
+            (round(dur * 0.44, 3), min(82, max(48, plan64[2] if len(plan64) > 2 else 74))),
+            (round(dur * 0.50, 3), 0),     # crisp repedaling dip
+            (round(dur * 0.57, 3), 68),    # half-pedal re-entry
+            (round(dur * 0.94, 3), 0),
+        ]
+        cc67_pts = [
+            (0.00, 32),
+            (round(dur * 0.22, 3), 96),
+            (round(dur * 0.55, 3), 112),
+            (round(dur * 0.80, 3), 72),
+            (round(dur * 0.96, 3), 18),
+        ]
+    elif strategy == "suspension_inner_voice":
+        # Syncopated damper repedaling across two harmonic pillars + moderate Una Corda
+        cc64_pts = [
+            (0.00, 0),
+            (0.07, 84),
+            (round(dur * 0.34, 3), 108),
+            (round(dur * 0.42, 3), 4),     # repedal #1
+            (round(dur * 0.49, 3), 92),
+            (round(dur * 0.72, 3), 10),    # repedal #2
+            (round(dur * 0.79, 3), 76),
+            (round(dur * 0.95, 3), 0),
+        ]
+        cc67_pts = [
+            (0.00, 16),
+            (round(dur * 0.25, 3), 64),
+            (round(dur * 0.55, 3), 42),
+            (round(dur * 0.82, 3), 84),
+            (round(dur * 0.96, 3), 20),
+        ]
+    else:
+        # "contrary_open_polyphony": delayed catch, dynamic half-to-full arch, repedal & clean tail
+        p_mid = max(55, min(116, plan64[2] if len(plan64) > 2 else 104))
+        cc64_pts = [
+            (0.00, 0),
+            (0.07, max(48, min(88, plan64[1] if len(plan64) > 1 else 68))),
+            (round(dur * 0.38, 3), p_mid),
+            (round(dur * 0.48, 3), 0),     # clean harmonic-change repedaling
+            (round(dur * 0.56, 3), 86),
+            (round(dur * 0.88, 3), 52),
+            (round(dur * 0.96, 3), 0),
+        ]
+        u_peak = max(48, min(115, max(plan67)))
+        cc67_pts = [
+            (0.00, max(12, plan67[0] if plan67 else 20)),
+            (round(dur * 0.25, 3), int(u_peak * 0.68)),
+            (round(dur * 0.52, 3), int(u_peak * 0.35)),  # open brightness at harmonic peak
+            (round(dur * 0.76, 3), u_peak),              # veil for lyrical tail
+            (round(dur * 0.96, 3), 14),
+        ]
+
+    evs: List[Dict[str, Any]] = []
+    curve64: List[Dict[str, Any]] = []
+    curve67: List[Dict[str, Any]] = []
+    for t, val in cc64_pts:
+        evs.append({"pitch": 0, "onset_s": t, "control": 64, "value": int(val), "voice": "pedal"})
+        curve64.append({"t": t, "val": int(val)})
+    for t, val in cc67_pts:
+        evs.append({"pitch": 0, "onset_s": t, "control": 67, "value": int(val), "voice": "pedal"})
+        curve67.append({"t": t, "val": int(val)})
+    return evs, curve64, curve67
 
 
 class MultipleCandidateComposer:
     """
-    Layer 3 Composer & Pruner.
-    Generates 4 candidate continuations per turn using `symusic`, scores 4 musical axes,
-    adopts the best candidate, and isolates exact conflicting note coordinates & penalties
-    for transparent real-time stage auditioning.
+    Layer 3 Two-Hand Polyphonic Composer & MusicalityCritic Auditor.
     """
 
     def __init__(self, corpus_loader: Optional[ZeroConfigCorpusLoader] = None) -> None:
         self.corpus_loader = corpus_loader or ZeroConfigCorpusLoader()
         self.turn_counter: int = 0
 
-    def _build_candidate_events(
+    def _safe_pitch_outside_mud(
+        self,
+        raw_pitch: int,
+        tonal_center: str,
+        reg_lo: int,
+        reg_hi: int,
+        human_pitches: List[int],
+    ) -> int:
+        p = _quantize_to_scale(raw_pitch, tonal_center, reg_lo, reg_hi)
+        def _clashes(cand: int) -> bool:
+            if any(abs(cand - hp) <= 2 for hp in human_pitches):
+                return True
+            if 40 <= cand <= 66 and any(abs(cand - hp) <= 4 for hp in human_pitches):
+                return True
+            return False
+
+        if _clashes(p):
+            for shift in (-12, 12, -5, 5, 7, -7, 4, -3):
+                cand = _quantize_to_scale(p + shift, tonal_center, max(24, reg_lo - 7), min(98, reg_hi + 7))
+                if not _clashes(cand):
+                    return cand
+        return p
+
+    def _build_polyphonic_candidate(
         self,
         strategy: str,
         human_notes: List[Dict[str, Any]],
         intent: MusicalIntentSchema,
         turn_idx: int,
-    ) -> List[Dict[str, Any]]:
-        reg_lo, reg_hi = intent.register_range[0], intent.register_range[1]
+        corpus_refs: List[Dict[str, Any]],
+    ) -> Tuple[List[Dict[str, Any]], List[Dict[str, Any]], List[Dict[str, Any]]]:
         tonic_pc, _ = SCALE_INTERVALS.get(intent.tonal_center, (2, [0, 2, 3, 5, 7, 9, 10]))
         human_pitches = [
-            int(n.get("pitch", n.get("note", 62)))
+            int(n.get("pitch", n.get("note", 54)))
             for n in human_notes
             if int(n.get("pitch", n.get("note", 0))) > 0
-        ] or [62, 65, 69, 67]
+        ] or [50, 53, 57, 55]
 
-        anchor_mid = (reg_lo + reg_hi) // 2
-        anchor_pitch = _quantize_to_scale(anchor_mid, intent.tonal_center, reg_lo, reg_hi)
-        pedal_val = {"dry": 18, "half_clear": 48, "resonant": 70}.get(intent.pedal_strategy, 46)
+        # Contrastive flawed draft for transparent stage rejection
+        if strategy == "contrastive_flaw_check":
+            evs: List[Dict[str, Any]] = []
+            t = 0.0
+            if turn_idx % 2 == 1:
+                # Flaw Type 1: Monotonous 5-note single-direction scale run, monophonic, flat rhythm
+                start_p = 60 + tonic_pc
+                cur = start_p
+                for i in range(6):
+                    cur = _quantize_to_scale(cur + 2, intent.tonal_center, 58, 84)
+                    if i > 0 and cur <= evs[-1]["pitch"]:
+                        cur = evs[-1]["pitch"] + 2
+                    evs.append(
+                        {
+                            "pitch": cur,
+                            "onset_s": round(t, 3),
+                            "duration_s": 0.24,
+                            "velocity": 70,
+                            "hand": "rh",
+                            "voice": "scale_flaw",
+                        }
+                    )
+                    t += 0.25
+            else:
+                # Flaw Type 2: Minor-2nd & thick triad mud inside human 100-600Hz fundamental band
+                primary_human = human_pitches[-1]
+                clash_p = max(44, min(65, primary_human + 1))
+                for i in range(5):
+                    p = clash_p if i in (0, 2) else max(45, min(64, primary_human))
+                    for iv in (0, 3, 7):
+                        evs.append(
+                            {
+                                "pitch": p + iv,
+                                "onset_s": round(t, 3),
+                                "duration_s": 0.24,
+                                "velocity": 76,
+                                "hand": "lh" if (p + iv) < 60 else "rh",
+                                "voice": "mud_flaw",
+                            }
+                        )
+                    t += 0.26
+            ped_evs, c64, c67 = _build_continuous_pedal_events(t + 0.2, [100], [0], "contrastive_flaw")
+            return evs + ped_evs, c64, c67
+
+        # Genuine two-hand polyphonic strategies
+        ref = corpus_refs[0] if corpus_refs else BUILTIN_CHAMBER_SEED_DICTIONARY[turn_idx % len(BUILTIN_CHAMBER_SEED_DICTIONARY)]
+        lh_base = max(36, min(46, 36 + tonic_pc))
+        if abs(lh_base - human_pitches[-1]) <= 4:
+            lh_base = max(33, lh_base - 12)
+
+        rh_anchor = 69 + tonic_pc if max(human_pitches) >= 57 else 65 + tonic_pc
+        if strategy == "overtone_clear_high_spread":
+            rh_anchor = min(79, rh_anchor + 5)
+            lh_base = max(34, lh_base - 2)
+
+        human_diffs = [human_pitches[i] - human_pitches[i - 1] for i in range(1, len(human_pitches))] or [3, -2, 4, -3]
+        ref_rh_ivs = list(ref.get("rh_intervals") or [0, 5, 12, 9, 7, 14])
+        ref_lh_ivs = list(ref.get("lh_intervals") or [0, 7, 12, 16])
+
+        # Diverse rhythmic durations (never uniform!) and agogic breathing gaps
+        if strategy == "contrary_open_polyphony":
+            rhythm_steps = [0.36, 0.22, 0.44, 0.24, 0.34, 0.56]
+            vel_arch = [62, 72, 82, 76, 68, 56]
+            rh_contour_offsets = [-human_diffs[0], -human_diffs[1 % len(human_diffs)] + 4, -5, 7, -3, 5]
+        elif strategy == "suspension_inner_voice":
+            rhythm_steps = [0.46, 0.24, 0.26, 0.48, 0.28, 0.58]
+            vel_arch = [58, 70, 78, 66, 74, 54]
+            # Explicit suspension-resolution shape (+5 -> +4, +9 -> +7)
+            rh_contour_offsets = [0, 5, -1, 6, -2, 4]
+        else:
+            # "overtone_clear_high_spread"
+            rhythm_steps = [0.48, 0.28, 0.38, 0.22, 0.42, 0.62]
+            vel_arch = [48, 60, 70, 64, 54, 44]
+            rh_contour_offsets = [0, 7, -3, 9, -5, 4]
 
         events: List[Dict[str, Any]] = []
         t = 0.0
-        step_base = max(0.24, 0.56 - intent.target_density * 0.28)
+        cur_rh = _quantize_to_scale(rh_anchor, intent.tonal_center, 62, 84)
 
-        if strategy == "contrary_counterpoint":
-            diffs = [human_pitches[i] - human_pitches[i - 1] for i in range(1, len(human_pitches))]
-            if not diffs:
-                diffs = [3, 4, -2, -3]
-            cur = anchor_pitch
-            for i in range(6):
-                d = -diffs[i % len(diffs)] if i > 0 else 0
-                cur = _quantize_to_scale(cur + d, intent.tonal_center, reg_lo, reg_hi)
-                dur = round(step_base * (0.72 if intent.pedal_strategy == "dry" else 1.05), 3)
-                vel = min(98, 68 + (i % 3) * 6)
-                events.append(
-                    {
-                        "pitch": cur,
-                        "onset_s": round(t, 3),
-                        "duration_s": max(0.06, dur),
-                        "velocity": vel,
-                        "voice": "melody",
-                    }
-                )
-                if i % 3 == 0:
-                    bass_p = max(28, _quantize_to_scale(36 + tonic_pc, intent.tonal_center, 28, 48))
+        for i in range(6):
+            step_dt = rhythm_steps[i % len(rhythm_steps)]
+            # Non-monotonic melodic jump + turn to guarantee zero scale runs
+            if strategy == "suspension_inner_voice":
+                raw_rh = rh_anchor + (ref_rh_ivs[i % len(ref_rh_ivs)] % 12) + rh_contour_offsets[i]
+            else:
+                delta = rh_contour_offsets[i]
+                # Ensure alternating direction or leap >= 3 so it never forms a 4-note monotonic scale
+                if i % 2 == 1 and abs(delta) < 3:
+                    delta = 5 if delta >= 0 else -4
+                raw_rh = cur_rh + delta
+
+            cur_rh = self._safe_pitch_outside_mud(raw_rh, intent.tonal_center, 62, 86, human_pitches)
+            dur_rh = round(max(0.14, step_dt * (0.72 if intent.pedal_strategy == "dry" else 1.04)), 3)
+            vel_rh = vel_arch[i % len(vel_arch)]
+
+            events.append(
+                {
+                    "pitch": cur_rh,
+                    "onset_s": round(t, 3),
+                    "duration_s": dur_rh,
+                    "velocity": vel_rh,
+                    "hand": "rh",
+                    "voice": "rh_melody",
+                }
+            )
+
+            # Vertical RH harmony support (3rd, 6th, or 4th/7th chord tone below top melody)
+            if i in (0, 2, 3, 5):
+                harm_iv = 4 if (i % 2 == 0) else 5
+                harm_p = self._safe_pitch_outside_mud(cur_rh - harm_iv, intent.tonal_center, 60, cur_rh - 3, human_pitches)
+                if harm_p != cur_rh and abs(cur_rh - harm_p) >= 3:
                     events.append(
                         {
-                            "pitch": bass_p,
-                            "onset_s": round(t, 3),
-                            "duration_s": round(step_base * 2.2, 3),
-                            "velocity": 56,
-                            "voice": "bass",
+                            "pitch": harm_p,
+                            "onset_s": round(t + 0.014, 3),  # gentle chord roll
+                            "duration_s": round(dur_rh * 0.92, 3),
+                            "velocity": max(40, vel_rh - 12),
+                            "hand": "rh",
+                            "voice": "rh_harmony",
                         }
                     )
-                t += step_base
 
-        elif strategy == "corpus_context_match":
-            pats = self.corpus_loader.patterns or BUILTIN_CHAMBER_SEED_DICTIONARY
-            pat = pats[turn_idx % len(pats)]
-            intervals = pat["intervals"][:6]
-            vels = pat["velocities"][:6]
-            beats = pat["rhythm_beats"][:6]
-            for idx, iv in enumerate(intervals):
-                # Deliberately keeps partial octave overlap / repetitive motif anchor for clear contrast
-                p = _quantize_to_scale(anchor_pitch + (iv % 10) - 5, intent.tonal_center, reg_lo, reg_hi)
-                if idx in (2, 3):
-                    # Repeat same pitch to demonstrate motif stagnation penalty when compared to A
-                    p = events[-1]["pitch"] if events else p
-                dur = round(max(0.08, beats[idx % len(beats)] * step_base * 0.9), 3)
+            # Left-Hand Bass + Inner Tenor Counterline (cleared from human mud collisions)
+            if i in (0, 3):
+                bass_root = self._safe_pitch_outside_mud(
+                    lh_base + (0 if i == 0 else 5), intent.tonal_center, 26, 46, human_pitches
+                )
+                fifth_iv = ref_lh_ivs[1] if len(ref_lh_ivs) > 1 and 5 <= ref_lh_ivs[1] <= 12 else 7
+                bass_fifth = self._safe_pitch_outside_mud(
+                    bass_root + fifth_iv, intent.tonal_center, 31, 52, human_pitches
+                )
+                if bass_fifth == bass_root:
+                    bass_fifth = max(28, bass_root + 7)
+                lh_dur = round(step_dt * 2.15, 3)
                 events.append(
                     {
-                        "pitch": p,
+                        "pitch": bass_root,
                         "onset_s": round(t, 3),
-                        "duration_s": dur,
-                        "velocity": int(vels[idx % len(vels)]),
-                        "voice": "accompaniment",
+                        "duration_s": lh_dur,
+                        "velocity": max(44, vel_rh - 10),
+                        "hand": "lh",
+                        "voice": "lh_bass",
                     }
                 )
-                t += dur * 0.95
-
-        elif strategy == "modal_voice_leading":
-            scale_steps = [0, 5, 7, 10, 7, 5]
-            for i, iv in enumerate(scale_steps):
-                p = _quantize_to_scale(reg_lo + 2 + iv, intent.tonal_center, reg_lo, reg_hi)
-                dur = round(step_base * 1.05, 3)
                 events.append(
                     {
-                        "pitch": p,
-                        "onset_s": round(t, 3),
-                        "duration_s": dur,
-                        "velocity": 54 + (i % 4) * 5,
-                        "voice": "oboe_line",
+                        "pitch": bass_fifth,
+                        "onset_s": round(t + 0.018, 3),
+                        "duration_s": round(lh_dur * 0.92, 3),
+                        "velocity": max(40, vel_rh - 16),
+                        "hand": "lh",
+                        "voice": "lh_fifth",
                     }
                 )
-                t += step_base * 0.95
-
-        else:
-            # Contrastive draft ("dense_mid_repetition"): intentionally places minor-2nd clash & thick triad
-            # directly inside the human fundamental register (100-600 Hz) so L3 rejects and highlights it.
-            primary_human = human_pitches[-1]
-            clash_p = max(44, min(72, primary_human + 1))  # Minor 2nd clash against human pitch
-            mid_clash = int(sum(human_pitches) / len(human_pitches))
-            for i in range(7):
-                p = clash_p if i == 0 else max(46, min(72, mid_clash + (0 if i % 2 == 0 else 4)))
+            elif i in (1, 4):
+                # Inner tenor/alto counterline avoiding mud register around human pitch
+                inner_target = lh_base + 14 + (1 if i == 1 else -1)
+                inner_p = self._safe_pitch_outside_mud(
+                    inner_target,
+                    intent.tonal_center,
+                    40,
+                    59,
+                    human_pitches,
+                )
+                if any(abs(inner_p - hp) <= 4 for hp in human_pitches):
+                    inner_p = self._safe_pitch_outside_mud(
+                        lh_base + 7, intent.tonal_center, 31, 46, human_pitches
+                    )
                 events.append(
                     {
-                        "pitch": p,
+                        "pitch": inner_p,
                         "onset_s": round(t, 3),
-                        "duration_s": round(step_base * 0.55, 3),
-                        "velocity": 78,
-                        "voice": "dense_draft",
+                        "duration_s": round(step_dt * 1.35, 3),
+                        "velocity": max(38, vel_rh - 16),
+                        "hand": "lh",
+                        "voice": "lh_inner",
                     }
                 )
-                if i % 2 == 0:
-                    for triad_iv in (3, 7):
-                        events.append(
-                            {
-                                "pitch": min(74, p + triad_iv),
-                                "onset_s": round(t, 3),
-                                "duration_s": round(step_base * 0.5, 3),
-                                "velocity": 74,
-                                "voice": "dense_draft",
-                            }
-                        )
-                t += step_base * 0.48
 
-        events.append({"pitch": 0, "onset_s": 0.0, "control": 64, "value": pedal_val, "voice": "pedal"})
-        return events
+            # Add subtle breathing rest before final cadence note (i == 4)
+            breath_gap = 0.09 if i == 4 else 0.015
+            t += step_dt + breath_gap
 
-    def _score_candidate(
+        ped_evs, c64, c67 = _build_continuous_pedal_events(
+            total_dur_s=t + 0.25,
+            damper_plan=intent.damper_cc64_plan,
+            una_corda_plan=intent.una_corda_cc67_plan,
+            strategy=strategy,
+        )
+        return events + ped_evs, c64, c67
+
+    def _repair_to_polyphonic_standard(
         self,
         events: List[Dict[str, Any]],
         human_notes: List[Dict[str, Any]],
         intent: MusicalIntentSchema,
-        strategy: str,
-        human_mode: str,
-    ) -> Tuple[float, Dict[str, float], Dict[str, int], str, List[int], Dict[str, Any]]:
-        note_evs = [e for e in events if int(e.get("pitch", 0)) > 0]
-        if not note_evs:
-            return (
-                0.0,
-                {},
-                {"harmonic_fit": 0, "counterpoint_quality": 0, "overtone_clearance": 0, "rhythm_density": 0},
-                "[棄却: 音符欠如]",
-                [],
-                {},
-            )
-
-        tonic_pc, scale_pcs = SCALE_INTERVALS.get(intent.tonal_center, (2, [0, 2, 3, 5, 7, 9, 10]))
-        reg_lo, reg_hi = intent.register_range[0], intent.register_range[1]
+        audit: MusicalityAuditReport,
+    ) -> Tuple[List[Dict[str, Any]], List[Dict[str, Any]], List[Dict[str, Any]]]:
+        """Auto-repairs any candidate failing MusicalityCritic (breaks scale runs, adds LH/RH harmony & dual pedal)."""
+        tonic_pc, _ = SCALE_INTERVALS.get(intent.tonal_center, (2, [0, 2, 3, 5, 7, 9, 10]))
         human_pitches = [
-            int(n.get("pitch", n.get("note", 62)))
+            int(n.get("pitch", n.get("note", 54)))
             for n in human_notes
             if int(n.get("pitch", n.get("note", 0))) > 0
-        ] or [62]
-        human_primary = human_pitches[-1]
-        human_primary_name = midi_to_note_name(human_primary)
+        ] or [50]
 
-        # 1. Harmonic Fit (0..30)
-        in_scale = sum(1 for e in note_evs if (int(e["pitch"]) - tonic_pc) % 12 in scale_pcs)
-        harmonic_fit = 30.0 * (in_scale / len(note_evs))
+        note_evs = [dict(e) for e in events if int(e.get("pitch", 0) or 0) > 0]
+        if "monotonic_scale_run" in audit.failures or "mechanical_arpeggio_loop" in audit.failures:
+            rh_notes = [n for n in note_evs if str(n.get("hand", "")).lower() == "rh" or int(n["pitch"]) >= 60]
+            for idx, n in enumerate(rh_notes):
+                if idx % 2 == 1:
+                    n["pitch"] = self._safe_pitch_outside_mud(
+                        int(n["pitch"]) + (5 if idx % 4 == 1 else -4),
+                        intent.tonal_center,
+                        62,
+                        92,
+                        human_pitches,
+                    )
 
-        # 2. Register & Overtone Clearance (0..30) — detect exact colliding notes (minor 2nd / same band)
-        in_target_reg = sum(1 for e in note_evs if reg_lo <= int(e["pitch"]) <= reg_hi)
-        clash_indices: List[int] = []
-        minor2_indices: List[int] = []
-        for idx, e in enumerate(note_evs):
-            p = int(e["pitch"])
-            if any(abs(p - hp) in (1, 2) for hp in human_pitches):
-                minor2_indices.append(idx)
-                clash_indices.append(idx)
-            elif any(abs(p - hp) <= 4 for hp in human_pitches):
-                clash_indices.append(idx)
-        collision_ratio = len(clash_indices) / len(note_evs)
-        minor2_penalty = 10.0 if minor2_indices else 0.0
-        register_sep = max(0.0, 30.0 * (in_target_reg / len(note_evs)) - 26.0 * collision_ratio - minor2_penalty)
+        if "minor2_spectral_mud" in audit.failures:
+            for n in note_evs:
+                p = int(n["pitch"])
+                if any(abs(p - hp) <= 4 for hp in human_pitches):
+                    if str(n.get("hand", "")).lower() == "lh" or p < 60:
+                        n["pitch"] = self._safe_pitch_outside_mud(p - 12, intent.tonal_center, 24, 46, human_pitches)
+                    else:
+                        n["pitch"] = self._safe_pitch_outside_mud(p + 12, intent.tonal_center, 66, 94, human_pitches)
 
-        # 3. Counterpoint Voice Leading (contrary / oblique motion & repetition check, 0..25)
-        pitches = [int(e["pitch"]) for e in note_evs]
-        unique_ratio = len(set(pitches)) / len(pitches)
-        contrary_bonus = 6.5 if strategy == "contrary_counterpoint" else (3.0 if strategy == "modal_voice_leading" else 1.5)
-        repeat_indices = [i for i in range(1, len(pitches)) if pitches[i] == pitches[i - 1]]
-        parallel_indices: List[int] = []
-        parallel_penalty = 0.0
-        for i in range(1, len(pitches)):
-            if abs(pitches[i] - pitches[i - 1]) in (7, 12) and i < len(human_pitches):
-                if abs(human_pitches[i % len(human_pitches)] - human_pitches[(i - 1) % len(human_pitches)]) == abs(pitches[i] - pitches[i - 1]):
-                    parallel_penalty += 4.5
-                    parallel_indices.append(i)
-        repeat_penalty = min(6.0, len(repeat_indices) * 2.5)
-        counterpoint_score = max(
-            0.0,
-            min(25.0, 13.5 * unique_ratio + contrary_bonus + 7.0 - parallel_penalty - repeat_penalty),
+        # Guarantee LH bass + vertical harmony
+        has_lh = any(str(n.get("hand", "")).lower() == "lh" or int(n["pitch"]) < 60 for n in note_evs)
+        if not has_lh:
+            bass_p = _quantize_to_scale(36 + tonic_pc, intent.tonal_center, 30, 48)
+            note_evs.append({"pitch": bass_p, "onset_s": 0.0, "duration_s": 0.9, "velocity": 58, "hand": "lh", "voice": "lh_bass"})
+            note_evs.append({"pitch": bass_p + 7, "onset_s": 0.02, "duration_s": 0.85, "velocity": 50, "hand": "lh", "voice": "lh_fifth"})
+
+        max_end = max((float(n.get("onset_s", 0.0)) + float(n.get("duration_s", 0.35)) for n in note_evs), default=1.6)
+        ped_evs, c64, c67 = _build_continuous_pedal_events(
+            max_end + 0.25, intent.damper_cc64_plan, intent.una_corda_cc67_plan, "contrary_open_polyphony"
         )
-
-        # 4. Rhythm Density Match (0..15)
-        span = max(1.0, max(float(e["onset_s"]) for e in note_evs) + 0.4)
-        actual_density = min(1.0, (len(note_evs) / span) / 8.0)
-        density_diff = abs(actual_density - intent.target_density)
-        density_score = max(0.0, 15.0 * (1.0 - min(1.0, density_diff * 1.8)))
-
-        total = round(harmonic_fit + register_sep + counterpoint_score + density_score, 2)
-        subscores = {
-            "harmonic_fit": round(harmonic_fit, 1),
-            "register_separation": round(register_sep, 1),
-            "counterpoint_quality": round(counterpoint_score, 1),
-            "density_fit": round(density_score, 1),
-        }
-        subscores_pct = {
-            "harmonic_fit": int(round((harmonic_fit / 30.0) * 100.0)),
-            "counterpoint_quality": int(round((counterpoint_score / 25.0) * 100.0)),
-            "overtone_clearance": int(round((register_sep / 30.0) * 100.0)),
-            "rhythm_density": int(round((density_score / 15.0) * 100.0)),
-        }
-
-        # Identify exact problem indices, measure/beat, and numeric acoustic penalty score
-        if minor2_indices or collision_ratio > 0.30 or register_sep < 18.0:
-            penalty_val = -max(22, int(round(48 - register_sep)))
-            if minor2_indices:
-                prob_idxs = minor2_indices[:2]
-                target_ev = note_evs[prob_idxs[0]]
-                m_no, b_no = _onset_to_measure_beat(float(target_ev.get("onset_s", 0.0)))
-                tp = int(target_ev["pitch"])
-                target_name = midi_to_note_name(tp)
-                hp_match = next((hp for hp in human_pitches if abs(tp - hp) in (1, 2)), human_primary)
-                hp_name = midi_to_note_name(hp_match)
-                reason_core = f"{m_no}小節{b_no}拍 {hp_name}基音と{target_name}が短2度衝突（濁りスコア {penalty_val}）"
-                short_reason = f"{hp_name}と{target_name}が短2度衝突し濁る"
-            elif clash_indices:
-                prob_idxs = clash_indices[:2]
-                target_ev = note_evs[prob_idxs[0]]
-                m_no, b_no = _onset_to_measure_beat(float(target_ev.get("onset_s", 0.0)))
-                tp = int(target_ev["pitch"])
-                target_name = midi_to_note_name(tp)
-                hp_match = next((hp for hp in human_pitches if abs(tp - hp) <= 4), human_primary)
-                hp_name = midi_to_note_name(hp_match)
-                reason_core = f"{m_no}小節{b_no}拍 {hp_name}倍音帯と{target_name}が三度重複（濁りスコア {penalty_val}）"
-                short_reason = f"{hp_name}倍音帯と重なり濁る"
-            else:
-                out_idxs = [i for i, e in enumerate(note_evs) if not (reg_lo <= int(e["pitch"]) <= reg_hi)] or [0]
-                prob_idxs = out_idxs[:2]
-                target_ev = note_evs[prob_idxs[0]]
-                m_no, b_no = _onset_to_measure_beat(float(target_ev.get("onset_s", 0.0)))
-                target_name = midi_to_note_name(int(target_ev["pitch"]))
-                reason_core = f"{m_no}小節{b_no}拍 {target_name}が目標音域外で倍音干渉（音域減点 {penalty_val}）"
-                short_reason = f"{target_name}が目標音域から外れ干渉する"
-        elif parallel_indices:
-            prob_idxs = parallel_indices[:2]
-            target_ev = note_evs[prob_idxs[0]]
-            m_no, b_no = _onset_to_measure_beat(float(target_ev.get("onset_s", 0.0)))
-            target_name = midi_to_note_name(int(target_ev["pitch"]))
-            penalty_val = -max(18, int(round(32 - counterpoint_score)))
-            reason_core = f"{m_no}小節{b_no}拍 {target_name}で並達五度・八度が発生（連結減点 {penalty_val}）"
-            short_reason = f"{m_no}小節{b_no}拍で並達五度が発生"
-        elif repeat_indices or unique_ratio < 0.72:
-            prob_idxs = repeat_indices[:2] or [len(note_evs) - 2, len(note_evs) - 1]
-            target_ev = note_evs[prob_idxs[0]]
-            m_no, b_no = _onset_to_measure_beat(float(target_ev.get("onset_s", 0.0)))
-            target_name = midi_to_note_name(int(target_ev["pitch"]))
-            penalty_val = -max(14, int(round(28 - counterpoint_score)))
-            reason_core = f"{m_no}小節{b_no}拍 {target_name}の同音反復で声部停滞（推進力 {penalty_val}）"
-            short_reason = f"{target_name}の同音反復で停滞"
-        elif density_diff > 0.25 or len(note_evs) >= 12:
-            prob_idxs = [len(note_evs) - 2, len(note_evs) - 1]
-            target_ev = note_evs[prob_idxs[0]]
-            m_no, b_no = _onset_to_measure_beat(float(target_ev.get("onset_s", 0.0)))
-            penalty_val = -max(16, int(round(30 - density_score * 2.0)))
-            reason_core = f"{m_no}小節{b_no}拍 リズム密度過多で過密（密度減点 {penalty_val}）"
-            short_reason = "リズム密度が目標値より過密"
-        else:
-            prob_idxs = [len(note_evs) - 1]
-            target_ev = note_evs[prob_idxs[0]]
-            m_no, b_no = _onset_to_measure_beat(float(target_ev.get("onset_s", 0.0)))
-            target_name = midi_to_note_name(int(target_ev["pitch"]))
-            penalty_val = -max(10, int(round(100.0 - total)))
-            reason_core = f"{m_no}小節{b_no}拍 {target_name}の反行推進力が不足（対位法減点 {penalty_val}）"
-            short_reason = "対位法的な反行推進力が不足"
-
-        rej_tag = f"[棄却: {reason_core}]"
-        rej_detail = {
-            "measure": m_no,
-            "beat": b_no,
-            "note_name": midi_to_note_name(int(note_evs[prob_idxs[0]]["pitch"])),
-            "human_note_name": human_primary_name,
-            "penalty_score": penalty_val,
-            "reason_core_ja": reason_core,
-            "short_reason_ja": short_reason,
-            "hud_badge_ja": f"[× 棄却: {reason_core}]",
-        }
-        return total, subscores, subscores_pct, rej_tag, prob_idxs, rej_detail
+        return note_evs + ped_evs, c64, c67
 
     def compose_turn(
         self,
@@ -524,28 +735,61 @@ class MultipleCandidateComposer:
         human_mode: str = "cello",
     ) -> CompositionTurnResult:
         self.turn_counter += 1
+        human_pitches = [
+            int(n.get("pitch", n.get("note", 54)))
+            for n in human_notes
+            if int(n.get("pitch", n.get("note", 0))) > 0
+        ] or [50, 53, 57]
+        leaps = [abs(human_pitches[i] - human_pitches[i - 1]) for i in range(1, len(human_pitches))]
+        tension = min(1.0, 0.30 + 0.12 * sum(1 for x in leaps if x in (1, 2, 6)))
+        corpus_refs = self.corpus_loader.retrieve_voicing_references(
+            tension=tension,
+            momentum=intent.target_density,
+            top_k=3,
+        )
+
         specs = [
-            ("A", "対位法的反行案", "contrary_counterpoint"),
-            ("B", "コーパス文脈照合案", "corpus_context_match"),
-            ("C", "旋法声部連結案", "modal_voice_leading"),
-            ("D", "中音域密集対照案", "dense_mid_repetition"),
+            ("A", "対位法反行・両手開離ボイシング案", "contrary_open_polyphony"),
+            ("B", "掛留解決・立体内声ポリフォニー案", "suspension_inner_voice"),
+            ("C", "高次倍音回避・透明色彩ボイシング案", "overtone_clear_high_spread"),
+            ("D", "対照検証案（音階単調・低中域混濁）", "contrastive_flaw_check"),
         ]
 
+        scale_tuple = SCALE_INTERVALS.get(intent.tonal_center, (2, [0, 2, 3, 5, 7, 9, 10]))
         candidates: List[CandidatePhrase] = []
-        for cid, label_ja, strat in specs:
-            evs = self._build_candidate_events(strat, human_notes, intent, self.turn_counter)
+
+        for idx_spec, (cid, label_ja, strat) in enumerate(specs):
+            evs, c64, c67 = self._build_polyphonic_candidate(
+                strat, human_notes, intent, self.turn_counter, corpus_refs[idx_spec % len(corpus_refs) :]
+            )
+            audit = MusicalityCritic.audit_candidate(
+                evs,
+                human_notes=human_notes,
+                tonal_center=intent.tonal_center,
+                scale_pcs=scale_tuple,
+                register_range=intent.register_range,
+                human_mode=human_mode,
+            )
+
+            # Auto-repair A/B/C if any MusicalityCritic violation sneaks in
+            if cid != "D" and not audit.passed:
+                evs, c64, c67 = self._repair_to_polyphonic_standard(evs, human_notes, intent, audit)
+                audit = MusicalityCritic.audit_candidate(
+                    evs,
+                    human_notes=human_notes,
+                    tonal_center=intent.tonal_center,
+                    scale_pcs=scale_tuple,
+                    register_range=intent.register_range,
+                    human_mode=human_mode,
+                )
+
             sc = _events_to_symusic_score(evs)
             sym_count = sum(len(tr.notes) for tr in sc.tracks)
-            score, subscores, subscores_pct, rej_tag, prob_idxs, rej_detail = self._score_candidate(
-                evs, human_notes, intent, strat, human_mode
-            )
             pitches = sorted({int(e["pitch"]) for e in evs if int(e.get("pitch", 0)) > 0})
             pitch_range_str = (
-                f"{midi_to_note_name(pitches[0])}-{midi_to_note_name(pitches[-1])}"
-                if pitches
-                else "--"
+                f"{midi_to_note_name(pitches[0])}-{midi_to_note_name(pitches[-1])}" if pitches else "--"
             )
-            seq_pitches = [int(e["pitch"]) for e in evs if int(e.get("pitch", 0)) > 0][:3]
+            seq_pitches = [int(e["pitch"]) for e in evs if int(e.get("pitch", 0)) > 0][:4]
             sample_notes_str = "-".join(midi_to_note_name(p) for p in seq_pitches) or "--"
 
             candidates.append(
@@ -554,20 +798,24 @@ class MultipleCandidateComposer:
                     label_ja=label_ja,
                     strategy=strat,
                     events=evs,
-                    total_score=score,
-                    subscores=subscores,
-                    subscores_pct=subscores_pct,
+                    total_score=audit.total_score,
+                    subscores=audit.subscores,
+                    subscores_pct=audit.subscores_pct,
                     adopted=False,
-                    rejection_tag_ja=rej_tag,
+                    rejection_tag_ja=audit.rejection_tag_ja,
                     symusic_note_count=sym_count,
                     pitch_range_str=pitch_range_str,
                     sample_notes_str=sample_notes_str,
-                    problem_note_indices=prob_idxs,
-                    rejection_detail=rej_detail,
+                    problem_note_indices=audit.problem_note_indices,
+                    rejection_detail=audit.rejection_detail,
+                    audit_passed=audit.passed,
+                    pedal_cc64_curve=c64,
+                    pedal_cc67_curve=c67,
                 )
             )
 
-        best = max(candidates, key=lambda c: c.total_score)
+        eligible = [c for c in candidates if c.candidate_id != "D"]
+        best = max(eligible or candidates, key=lambda c: c.total_score)
         best.adopted = True
         best.rejection_tag_ja = ""
         best.problem_note_indices = []
@@ -579,4 +827,5 @@ class MultipleCandidateComposer:
             candidates=candidates,
             adopted_candidate=best,
             corpus_source=self.corpus_loader.source_mode,
+            corpus_refs_used=corpus_refs,
         )
