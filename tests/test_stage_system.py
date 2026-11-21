@@ -283,6 +283,14 @@ def test_4_musicality_critic_token_economizer_and_logic_validator() -> None:
         assert "UNA CORDA" in hud_html and "DAMPER" in hud_html
         for forbidden in ("AI THINKING", "#00ffff", "#ff00ff", "素晴らしい演奏", "共鳴しました", "印象派風", "バロック風"):
             assert forbidden not in hud_html
+        assert "cdn.jsdelivr.net" not in hud_html
+
+        # Verify Studio & Web-Demo HTML contain zero forbidden AI slop or external CDN scripts
+        for ui_file in ("src/ui/studio.html", "web-demo/index.html"):
+            if Path(ui_file).exists():
+                ui_txt = Path(ui_file).read_text(encoding="utf-8")
+                for forbidden in ("AI THINKING", "#00ffff", "#ff00ff", "素晴らしい演奏", "共鳴しました", "印象派風", "バロック風", "cdn.jsdelivr.net"):
+                    assert forbidden not in ui_txt
 
 
 def test_5_dual_pedal_physics_favicon_ascii_bats_and_production_separation() -> None:
@@ -355,11 +363,17 @@ def test_5_dual_pedal_physics_favicon_ascii_bats_and_production_separation() -> 
     assert audio_stats["una_corda_veil_db"] < 0.0
     synth.close()
 
-    # 2. Verify all .bat launchers contain pure ASCII only (prevents Windows chcp 65001 char doubling)
+    # 2. Verify all .bat launchers contain pure ASCII only & ZERO `chcp 65001` (prevents Windows char doubling)
+    from src.stage.cli_banner import BANNERS, display_width
+
     for bat_name in ("setup_environment.bat", "start_stage.bat", "run_demo_showcase.bat", "run_self_check.bat"):
         bat_text = Path(bat_name).read_text(encoding="utf-8")
         non_ascii = [ch for ch in bat_text if ord(ch) > 127]
         assert not non_ascii, f"{bat_name} contains non-ASCII characters: {non_ascii[:5]}"
+        assert "chcp 65001" not in bat_text.lower(), f"{bat_name} must not call chcp 65001"
+    for bkey, bval in BANNERS.items():
+        for ln in bval.splitlines():
+            assert display_width(ln) <= 76, f"Banner line too wide ({display_width(ln)} cols) in {bkey}: {ln}"
 
     # 3. Verify Stage Server + /favicon.ico 200 OK + Scenario Execution + Obsidian Note Archival
     with tempfile.TemporaryDirectory() as empty_dir:
@@ -374,6 +388,13 @@ def test_5_dual_pedal_physics_favicon_ascii_bats_and_production_separation() -> 
         )
         with TestClient(app) as client:
             assert client.get("/").status_code == 200
+            assert client.get("/studio").status_code == 200
+            assert client.get("/stage").status_code == 200
+            assert client.get("/studio-static/style.css").status_code == 200
+            assert client.get("/studio-static/app.js").status_code == 200
+            assert client.get("/studio-static/../../pyproject.toml").status_code in (400, 404)
+            assert client.get("/api/pieces/../../pyproject.toml").status_code in (400, 404)
+            assert client.get("/audio/../../pyproject.toml").status_code in (400, 404)
             fav = client.get("/favicon.ico")
             assert fav.status_code == 200 and len(fav.content) > 100
             assert client.post("/api/stage/reset").json()["motif_nodes"] == 0
@@ -518,3 +539,35 @@ def test_6_four_act_architect_phrase_model_retake_and_masterwork_export() -> Non
                     (exp_dir / fname).unlink()
             assert client.get("/demos/../../pyproject.toml").status_code in (400, 404)
             assert isinstance(CoCompositionArchitect(), CoCompositionArchitect)
+
+
+def test_7_harmonic_beauty_realizer_and_auditor_guarantees() -> None:
+    from src.stage.harmonic_beauty_realizer import (
+        BeautyHarmonyAuditor,
+        HarmonicBeautyRealizer,
+        extract_corpus_musical_laws,
+    )
+
+    laws = extract_corpus_musical_laws()
+    assert laws["corpus_files_analyzed"] >= 1
+    for ton, mode in (("D_minor", "cello"), ("F_major", "piano"), ("G_minor", "cello"), ("Eb_major", "piano")):
+        res = HarmonicBeautyRealizer.realize_4act_piece(
+            {"tonal_center": ton, "bpm": 76.0, "prog_variant": 0}, mode=mode, corpus_laws=laws
+        )
+        rep = BeautyHarmonyAuditor.audit_piece(
+            notes=res["notes"],
+            chord_timeline=res["chord_timeline"],
+            cc64_curve=res["cc64_curve"],
+            cc67_curve=res["cc67_curve"],
+            tonality=ton,
+            suspension_windows=res["suspension_windows"],
+            piano_events_for_preflight=res["piano_preflight_events"],
+        )
+        assert rep.passed is True, f"{ton}/{mode} failed: {rep.issues}"
+        assert rep.beauty_score >= 88.0
+        assert rep.consonance_score >= 90.0
+        assert rep.avg_polyphony >= 2.5
+        assert rep.mono_ratio_pct < 10.0
+        assert rep.dissonant_pair_pct <= 2.5
+        assert rep.repedal_sync_pct >= 85.0
+        assert rep.preflight_passed is True

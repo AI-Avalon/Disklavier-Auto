@@ -146,7 +146,32 @@ def _build_hall_ir_stereo(sample_rate: int = 44100, rt60_s: float = 1.60) -> Tup
     ir_l += noise_l * decay_env * 0.030
     ir_r += noise_r * decay_env * 0.030
     _HALL_IR_CACHE[key] = (ir_l, ir_r)
+    while len(_HALL_IR_CACHE) > 8:
+        oldest_key = next(iter(_HALL_IR_CACHE))
+        _HALL_IR_CACHE.pop(oldest_key, None)
     return ir_l, ir_r
+
+
+def _apply_edge_fades(buf: np.ndarray, sample_rate: int, fade_in_s: float = 0.006, fade_out_s: float = 0.014) -> np.ndarray:
+    """Applies raised-cosine micro fades at buffer edges to prevent clicks/pops."""
+    n = len(buf)
+    if n < 32:
+        return buf
+    fi = min(n // 4, max(0, int(fade_in_s * sample_rate)))
+    fo = min(n // 3, max(0, int(fade_out_s * sample_rate)))
+    if fi > 2:
+        ramp_in = 0.5 * (1.0 - np.cos(np.linspace(0.0, math.pi, fi)))
+        if buf.ndim == 2:
+            buf[:fi, :] *= ramp_in[:, None]
+        else:
+            buf[:fi] *= ramp_in
+    if fo > 2:
+        ramp_out = 0.5 * (1.0 + np.cos(np.linspace(0.0, math.pi, fo)))
+        if buf.ndim == 2:
+            buf[-fo:, :] *= ramp_out[:, None]
+        else:
+            buf[-fo:] *= ramp_out
+    return buf
 
 
 def apply_concert_hall_reverb_stereo(
@@ -343,6 +368,7 @@ class LocalAudioSynthesizer:
                 env_rel[release_idx:] = np.exp(-np.linspace(0.0, 6.2, rel_len))
 
         out = wave * attack * env_rel * amp_scale
+        out = _apply_edge_fades(out, sr, fade_in_s=0.002, fade_out_s=0.012)
         return np.nan_to_num(out, nan=0.0, posinf=0.0, neginf=0.0).astype(np.float32)
 
     def synthesize_cello_phrase(
@@ -416,6 +442,7 @@ class LocalAudioSynthesizer:
             buf[start_i : start_i + seg_len] += tone * env * vel_amp
 
         buf = np.nan_to_num(buf, nan=0.0, posinf=0.0, neginf=0.0)
+        buf = _apply_edge_fades(buf, sr, fade_in_s=0.005, fade_out_s=0.012)
         if not return_stereo:
             return buf.astype(np.float32)
 
@@ -582,10 +609,20 @@ class LocalAudioSynthesizer:
         wet_mix = apply_concert_hall_reverb_stereo(dry_mix, sample_rate=sr, wet_mix=0.28, rt60_s=1.60)
         clean = np.nan_to_num(wet_mix, nan=0.0, posinf=0.0, neginf=0.0)
 
-        # Gentle mastering limiter & peak normalization (-1.5 dBFS max)
-        peak_raw = float(np.max(np.abs(clean))) if len(clean) else 1.0
-        if peak_raw > 0.84:
-            clean = clean * (0.82 / peak_raw)
+        # RMS-targeted loudness mastering (-17 dBFS target) + transparent soft-knee transient ceiling (< 0.88)
+        rms_raw = float(np.sqrt(np.mean(clean ** 2)) + 1e-12)
+        target_rms = 0.145
+        gain = min(2.35, max(0.65, target_rms / rms_raw))
+        clean = clean * gain
+        peak_after = float(np.max(np.abs(clean))) if len(clean) else 1.0
+        if peak_after > 0.74:
+            over = np.maximum(0.0, np.abs(clean) - 0.74)
+            clean = np.where(
+                np.abs(clean) > 0.74,
+                np.sign(clean) * (0.74 + 0.14 * np.tanh(over / 0.28)),
+                clean,
+            )
+        clean = _apply_edge_fades(clean, sr, fade_in_s=0.008, fade_out_s=0.025)
         mastered = np.tanh(clean * 0.96).astype(np.float32)
 
         rms = float(np.sqrt(np.mean(mastered.astype(np.float64) ** 2)) + 1e-12)
@@ -606,45 +643,74 @@ class LocalAudioSynthesizer:
         }
         return mastered, metrics
 
+    def export_stereo_mp3(
+        self,
+        stereo_audio: np.ndarray,
+        out_mp3_path: Path,
+        sample_rate: Optional[int] = None,
+        bitrate_kbps: int = 128,
+    ) -> Dict[str, Any]:
+        """Saves 44.1kHz Stereo MP3 directly (no intermediate bloated WAV required)."""
+        sr = int(sample_rate or self.sample_rate)
+        clipped = np.clip(stereo_audio, -1.0, 1.0)
+        pcm16 = (clipped * 32767.0).astype(np.int16)
+        if lameenc is None:
+            raise RuntimeError("lameenc is required for direct MP3 export")
+        out_mp3_path.parent.mkdir(parents=True, exist_ok=True)
+        encoder = lameenc.Encoder()
+        encoder.set_bit_rate(int(bitrate_kbps))
+        encoder.set_in_sample_rate(sr)
+        encoder.set_channels(2 if pcm16.ndim == 2 else 1)
+        encoder.set_quality(2)
+        mp3_bytes = encoder.encode(pcm16.tobytes()) + encoder.flush()
+        out_mp3_path.write_bytes(mp3_bytes)
+        return {
+            "mp3_path": str(out_mp3_path),
+            "mp3_bytes": out_mp3_path.stat().st_size if out_mp3_path.exists() else 0,
+            "bitrate_kbps": int(bitrate_kbps),
+        }
+
     def export_stereo_wav_and_mp3(
         self,
         stereo_audio: np.ndarray,
-        out_wav_path: Path,
+        out_wav_path: Optional[Path],
         out_mp3_path: Optional[Path] = None,
         sample_rate: Optional[int] = None,
+        mp3_bitrate_kbps: int = 128,
     ) -> Dict[str, Any]:
-        """Saves 44.1kHz 16-bit PCM Stereo WAV and 192kbps Stereo MP3."""
+        """Saves 44.1kHz 16-bit PCM Stereo WAV (optional) and Stereo MP3 (default 128kbps)."""
         sr = int(sample_rate or self.sample_rate)
         clipped = np.clip(stereo_audio, -1.0, 1.0)
         pcm16 = (clipped * 32767.0).astype(np.int16)
 
-        out_wav_path.parent.mkdir(parents=True, exist_ok=True)
-        if sf is not None:
-            sf.write(str(out_wav_path), pcm16, sr, subtype="PCM_16")
-        else:
-            import wave
+        wav_bytes = 0
+        if out_wav_path is not None:
+            out_wav_path.parent.mkdir(parents=True, exist_ok=True)
+            if sf is not None:
+                sf.write(str(out_wav_path), pcm16, sr, subtype="PCM_16")
+            else:
+                import wave
 
-            with wave.open(str(out_wav_path), "wb") as wf:
-                wf.setnchannels(2 if pcm16.ndim == 2 else 1)
-                wf.setsampwidth(2)
-                wf.setframerate(sr)
-                wf.writeframes(pcm16.tobytes())
+                with wave.open(str(out_wav_path), "wb") as wf:
+                    wf.setnchannels(2 if pcm16.ndim == 2 else 1)
+                    wf.setsampwidth(2)
+                    wf.setframerate(sr)
+                    wf.writeframes(pcm16.tobytes())
+            wav_bytes = out_wav_path.stat().st_size if out_wav_path.exists() else 0
 
         mp3_saved = False
         if out_mp3_path is not None and lameenc is not None:
-            out_mp3_path.parent.mkdir(parents=True, exist_ok=True)
-            encoder = lameenc.Encoder()
-            encoder.set_bit_rate(192)
-            encoder.set_in_sample_rate(sr)
-            encoder.set_channels(2 if pcm16.ndim == 2 else 1)
-            encoder.set_quality(2)
-            mp3_bytes = encoder.encode(pcm16.tobytes()) + encoder.flush()
-            out_mp3_path.write_bytes(mp3_bytes)
+            self.export_stereo_mp3(
+                stereo_audio,
+                out_mp3_path=out_mp3_path,
+                sample_rate=sr,
+                bitrate_kbps=mp3_bitrate_kbps,
+            )
             mp3_saved = True
 
         return {
-            "wav_path": str(out_wav_path),
-            "wav_bytes": out_wav_path.stat().st_size if out_wav_path.exists() else 0,
+            "wav_path": str(out_wav_path) if out_wav_path is not None else None,
+            "wav_bytes": wav_bytes,
             "mp3_path": str(out_mp3_path) if mp3_saved else None,
             "mp3_bytes": out_mp3_path.stat().st_size if (mp3_saved and out_mp3_path and out_mp3_path.exists()) else 0,
         }
@@ -722,6 +788,7 @@ class LocalAudioSynthesizer:
         peak_raw = float(np.max(np.abs(hall_stereo))) if len(hall_stereo) else 1.0
         if peak_raw > 0.85:
             hall_stereo = hall_stereo * (0.82 / peak_raw)
+        hall_stereo = _apply_edge_fades(hall_stereo, sr, fade_in_s=0.005, fade_out_s=0.018)
         limited = np.tanh(hall_stereo * 0.92).astype(np.float32)
 
         rms = float(np.sqrt(np.mean(limited.astype(np.float64) ** 2)) + 1e-12)

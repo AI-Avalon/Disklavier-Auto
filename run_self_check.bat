@@ -1,8 +1,6 @@
 @echo off
-chcp 65001 >nul
 setlocal EnableDelayedExpansion
 cd /d "%~dp0"
-set "PYTHONIOENCODING=utf-8"
 set "PYTHONUTF8=1"
 set "OLLAMA_FLASH_ATTENTION=1"
 set "OLLAMA_KV_CACHE_TYPE=q8_0"
@@ -21,7 +19,7 @@ set "FAIL_FLAG=0"
 python -m src.stage.cli_banner check_header
 
 echo.
-echo [1/4] Running stage system verification tests (tests/test_stage_system.py)...
+echo [1/6] Running stage system verification tests (tests/test_stage_system.py)...
 pytest -v tests/test_stage_system.py
 if errorlevel 1 (
     echo [FAIL] tests/test_stage_system.py failed.
@@ -31,7 +29,7 @@ if errorlevel 1 (
 )
 
 echo.
-echo [2/4] Running full test suite (pytest tests/)...
+echo [2/6] Running full test suite (pytest tests/)...
 pytest -v tests/
 if errorlevel 1 (
     echo [FAIL] pytest tests/ failed.
@@ -41,7 +39,7 @@ if errorlevel 1 (
 )
 
 echo.
-echo [3/4] Running system integrity validation (validate_system_integrity.py)...
+echo [3/6] Running system integrity validation (validate_system_integrity.py)...
 python validate_system_integrity.py
 if errorlevel 1 (
     echo [FAIL] validate_system_integrity.py failed.
@@ -51,7 +49,27 @@ if errorlevel 1 (
 )
 
 echo.
-echo [4/4] Running 10x real LLM + MusicalityCritic + Dual Pedal + Audio loop...
+echo [4/6] Verifying 100-piece library and 10 showcase MP3/MIDI assets...
+python scripts/verify_catalog_and_demo.py
+if errorlevel 1 (
+    echo [FAIL] scripts/verify_catalog_and_demo.py failed.
+    set "FAIL_FLAG=1"
+) else (
+    echo [PASS] scripts/verify_catalog_and_demo.py passed.
+)
+
+echo.
+echo [5/6] Running Playwright real-browser audit (/studio, /stage, web-demo)...
+python scripts/playwright_audit.py --quick
+if errorlevel 1 (
+    echo [FAIL] scripts/playwright_audit.py failed.
+    set "FAIL_FLAG=1"
+) else (
+    echo [PASS] scripts/playwright_audit.py passed.
+)
+
+echo.
+echo [6/6] Running 10x real LLM + MusicalityCritic + Dual Pedal + Audio loop...
 python scripts/run_10x_iterative_refinement.py --iterations 10 --no-device-audio
 if errorlevel 1 (
     echo [FAIL] scripts/run_10x_iterative_refinement.py failed.

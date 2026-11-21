@@ -26,6 +26,7 @@ from typing import Any, Dict, List, Optional, Tuple
 
 import numpy as np
 
+from src.stage.harmonic_beauty_realizer import BeautyHarmonyAuditor, parse_chord_symbol
 from src.stage.layer1_perception import midi_to_note_name
 
 try:
@@ -173,8 +174,8 @@ class MasterworkEvaluator:
         if seed_signs and mel_signs:
             for off in range(max(1, len(mel_signs) - len(seed_signs) + 1)):
                 seg = mel_signs[off : off + len(seed_signs)]
-                same = sum(1 for a, b in zip(seg, seed_signs) if a == b)
-                inv = sum(1 for a, b in zip(seg, seed_signs) if a == -b)
+                same = sum(1 for a, b in zip(seg, seed_signs, strict=False) if a == b)
+                inv = sum(1 for a, b in zip(seg, seed_signs, strict=False) if a == -b)
                 dir_match = max(dir_match, max(same, inv) / max(1, len(seed_signs)))
         # Also check interval size echo (within +/-1 semitone of seed intervals or inverted)
         abs_seed = {abs(x) for x in seed_ivs if x != 0}
@@ -489,11 +490,32 @@ class MusicalityCritic:
             )
             pedal_score = 12.0 if has_repedal else 10.5
 
-        # Evaluate 4 Masterwork Structural Criteria
+        # Evaluate 4 Masterwork Structural Criteria & Consonance/Polyphony Beauty check
         mw_scores, mw_pct, mw_total, mw_failures = MasterworkEvaluator.evaluate(
             note_evs, human_notes, tonal_center, eff_scale_pcs, macro_plan=macro_plan
         )
         failures.extend(mw_failures)
+
+        # Incorporate BeautyHarmonyAuditor consonance/polyphony verification on full two-hand candidates
+        if has_lh and has_rh and len(note_evs) >= 6:
+            max_nt = max((float(n.get("onset_s", 0.0)) + float(n.get("duration_s", 0.3)) for n in note_evs), default=3.2)
+            ch_sym = "Dm9"
+            if macro_plan is not None:
+                recs = macro_plan.get("recommended_chords") if isinstance(macro_plan, dict) else getattr(macro_plan, "recommended_chords", None)
+                if recs:
+                    ch_sym = str(recs[0])
+            sp0 = parse_chord_symbol(ch_sym, tonal_center)
+            b_rep = BeautyHarmonyAuditor.audit_piece(
+                note_evs,
+                [{"bar": 1, "start_s": 0.0, "end_s": max_nt, "chord": sp0.symbol, "_spec": sp0}],
+                [{"t": 0.0, "val": int(v)} for v in cc64_vals] or [{"t": 0.0, "val": 0}],
+                [{"t": 0.0, "val": int(v)} for v in cc67_vals] or [{"t": 0.0, "val": 0}],
+                tonality=tonal_center,
+            )
+            if b_rep.mono_ratio_pct >= 30.0 and "excessive_monophony" not in failures:
+                polyphony_score = max(3.0, polyphony_score - 6.0)
+            if b_rep.dissonant_pair_pct > 5.5:
+                spectral_score = max(4.0, spectral_score - 4.0)
 
         raw_6axis = (
             anti_scale_score

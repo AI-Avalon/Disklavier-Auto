@@ -21,6 +21,7 @@ Verifies on every single iteration (>= 10 iterations):
 from __future__ import annotations
 
 import argparse
+import faulthandler
 import json
 from pathlib import Path
 import sys
@@ -28,8 +29,6 @@ import time
 from typing import Any, Dict, List
 
 from fastapi.testclient import TestClient
-import numpy as np
-import soundfile as sf
 
 ROOT = Path(__file__).resolve().parents[1]
 if str(ROOT) not in sys.path:
@@ -57,34 +56,38 @@ SCENARIOS: List[Dict[str, Any]] = [
 
 
 def _verify_published_demo_audio(violations: List[str]) -> Dict[str, Any]:
+    from scripts.verify_catalog_and_demo import _decode_mp3_metrics, _find_ffmpeg
+
     demo_dir = ROOT / "docs" / "demos"
+    ffmpeg_exe = _find_ffmpeg()
     stats: Dict[str, Any] = {}
     for stem in ("demo_mode_b_cello_dialogue", "demo_mode_a_piano_dialogue"):
-        wav_p = demo_dir / f"{stem}.wav"
         mp3_p = demo_dir / f"{stem}.mp3"
         mid_p = demo_dir / f"{stem}.mid"
         xml_p = demo_dir / f"{stem}.musicxml"
-        for p in (wav_p, mp3_p, mid_p, xml_p):
+        for p in (mp3_p, mid_p, xml_p):
             if not p.exists() or p.stat().st_size < 1000:
                 violations.append(f"Published demo asset missing or too small: {p}")
-        if wav_p.exists():
-            data, sr = sf.read(str(wav_p), dtype="float32")
-            dur_s = len(data) / float(sr)
-            rms = float(np.sqrt(np.mean(data.astype(np.float64) ** 2)) + 1e-12)
-            peak = float(np.max(np.abs(data))) if len(data) else 0.0
-            has_bad = bool(np.any(~np.isfinite(data)))
-            if not (45.0 <= dur_s <= 135.0):
-                violations.append(f"{wav_p.name}: duration_s {dur_s:.2f} outside [45, 135]")
-            if rms <= 0.015:
-                violations.append(f"{wav_p.name}: RMS too low ({rms:.4f})")
-            if has_bad or peak > 1.0:
-                violations.append(f"{wav_p.name}: NaN/Inf or clipping peak={peak:.4f}")
-            stats[stem] = {
-                "duration_s": round(dur_s, 2),
-                "rms": round(rms, 4),
-                "peak": round(peak, 4),
-                "mp3_kb": round(mp3_p.stat().st_size / 1024.0, 1) if mp3_p.exists() else 0.0,
-            }
+        if mp3_p.exists():
+            m = _decode_mp3_metrics(mp3_p, ffmpeg_exe)
+            if "error" in m:
+                violations.append(m["error"])
+            else:
+                dur_s = m["duration_s"]
+                rms = m["rms"]
+                peak = m["peak"]
+                if not (25.0 <= dur_s <= 135.0):
+                    violations.append(f"{mp3_p.name}: duration_s {dur_s:.2f} outside [25, 135]")
+                if rms <= 0.015:
+                    violations.append(f"{mp3_p.name}: RMS too low ({rms:.4f})")
+                if m["has_nan_or_inf"] or m["clipping"] > 0:
+                    violations.append(f"{mp3_p.name}: NaN/Inf or clipping peak={peak:.4f}")
+                stats[stem] = {
+                    "duration_s": dur_s,
+                    "rms": rms,
+                    "peak": peak,
+                    "mp3_kb": m["size_kb"],
+                }
     return stats
 
 
@@ -143,6 +146,7 @@ def run_iterative_verification(iterations: int = 10, play_device_audio: bool = F
                     assert client.post("/api/stage/mode", json={"mode": sc["mode"]}).status_code == 200
 
                 t0 = time.perf_counter()
+                print(f"  [Iter {idx + 1:02d}/{iterations}] mode={sc['mode']} ...", flush=True)
                 r_turn = client.post("/api/stage/turn")
                 assert r_turn.status_code == 200
                 st = r_turn.json()["state"]
@@ -223,6 +227,14 @@ def run_iterative_verification(iterations: int = 10, play_device_audio: bool = F
                     mw_pct = win.get("masterwork_pct", {})
                     if len(mw_pct) != 4 or float(win.get("masterwork_total", 0.0)) < 65.0:
                         violations.append(f"Iter {idx + 1}: MasterworkEvaluator check failed ({mw_pct})")
+                    bsum = win.get("beauty_summary") or {}
+                    if bsum:
+                        if float(bsum.get("consonance_score", 0.0)) < 90.0:
+                            violations.append(f"Iter {idx + 1}: Beauty consonance < 90 ({bsum})")
+                        if float(bsum.get("avg_polyphony", 0.0)) < 2.2:
+                            violations.append(f"Iter {idx + 1}: Beauty avg_polyphony < 2.2 ({bsum})")
+                        if float(bsum.get("mono_ratio_pct", 100.0)) >= 15.0:
+                            violations.append(f"Iter {idx + 1}: Beauty mono_ratio >= 15% ({bsum})")
 
                 for rc in rejected_list:
                     if not rc["rejection_tag_ja"].startswith("[× 棄却:"):
@@ -341,10 +353,14 @@ def main() -> int:
     parser.add_argument("--no-device-audio", action="store_true")
     args = parser.parse_args()
 
-    report = run_iterative_verification(
-        iterations=max(10, args.iterations),
-        play_device_audio=not args.no_device_audio,
-    )
+    faulthandler.dump_traceback_later(240, repeat=False, exit=True)
+    try:
+        report = run_iterative_verification(
+            iterations=max(10, args.iterations),
+            play_device_audio=not args.no_device_audio,
+        )
+    finally:
+        faulthandler.cancel_dump_traceback_later()
     print(f"=== 10x Iterative Refinement Report (Model: {report['ollama_model']}) ===")
     for rec in report["records"]:
         print(

@@ -18,6 +18,8 @@ from contextlib import asynccontextmanager
 import os
 from pathlib import Path
 import random
+import subprocess
+import sys
 import threading
 import time
 from typing import Any, Dict, List, Optional, Set
@@ -64,6 +66,8 @@ except Exception:  # pragma: no cover
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 STAGE_HUD_HTML_PATH = REPO_ROOT / "src" / "ui" / "stage_hud.html"
+STUDIO_HTML_PATH = REPO_ROOT / "src" / "ui" / "studio.html"
+WEB_DEMO_DIR = REPO_ROOT / "web-demo"
 
 # Concrete musical inquiry scenarios (zero hardcoded "〇〇風" composer/style presets)
 STAGE_INQUIRY_SCENARIOS: Dict[str, Dict[str, Any]] = {
@@ -115,6 +119,59 @@ def _load_stage_config() -> Dict[str, Any]:
         except Exception:
             pass
     return {}
+
+
+def _probe_gpu_vram_gb_nonblocking() -> Optional[float]:
+    """Queries live RTX VRAM usage without importing heavy modules if not already loaded."""
+    torch_mod = sys.modules.get("torch")
+    if torch_mod is not None:
+        try:
+            if torch_mod.cuda.is_available():
+                free_b, total_b = torch_mod.cuda.mem_get_info(0)
+                used_b = max(0, int(total_b) - int(free_b))
+                if used_b > 0:
+                    return round(used_b / (1024.0 ** 3), 1)
+        except Exception:
+            pass
+    try:
+        flags = getattr(subprocess, "CREATE_NO_WINDOW", 0)
+        res = subprocess.run(
+            ["nvidia-smi", "--query-gpu=memory.used", "--format=csv,noheader,nounits"],
+            stdin=subprocess.DEVNULL,
+            capture_output=True,
+            text=True,
+            timeout=1.0,
+            check=False,
+            creationflags=flags,
+        )
+        if res.returncode == 0 and res.stdout.strip():
+            mib = float(res.stdout.strip().splitlines()[0].strip())
+            return round(mib / 1024.0, 1)
+    except Exception:
+        pass
+    return None
+
+
+_TONALITY_SHORT_MAP: Dict[str, str] = {
+    "D_minor": "Dm",
+    "D_dorian": "Ddor",
+    "F_major": "F",
+    "A_minor": "Am",
+    "C_major": "C",
+    "G_minor": "Gm",
+    "Eb_major": "Eb",
+    "Bb_major": "Bb",
+    "E_minor": "Em",
+    "G_major": "G",
+    "C_minor": "Cm",
+    "Ab_major": "Ab",
+    "B_minor": "Bm",
+    "D_major": "D",
+    "F_minor": "Fm",
+    "A_major": "A",
+    "F#_minor": "F#m",
+    "E_major": "E",
+}
 
 
 class ModeSwitchReq(BaseModel):
@@ -272,15 +329,30 @@ class StageOrchestrator:
         self._last_human_node_id: Optional[str] = None
         self._last_ai_node_id: Optional[str] = None
 
-        # Background Demo / Turn Loop
+        # Background Demo / Turn Loop & Lock-free GPU VRAM Monitor
         self._running: bool = True
         self._demo_step_idx: int = 0
+        self._gpu_vram_gb: Optional[float] = None
         self._thread = threading.Thread(
             target=self._orchestration_loop,
             name="StageOrchestratorLoop",
             daemon=True,
         )
         self._thread.start()
+        self._vram_thread = threading.Thread(
+            target=self._vram_poll_loop,
+            name="GpuVramPoll",
+            daemon=True,
+        )
+        self._vram_thread.start()
+
+    def _vram_poll_loop(self) -> None:
+        while self._running:
+            self._gpu_vram_gb = _probe_gpu_vram_gb_nonblocking()
+            for _ in range(150):
+                if not self._running:
+                    break
+                time.sleep(0.1)
 
     def _try_open_midi_in(self, preferred: str) -> None:
         try:
@@ -551,7 +623,7 @@ class StageOrchestrator:
                 note_name=midi_to_note_name(pitches[-1]),
                 articulation="legato" if step_idx % 2 == 0 else "staccato",
                 breath_gauge=max(0.84, gauge),
-                turn_ready=True or ready,
+                turn_ready=bool(ready or gauge >= 0.68 or len(human_notes) >= 2),
                 turn_reason=reason,
                 pedal_cc64=44 if step_idx % 2 == 0 else 12,
                 pedal_cc67=90 if step_idx % 2 == 1 else 0,
@@ -829,13 +901,14 @@ class StageOrchestrator:
                     "pitches": h_pitches,
                 }
             )
+            ton_short = _TONALITY_SHORT_MAP.get(final_intent.tonal_center, str(final_intent.tonal_center).replace("_", " "))
+            a_motif_str = "-".join(midi_to_note_name(p) for p in a_pitches[:3])
             self.motif_nodes.append(
                 {
                     "id": a_id,
                     "kind": "ai",
                     "turn": self.turn_id,
-                    "label": f"AI [{adopted.candidate_id}] Act{macro_plan.act_number} {final_intent.tonal_center}: "
-                    + "-".join(midi_to_note_name(p) for p in a_pitches[:3]),
+                    "label": f"AI [{adopted.candidate_id}] Act{macro_plan.act_number} {ton_short} {a_motif_str}",
                     "pitches": a_pitches,
                     "stance": final_intent.interaction_stance,
                 }
@@ -906,6 +979,7 @@ class StageOrchestrator:
             stereo_audio,
             out_wav_path=export_dir / f"{stem}.wav",
             out_mp3_path=export_dir / f"{stem}.mp3",
+            mp3_bitrate_kbps=128,
         )
 
         asset_rel = {
@@ -1014,6 +1088,8 @@ class StageOrchestrator:
                     "masterwork_pct": c.masterwork_pct,
                     "lh_idiom": c.lh_idiom,
                     "blueprint_source": c.blueprint_source,
+                    "chord_timeline": c.chord_timeline,
+                    "beauty_summary": c.beauty_summary,
                 }
                 for c in self.latest_candidates
             ]
@@ -1044,6 +1120,7 @@ class StageOrchestrator:
                 "synthesized_work": dict(self.latest_synthesized_work) if self.latest_synthesized_work else None,
                 "corpus_source": self.corpus_loader.source_mode,
                 "phrase_model_device": self.phrase_model.device if self.phrase_model.loaded else "fallback",
+                "gpu_vram_gb": self._gpu_vram_gb,
                 "calibration": dict(self.calibration_status),
                 "audio_status": {
                     **self.latest_audio_stats,
@@ -1151,16 +1228,19 @@ class StageWSBroadcaster:
     async def _broadcast_loop(self) -> None:
         while True:
             if self.clients:
-                payload = self.orchestrator.get_hud_state()
+                payload = await asyncio.to_thread(self.orchestrator.get_hud_state)
                 dead: List[WebSocket] = []
                 for ws in list(self.clients):
                     try:
-                        await ws.send_json(payload)
+                        await asyncio.wait_for(ws.send_json(payload), timeout=1.5)
+                    except (asyncio.TimeoutError, TimeoutError):
+                        # Slow consumer frame skip; keep client subscribed
+                        continue
                     except Exception:
                         dead.append(ws)
                 for ws in dead:
                     self.clients.discard(ws)
-            await asyncio.sleep(1.0 / 60.0)
+            await asyncio.sleep(1.0 / 33.0)
 
 
 def build_stage_router(orch: StageOrchestrator, broadcaster: StageWSBroadcaster) -> APIRouter:
@@ -1171,11 +1251,60 @@ def build_stage_router(orch: StageOrchestrator, broadcaster: StageWSBroadcaster)
         return Response(content=PIANO_FAVICON_ICO_BYTES, media_type="image/x-icon")
 
     @router.get("/", response_class=HTMLResponse)
+    @router.get("/studio", response_class=HTMLResponse)
+    async def serve_studio() -> HTMLResponse:
+        if STUDIO_HTML_PATH.exists():
+            return HTMLResponse(STUDIO_HTML_PATH.read_text(encoding="utf-8"))
+        if STAGE_HUD_HTML_PATH.exists():
+            return HTMLResponse(STAGE_HUD_HTML_PATH.read_text(encoding="utf-8"))
+        return HTMLResponse("<h1>studio.html missing</h1>", status_code=404)
+
     @router.get("/stage", response_class=HTMLResponse)
     async def serve_stage_hud() -> HTMLResponse:
         if STAGE_HUD_HTML_PATH.exists():
             return HTMLResponse(STAGE_HUD_HTML_PATH.read_text(encoding="utf-8"))
         return HTMLResponse("<h1>stage_hud.html missing</h1>", status_code=404)
+
+    @router.get("/studio-static/{filename:path}", include_in_schema=False)
+    async def serve_studio_static(filename: str) -> Response:
+        safe_name = Path(filename).name
+        if safe_name not in ("style.css", "app.js") or safe_name != filename or ".." in filename:
+            return JSONResponse({"ok": False, "error": "Invalid asset"}, status_code=400)
+        target = (WEB_DEMO_DIR / safe_name).resolve()
+        if not target.exists() or target.parent != WEB_DEMO_DIR.resolve():
+            return JSONResponse({"ok": False, "error": "Asset not found"}, status_code=404)
+        mt = "text/css; charset=utf-8" if safe_name.endswith(".css") else "application/javascript; charset=utf-8"
+        return FileResponse(str(target), media_type=mt)
+
+    @router.get("/api/catalog")
+    async def api_catalog() -> Response:
+        cat_path = (WEB_DEMO_DIR / "data" / "catalog_100.json").resolve()
+        if not cat_path.exists():
+            return JSONResponse({"ok": False, "error": "Catalog not generated"}, status_code=404)
+        return FileResponse(str(cat_path), media_type="application/json")
+
+    @router.get("/api/pieces/{piece_id}")
+    async def api_piece_detail(piece_id: str) -> Response:
+        clean_id = Path(piece_id).stem
+        if not clean_id or clean_id != piece_id or ".." in piece_id or "/" in piece_id or "\\" in piece_id:
+            return JSONResponse({"ok": False, "error": "Invalid piece id"}, status_code=400)
+        pieces_dir = (WEB_DEMO_DIR / "data" / "pieces").resolve()
+        target = (pieces_dir / f"{clean_id}.json").resolve()
+        if not target.exists() or target.parent != pieces_dir:
+            return JSONResponse({"ok": False, "error": "Piece not found"}, status_code=404)
+        return FileResponse(str(target), media_type="application/json")
+
+    @router.get("/audio/{filename:path}", include_in_schema=False)
+    async def serve_showcase_audio(filename: str) -> Response:
+        safe_name = Path(filename).name
+        if not safe_name or safe_name != filename or ".." in filename:
+            return JSONResponse({"ok": False, "error": "Invalid filename"}, status_code=400)
+        audio_dir = (WEB_DEMO_DIR / "audio").resolve()
+        target = (audio_dir / safe_name).resolve()
+        if not target.exists() or not target.is_file() or target.parent != audio_dir:
+            return JSONResponse({"ok": False, "error": "Audio not found"}, status_code=404)
+        media_map = {".mp3": "audio/mpeg", ".mid": "audio/midi", ".wav": "audio/wav"}
+        return FileResponse(str(target), media_type=media_map.get(target.suffix.lower()))
 
     @router.get("/api/stage/state")
     async def api_stage_state() -> JSONResponse:
@@ -1189,7 +1318,9 @@ def build_stage_router(orch: StageOrchestrator, broadcaster: StageWSBroadcaster)
     async def api_stage_demo(req: DemoToggleReq) -> JSONResponse:
         res = orch.set_demo_enabled(req.enabled)
         if req.enabled and not orch.production_mode and orch.turn_id == 0:
-            orch.execute_composition_turn(use_virtual_human=True, staggered_playback=False)
+            await asyncio.to_thread(
+                orch.execute_composition_turn, use_virtual_human=True, staggered_playback=False
+            )
         return JSONResponse(res)
 
     @router.post("/api/stage/audio_monitor")
@@ -1204,29 +1335,34 @@ def build_stage_router(orch: StageOrchestrator, broadcaster: StageWSBroadcaster)
     async def api_stage_preset(req: PresetReq) -> JSONResponse:
         res = orch.apply_preset(req.preset)
         if res.get("ok"):
-            state = orch.execute_composition_turn(use_virtual_human=True, staggered_playback=False)
+            state = await asyncio.to_thread(
+                orch.execute_composition_turn, use_virtual_human=True, staggered_playback=False
+            )
             return JSONResponse({**res, "state": state})
         return JSONResponse(res, status_code=400)
 
     @router.post("/api/stage/calibrate")
     async def api_stage_calibrate() -> JSONResponse:
-        return JSONResponse(orch.run_calibration())
+        res = await asyncio.to_thread(orch.run_calibration)
+        return JSONResponse(res)
 
     @router.post("/api/stage/turn")
     async def api_stage_turn(request: Request) -> JSONResponse:
-        state = orch.execute_composition_turn(use_virtual_human=True, staggered_playback=False)
+        state = await asyncio.to_thread(
+            orch.execute_composition_turn, use_virtual_human=True, staggered_playback=False
+        )
         return JSONResponse({"ok": True, "state": state})
 
     @router.post("/api/stage/retake")
     async def api_stage_retake(req: Optional[DirectiveReq] = None) -> JSONResponse:
         text = req.text if req is not None else ""
-        state = orch.retake_last_turn(text)
+        state = await asyncio.to_thread(orch.retake_last_turn, text)
         return JSONResponse({"ok": True, "state": state})
 
     @router.post("/api/stage/synthesize_work")
     async def api_stage_synthesize_work(req: Optional[SynthesizeWorkReq] = None) -> JSONResponse:
         play_audio = bool(req.play_audio) if req is not None else False
-        summary = orch.synthesize_complete_work(play_audio=play_audio)
+        summary = await asyncio.to_thread(orch.synthesize_complete_work, play_audio=play_audio)
         return JSONResponse({**summary, "state": orch.get_hud_state()})
 
     @router.get("/demos/{filename:path}", include_in_schema=False)
@@ -1267,11 +1403,13 @@ def build_stage_router(orch: StageOrchestrator, broadcaster: StageWSBroadcaster)
             while True:
                 msg = await ws.receive_text()
                 if msg == "turn":
-                    orch.execute_composition_turn(use_virtual_human=True, staggered_playback=False)
+                    await asyncio.to_thread(
+                        orch.execute_composition_turn, use_virtual_human=True, staggered_playback=False
+                    )
                 elif msg == "panic":
                     orch.audio_synth.stop_audio()
                     orch.output_layer.panic()
-        except WebSocketDisconnect:
+        except (WebSocketDisconnect, ConnectionResetError, OSError, asyncio.CancelledError):
             pass
         except Exception:
             pass
@@ -1313,7 +1451,9 @@ def create_stage_app(
     async def _lifespan(_app: FastAPI):
         broadcaster.ensure_started()
         if orch.demo_enabled and not orch.production_mode and orch.turn_id == 0:
-            orch.execute_composition_turn(use_virtual_human=True, staggered_playback=False)
+            await asyncio.to_thread(
+                orch.execute_composition_turn, use_virtual_human=True, staggered_playback=False
+            )
         try:
             yield
         finally:

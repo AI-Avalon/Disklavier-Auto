@@ -29,6 +29,11 @@ import xml.etree.ElementTree as ET
 import mido
 
 from src.safety.preflight_checker import LocalPreflightChecker
+from src.stage.harmonic_beauty_realizer import (
+    HarmonicBeautyRealizer,
+    parse_chord_symbol,
+    quantize_to_pitch_set,
+)
 from src.stage.layer1_perception import midi_to_note_name
 
 
@@ -574,12 +579,34 @@ class CoCompositionArchitect:
                 )
                 h_dur = max(h_dur, (on * stretch) + dur_s)
 
-            # Act 3 climax overlaps simultaneously so human and piano surge together;
-            # Act 1/2/4 enter seamlessly as upbeat (anacrusis) on human decay tail.
+            # Start AI piano chord bed softly under human phrase (from beat 2) so there are zero bare monophonic gaps,
+            # while Act 3 climax overlaps fully simultaneously.
             if act_num == 3:
-                ai_start_s = cursor_s + 0.15
+                ai_start_s = cursor_s + 0.12
             else:
-                ai_start_s = cursor_s + max(0.55, h_dur - 0.18)
+                ai_start_s = cursor_s + max(0.35, h_dur * 0.45)
+
+            # Add warm sustaining piano bass+chord bed underneath human entry when human plays alone
+            ch_list = list(tr.get("chord_progression") or ["Dm9"])
+            ch0 = parse_chord_symbol(ch_list[0], str(tr.get("tonal_center") or home_ton))
+            if ai_start_s > cursor_s + 0.25:
+                bed_dur = ai_start_s - cursor_s + 0.25
+                bed_bass = quantize_to_pitch_set(38 + (tonic_pc - 2), [ch0.bass_pc] + ch0.core_pcs, lo=30, hi=46)
+                bed_fifth = quantize_to_pitch_set(bed_bass + 7, ch0.core_pcs, lo=bed_bass + 5, hi=54)
+                bed_tenth = quantize_to_pitch_set(bed_bass + 15, ch0.core_pcs, lo=bed_fifth + 3, hi=62)
+                for b_idx, bp in enumerate((bed_bass, bed_fifth, bed_tenth)):
+                    piano_events.append(
+                        {
+                            "note": bp,
+                            "pitch": bp,
+                            "time_offset_s": round(cursor_s + 0.02 + b_idx * 0.08, 4),
+                            "onset_s": round(cursor_s + 0.02 + b_idx * 0.08, 4),
+                            "duration_s": round(max(0.45, bed_dur), 4),
+                            "velocity": 44 - b_idx * 3,
+                            "hand": "lh" if bp < 60 else "rh",
+                            "voice": "lh_bass" if b_idx == 0 else "lh_inner",
+                        }
+                    )
 
             ai_max_end = 0.0
             tempo_stretch = 1.18 if act_num == 4 else (0.96 if act_num == 3 else 1.08)
@@ -736,6 +763,31 @@ class CoCompositionArchitect:
         # full 8-turn sessions naturally span 55-80s.
         piano_events.append({"note": 0, "pitch": 0, "time_offset_s": round(end_t, 4), "onset_s": round(end_t, 4), "control": 64, "pedal_cc64": 0, "value": 0, "voice": "pedal"})
         pedal_cc67_events.append({"note": 0, "pitch": 0, "time_offset_s": round(end_t, 4), "onset_s": round(end_t, 4), "control": 67, "value": 0, "voice": "pedal"})
+
+        # Run HarmonicBeautyRealizer clash-resolution pass across full work before Disklavier preflight
+        note_only_all = [dict(n) for n in human_events] + [
+            dict(ev) for ev in piano_events if int(ev.get("pitch", ev.get("note", 0)) or 0) > 0
+        ]
+        tl_for_clash = [
+            {
+                "start_s": float(m.get("start_s", 0.0)),
+                "end_s": float(m.get("end_s", 4.0)),
+                "_spec": parse_chord_symbol(
+                    (turns[idx].get("chord_progression") or ["Dm9"])[0] if idx < len(turns) else "Dm9",
+                    str(m.get("tonal_center", home_ton)),
+                ),
+            }
+            for idx, m in enumerate(section_markers)
+        ]
+        if tl_for_clash and note_only_all:
+            resolved_all = HarmonicBeautyRealizer.resolve_vertical_clashes(note_only_all, tl_for_clash)
+            human_events = [dict(n) for n in resolved_all if n.get("hand") == "human"]
+            piano_cc_only = [dict(ev) for ev in piano_events if int(ev.get("pitch", ev.get("note", 0)) or 0) <= 0]
+            piano_notes_clean = [dict(n) for n in resolved_all if n.get("hand") != "human"]
+            for ev in piano_notes_clean:
+                ev["note"] = int(ev.get("pitch", ev.get("note", 60)))
+                ev["time_offset_s"] = float(ev.get("onset_s", ev.get("time_offset_s", 0.0)))
+            piano_events = piano_notes_clean + piano_cc_only
 
         # Audit & repair AI piano stream (notes + CC#64) through LocalPreflightChecker (<0.1s),
         # while preserving continuous CC#67 Una Corda curve alongside.

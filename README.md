@@ -1,152 +1,164 @@
-# Disklavier-Auto — 4幕共同作曲エンジン・RTX 3070コーパス学習・ホール音響舞台システム
+# Disklavier-Auto — 100曲高精度作曲スタジオ・古典和声リアライザー・舞台投影システム
 
-> **「問いかけと応答で1つの楽曲を共同作曲する」4幕構成アーキテクチャ × RTX 3070 MIDI学習 × コンサートホール物理モデリング音響 × 舞台公開推敲HUD**  
-> Yamaha Disklavier 実機とチェロ／ピアノ奏者が対話し、**L1知覚 → `CoCompositionArchitect`（4幕大局構成・種子核・声部接続）→ RTX 3070 `ClassicalPhraseTransformerNet` 推論 → `TokenEconomizer` × Ollama → `MasterworkEvaluator` / `MusicalityCritic` 監査 → L5安全駆動＆コンサートホールステレオ音響（`.mp3`/`.wav`/`.mid`/`.musicxml`）→ L4 60fps舞台HUD＆Obsidianアーカイブ** までを一貫実行する Windows 11 リアルタイム共演作曲システムです。
+[![GitHub Pages Interactive Demo](https://img.shields.io/badge/Live%20Demo-GitHub%20Pages%20(100曲試聴)-C83E2B?style=for-the-badge)](https://ai-avalon.github.io/Disklavier-Auto/)
 
----
+> **今すぐブラウザで聴けます（インストール・Python不要）**:  
+> **GitHub Pages 公開デモ・100曲試聴スタジオ**: **https://ai-avalon.github.io/Disklavier-Auto/**  
+> （代表10曲のコンサートホール録音 MP3 の即再生 ＋ 全100曲の 5パート聴き比べ WebAudio 再生・和声 X 線モニター・同期大譜表・公開推敲リプレイ・SMF MIDI ダウンロードをブラウザ上で体験できます）
 
-## 1. 完成デモ音源（`.mp3` / `.wav` / `.mid` / `.musicxml`）＆ 楽曲アナリーゼ
-
-ローカル Ollama（`qwen3.5:4b`）、RTX 3070 学習済みフレーズモデル（`data/models/classical_phrase_model.pt`）、4幕構成エンジン、およびコンサートホール物理モデリング音響シンセを実際に稼働させ、公開リハーサル（小節の書き直し）を経て1曲として完成させた音源と楽譜を収録しています（MIDIソフト不要でそのまま試聴できます）。
-
-### 作品1（Mode B：チェロ × Disklavier 対話作品）
-- **作品名**: *D ドリアン変奏曲：G3 への四度昇進* (*Variations on D Dorian: The Fourth Ascent to G3*)
-- **構成**: 4幕8ターン ＋ 公開推敲書き直し（Turn 2）＋ ウナ・コルダ回想コーダ（総演奏時間 **56.18 秒** / 44.1kHz Stereo / `RMS=0.11515` / `Clipping=0`）
-- **試聴・楽譜**:
-  - [MP3 完成音源 (`demo_mode_b_cello_dialogue.mp3`)](docs/demos/demo_mode_b_cello_dialogue.mp3)
-  - [WAV マスター音源 (`demo_mode_b_cello_dialogue.wav`)](docs/demos/demo_mode_b_cello_dialogue.wav)
-  - [標準MIDI (`demo_mode_b_cello_dialogue.mid`)](docs/demos/demo_mode_b_cello_dialogue.mid)
-  - [MusicXML 大譜表 (`demo_mode_b_cello_dialogue.musicxml`)](docs/demos/demo_mode_b_cello_dialogue.musicxml)
-
-### 作品2（Mode A：人間ピアノ × Disklavier 連弾対話作品）
-- **作品名**: *前奏曲と対話的変奏 ニ短調 — 連弾対話のための公開推敲作品* (*Prelude and Dialogic Variations in D minor for Two Pianists*)
-- **構成**: 4幕8ターン ＋ 公開推敲書き直し（Turn 2）＋ 終止コーダ（総演奏時間 **55.59 秒** / 44.1kHz Stereo / `RMS=0.08653` / `Clipping=0`）
-- **試聴・楽譜**:
-  - [MP3 完成音源 (`demo_mode_a_piano_dialogue.mp3`)](docs/demos/demo_mode_a_piano_dialogue.mp3)
-  - [WAV マスター音源 (`demo_mode_a_piano_dialogue.wav`)](docs/demos/demo_mode_a_piano_dialogue.wav)
-  - [標準MIDI (`demo_mode_a_piano_dialogue.mid`)](docs/demos/demo_mode_a_piano_dialogue.mid)
-  - [MusicXML 大譜表 (`demo_mode_a_piano_dialogue.musicxml`)](docs/demos/demo_mode_a_piano_dialogue.musicxml)
-
-- **全ターン推敲アナリーゼ・ボツ案棄却理由・書き直し記録**: [`docs/demos/COMPOSITION_SHOWCASE.md`](docs/demos/COMPOSITION_SHOWCASE.md)
+Yamaha Disklavier 実機およびコンサートホール物理モデリング音響シンセ上で、**「単音・無根拠な不協和音を構造的に根絶し、美しい多声室内楽を自律作曲する」** Windows 11 向けリアルタイム共演＆スタジオ作曲システムです。
 
 ---
 
-## 2. 舞台HUD 実画面スクリーンショット（1920x1080）
+## 1. 全100曲作曲ライブラリ ＆ 代表10曲 ホール実録音 MP3 ショーケース
 
-### Mode B: チェロ × Disklavier（第3幕クライマックス・公開推敲・連続両ペダル波形）
-![Disklavier-Auto Stage HUD Mode B Cello](docs/images/stage_hud_mode_b_cello.png)
+ローカル LLM（Ollama `qwen3.5:4b`, `keep_alive=-1`, Flash Attention + Q8 KV Cache）と `TokenEconomizer` による **4幕楽曲設計** を、新設の **古典和声・対位法リアライザー（`src/stage/harmonic_beauty_realizer.py`）** と **5軸美しさ監査器（`BeautyHarmonyAuditor`）** に通して自動リテイク選抜し、全 **100曲（Mode B チェロ×ピアノ 50曲 ＋ Mode A ピアノ×ピアノ 50曲）** を完成させました。
 
-### Mode A: ピアノ × Disklavier（第4幕ウナ・コルダ回想終止・16ノード記憶グラフ・完成曲統合）
-![Disklavier-Auto Stage HUD Mode A Piano](docs/images/stage_hud_mode_a_piano.png)
+### 1.1 定量品質実績（100曲全曲・リテイク通過後）
+
+| 指標 | 旧生成デモ（刷新前基準） | 新100曲ライブラリ実測平均（範囲） |
+|---|---:|---|
+| **美しさ総合スコア (Beauty Score)** | — | **`97.75 / 100`**（全曲 `>= 95.07`、合格基準 `88.0`） |
+| **協和率 (Consonance Score)** | ~72–76 | **`97.05 / 100`**（無根拠不協和ペア率 **`0.65%`** ← 刷新前 `9.2–10.9%`） |
+| **平均同時発音数 (Avg Polyphony)** | ~2.1–2.2 音 | **`5.01 音`**（合格基準 `>= 2.5 音`） |
+| **休符以外の単音率 (Monophonic Slice %)** | `24.3% – 25.9%` | **`1.12%`**（全曲最大 `1.70%` / 基準 `< 10.0%`） |
+| **LLM 自律作曲設計比率** | 一部フォールバック | **`100 / 100 曲`**（Ollama `qwen3.5:4b`） |
+| **代表10曲 MP3 音圧・ピーク安全性** | `8.0 dB` 差 | **`-17.66 .. -17.89 dBFS`**（`0.23 dB` 以内へ均一化・クリップ `0`） |
+
+### 1.2 代表10曲 コンサートホール録音 MP3（128kbps Stereo）
+
+10倍音非調和ピアノ・チェロ4大ボディフォルマント・連続両ペダル（`CC#64` / `CC#67`）・1.6秒 RT60 ステレオ FFT 畳み込みホール残響によってレンダリングされた最優秀 10曲です（全曲の譜面データは [`web-demo/data/pieces/`](web-demo/data/pieces/) に格納）：
+
+| # | 編成 | 作品タイトル | 調性 | BPM | 時間 | 美しさ | 協和率 | 同時音 | 単音率 | 音源・MIDI |
+|---:|---|---|---|---:|---:|---:|---:|---:|---:|---|
+| 01 | Mode B (Vc+Pf) | **ニ長調の問いかけ** *(最優秀 Mode B)* | ニ長調 | 64 | 63.82s | 99.78 | 99.9 | 5.24 | 0.6% | [MP3](docs/demos/showcase_01.mp3) / [MIDI](docs/demos/showcase_01.mid) |
+| 02 | Mode B (Vc+Pf) | ヘ長調の問いかけ 第20番 | ヘ長調 | 76 | 54.16s | 99.73 | 99.9 | 5.05 | 0.8% | [MP3](docs/demos/showcase_02.mp3) / [MIDI](docs/demos/showcase_02.mid) |
+| 03 | Mode B (Vc+Pf) | 変ホ長調の問いかけ | 変ホ長調 | 72 | 57.02s | 99.42 | 99.4 | 5.20 | 1.2% | [MP3](docs/demos/showcase_03.mp3) / [MIDI](docs/demos/showcase_03.mid) |
+| 04 | Mode B (Vc+Pf) | ニ短調の静謐な問いかけ 第37番 | ニ短調 | 67 | 61.08s | 99.42 | 99.1 | 5.05 | 0.9% | [MP3](docs/demos/showcase_04.mp3) / [MIDI](docs/demos/showcase_04.mid) |
+| 05 | Mode B (Vc+Pf) | 変イ長調の問いかけ | 変イ長調 | 82 | 50.40s | 99.14 | 98.7 | 5.19 | 1.4% | [MP3](docs/demos/showcase_05.mp3) / [MIDI](docs/demos/showcase_05.mid) |
+| 06 | Mode A (Pf+Pf) | **変ホ長調の四重奏** *(最優秀 Mode A)* | 変ホ長調 | 66 | 61.96s | 99.57 | 99.9 | 4.92 | 1.2% | [MP3](docs/demos/showcase_06.mp3) / [MIDI](docs/demos/showcase_06.mid) |
+| 07 | Mode A (Pf+Pf) | 変イ長調の問いかけ 第84番 | 変イ長調 | 76 | 54.16s | 99.42 | 99.0 | 5.01 | 0.8% | [MP3](docs/demos/showcase_07.mp3) / [MIDI](docs/demos/showcase_07.mid) |
+| 08 | Mode A (Pf+Pf) | ドリアの夜想曲 | ニ・ドリア旋法 | 75 | 54.85s | 99.36 | 99.7 | 4.99 | 1.7% | [MP3](docs/demos/showcase_08.mp3) / [MIDI](docs/demos/showcase_08.mid) |
+| 09 | Mode A (Pf+Pf) | ハ長調の問いかけ | ハ長調 | 84 | 49.26s | 99.23 | 98.7 | 4.82 | 1.1% | [MP3](docs/demos/showcase_09.mp3) / [MIDI](docs/demos/showcase_09.mid) |
+| 10 | Mode A (Pf+Pf) | ニ短調の問いかけ | ニ短調 | 95 | 43.87s | 98.96 | 98.1 | 4.81 | 1.4% | [MP3](docs/demos/showcase_10.mp3) / [MIDI](docs/demos/showcase_10.mid) |
+
+- 標準配信（MP3 / MIDI / MusicXML）: [Mode B 代表作](docs/demos/demo_mode_b_cello_dialogue.mp3) ・ [Mode A 代表作](docs/demos/demo_mode_a_piano_dialogue.mp3) ・ 詳細一覧 [`docs/demos/COMPOSITION_SHOWCASE.md`](docs/demos/COMPOSITION_SHOWCASE.md)
 
 ---
 
-## 3. 本システムの抜本再構築ポイント
+## 2. 刷新された 2画面 GUI ＆ Playwright 実検証スクリーンショット（1920×1080）
 
-1. **1つの楽曲を育てる「4幕大局構成エンジン (`src/stage/co_composition_architect.py`)」**:
-   - 毎ターン無関係な断片を出す設計を廃止し、**第1幕（種子動機の提示と半終止での音楽的問いかけ）→ 第2幕（ゼクエンツ模進・近親調転調・声部ブリッジ接続）→ 第3幕（低音バス保続音＋多声統合のクライマックスと単一頂点）→ 第4幕（ウナ・コルダによる冒頭動機の回想と完全終止）** の楽曲構成アークを形成します。
-   - **公開リハーサル（Retake）** で人間のダメ出しに応じて直前フレーズをその場で書き直し、最後に **`[作品を完成させ通し演奏]`** で全ターンを1曲の完結作品へ統合・自動命名して MP3/WAV/MIDI/MusicXML/Obsidian へ一括出力します。
-2. **RTX 3070（CUDA）クラシックMIDIコーパス実学習（`train/train_phrase_transformer.py` & `src/stage/corpus_phrase_model.py`）**:
-   - `data/imslp_midi/`, `data/human_references/`, `data/maestro-v3.0.0/` から `symusic` で抽出した1,975フレーズ窓（174曲解析）を RTX 3070 CUDA 上で学習し、`data/models/classical_phrase_model.pt` を構築しました。
-   - **跳躍後の順次逆行回復（Post-Leap Gap-Fill Law）**、**息づく左手伴奏イディオム（根音→5度→10度開離アルペジオ、バス保続音＋内声対旋律、裏拍シンコペーション和音、ウナ・コルダコラール）**、**4-3/9-8/7-6 掛留解決**、**アゴーギク・ルバート曲線** をリアルタイム推論します。
-3. **`TokenEconomizer` × Ollama × `MasterworkEvaluator` + `MusicalityCritic`**:
-   - [`src/stage/token_economizer.py`](src/stage/token_economizer.py) が知覚特徴と4幕構成・声部ブリッジ・失敗介入台帳を圧縮（約 57〜61% 削減）して RTX 3070 Ollama へ渡します。
-   - [`src/stage/musicality_critic.py`](src/stage/musicality_critic.py) が6軸監査に加え **Masterwork 4基準（主題統一性・旋律頂点設計・機能和声引力・フレーズ間声部接続）** で審査し、単調な音階・単声・短2度濁りを排除します。
-4. **コンサートホール物理モデリング音響シンセ（`src/stage/local_audio_synth.py`）**:
-   - 10倍音非調和ピアノモデル（3本弦微小デチューン・二段階響板減衰・ハンマーフェルト打撃）、チェロ4大ボディフォルマント（200/420/950/2150Hz）＋松脂擦弦・漸進ビブラート、連続ダンパー（`CC#64`）＆ウナ・コルダ（`CC#67`）物理音響、さらに **室内楽ホール（1.6s RT60）ステレオFFT畳み込み残響** を搭載し、44.1kHz Stereo WAV/MP3 を直接生成します。
-5. **Obsidian 完全連携 ＆ 純粋ASCII `.bat` / `/favicon.ico` 200 OK**:
-   - 各ターンの推敲記録（`obsidian_vault/05_Stage_Session_Logs/`）に加え、完成作品のタイトル・4幕推移・書き直し履歴・MP3/WAV/MIDI/MusicXMLリンクを `obsidian_vault/02_Hall_of_Fame_Performances/` へ自動保存します。
+Playwright 実ブラウザ検査＋自己評価を 3周連続（Round 1 → Round 2 → Round 3）実行して磨き上げた実画面です。`1920x1080` はもちろん `1280x720` でも大譜表まで一画面内に収まります。
+
+### `/studio` 制作・試聴スタジオ（100曲ブラウザ・5ch 聴き比べミキサー・和声 X 線・大譜表）
+![Disklavier-Auto Studio Cockpit](docs/images/studio_1920x1080.png)
+
+### GitHub Pages 静的公開デモ（Python サーバ不要・全100曲試聴可能）
+![GitHub Pages Static Web Demo](docs/images/web_demo_1920x1080.png)
+
+### `/stage` 本番舞台プロジェクション HUD（Mode B チェロ対話・Mode A ピアノ連弾・`F10` 操作バー格納）
+![Stage HUD Mode B Cello](docs/images/stage_hud_mode_b_cello.png)
+![Stage HUD Mode A Piano](docs/images/stage_hud_mode_a_piano.png)
+![Stage HUD F10 Projection Mode](docs/images/stage_projection_f10.png)
 
 ---
 
-## 4. システムアーキテクチャ＆安全回路（Mermaid図解）
+## 3. システム構成（古典和声リアライザー × 100曲バッチ × 2画面）
 
-### 4幕共同作曲 ＆ 5レイヤー全体構成
 ```mermaid
-graph TD
-    Human["人間奏者 (Mode A: Piano MIDI IN / Mode B: Cello C519ML + Ref Mic)"] --> L1["L1: 知覚・エコー抑圧 (EchoSuppressionLedger / 2ch NLMS / F0・呼吸検知)"]
-    L1 --> Arch["CoCompositionArchitect (4幕構成・ThematicDNA種子核・声部ブリッジ・公開推敲Retake)"]
-    Corpus["data/ クラシックMIDI資産 (IMSLP / Human Refs / Maestro)"] --> Train["RTX 3070 CUDA学習 (train/train_phrase_transformer.py)"]
-    Train --> Model["CorpusPhraseModelManager (classical_phrase_model.pt)"]
+flowchart TD
+    Human["人間奏者 (Mode A: Piano MIDI IN / Mode B: Cello C519ML + Ref Mic)"] --> L1["L1: 低遅延知覚 (EchoSuppressionLedger / 2ch NLMS / 呼吸検知)"]
+    L1 --> Arch["CoCompositionArchitect (4幕構成・ThematicDNA・公開推敲Retake)"]
+    Corpus["data/ クラシックMIDI資産 (1,295曲)"] --> Model["RTX 3070 Phrase Transformer + 普遍声部法則抽出"]
     Arch --> Econ["TokenEconomizer (音響＋4幕圧縮・失敗介入台帳)"]
-    Econ --> L2P["L2: 自律作曲設計 (Ollama keep_alive=-1: 問いかけ/発展/頂点/終止)"]
-    Model --> L3["L3: 2小節ポリフォニー作曲 (Candidate A/B/C/D ＋ 連続 CC#64 / CC#67)"]
-    L2P --> L3
-    L3 --> Critic["MusicalityCritic (6軸) & MasterworkEvaluator (主題統一・頂点・和声・接続)"]
-    Critic --> L2M["L2: 実演家メモ言語化 (MusicalLogicValidator 矛盾・ポエム・〇〇風ゼロ)"]
-    L2M --> L5["L5: Disklavier安全出力 (30音上限・熱保護・CC#64/67間引き・<10ms Panic)"]
-    L2M --> Synth["LocalAudioSynthesizer (コンサートホール物理音響・1.6s残響・MP3/WAV書き出し)"]
-    L2M --> L4["L4: 60fps舞台HUD (4幕アーク・MP3プレイヤー・大譜表) & Obsidian"]
+    Econ --> L2["Ollama qwen3.5:4b (keep_alive=-1, FlashAttn, Q8 KV)"]
+    Model --> Realizer["HarmonicBeautyRealizer (単音禁止 / 強拍和音 / 跳躍回復 / 衝突回避 / CC#64境界踏替)"]
+    L2 --> Realizer
+    Realizer --> Auditor["BeautyHarmonyAuditor & MusicalityCritic (協和率>=90 / 同時発音>=2.5 / Preflight)"]
+    Auditor --> L5["L5: Disklavier安全出力 (30音上限・熱保護・CC間引き・<10ms Panic)"]
+    Auditor --> Synth["LocalAudioSynthesizer (1.6s RT60ホール残響・128kbps MP3均等音圧)"]
+    Auditor --> Studio["/studio & web-demo (100曲試聴 / 5chミキサー / 和声X線 / MIDI DL)"]
+    Auditor --> Stage["/stage 本番舞台投影HUD (4ゾーン / 33fps WebSocket / F10)"]
 ```
 
-### 公開推敲（Retake）＆ 完成作品統合フロー
+### 100曲自動作曲・古典和声リアライザー品質ゲート
+```mermaid
+flowchart LR
+    LLM["Ollama qwen3.5:4b\n4幕構成・和声設計"] --> Parser["parse_chord_symbol()\n18調性・数字付き低音"]
+    Parser --> Realizer["HarmonicBeautyRealizer\n単音禁止・強拍和音・跳躍回復・衝突回避・両ペダル同期"]
+    Realizer --> Gate{"BeautyHarmonyAuditor\nBeauty>=88 / Cons>=90\nPoly>=2.5 / Mono<10%"}
+    Gate -->|基準未満: 最大5回自動リテイク| LLM
+    Gate -->|100/100 合格| Export["catalog_100.json & piece_001..100.json\n上位10曲 128kbps MP3 書き出し"]
+```
+
+### 公開推敲（Retake）＆ 4幕楽曲統合シーケンス
 ```mermaid
 sequenceDiagram
     participant Human as "チェロ / ピアノ奏者"
     participant Arch as "CoCompositionArchitect"
-    participant Model as "RTX 3070 Transformer + L2/L3"
-    participant Critic as "MusicalityCritic & MasterworkEvaluator"
-    participant Output as "L4 HUD / Hall Synth / Obsidian"
+    participant Engine as "Ollama qwen3.5:4b + Realizer"
+    participant Critic as "MusicalityCritic & BeautyAuditor"
+    participant Out as "/studio /stage & Hall Synth"
 
-    Human->>Arch: "Turn 1 種子モチーフ提示 (Seed DNA記録)"
-    Arch->>Model: "第1幕: 反行・半終止で音楽的に問いかけ返す"
-    Model->>Critic: "2小節両手ポリフォニー4案を監査"
-    Critic->>Output: "案A/Cロック・ボツ案赤ペン棄却"
-    Human->>Arch: "Retake指示: まだ解決せず問いかけのまま左手内声を強化"
-    Arch->>Output: "同ターンを書き直し再試奏・差分記録"
-    Human->>Arch: "第2幕(模進) -> 第3幕(同時重層頂点) -> 第4幕(ウナ・コルダ回想)"
-    Arch->>Output: "1曲統合・LLM作品命名・MP3/WAV/MIDI/MusicXML/Obsidian一括出力"
+    Human->>Arch: "Turn 1 種子動機提示 (Seed DNA記録)"
+    Arch->>Engine: "第1幕: 半終止の問いかけ・多声両手伴奏"
+    Engine->>Critic: "4候補 (A/B/C/D) の6軸音楽性＆不協和検証"
+    Critic->>Out: "採用案ロック・ボツ案を赤ペン根拠付きで公開棄却"
+    Human->>Arch: "Retake指示: 解決せず問いかけのまま左手増強"
+    Arch->>Out: "同小節を書き直し再実演・4幕完了後に1曲MP3/MIDI統合"
 ```
 
-### 両ペダル連続制御 ＆ 物理安全回路
-```mermaid
-flowchart LR
-    ModeA["Mode A (Piano <-> Piano)"] --> Ledger["EchoSuppressionLedger (0..280ms 自己打鍵遮断 + AI CC#67干渉抑止)"]
-    ModeB["Mode B (Cello <-> Disklavier)"] --> NLMS["2ch NLMS適応フィルタ (ピアノ回り込み >10dB減衰)"]
-    Ledger --> Safety["L5 安全ゲート: <=30音ボイススティール / Vel 18..112 / >=60ms再打鍵 / CC#64・CC#67 40ms間引き"]
-    NLMS --> Safety
-    Safety --> Panic["緊急停止 PANIC (<10ms 全鍵解放 + CC#64/67/120/123=0)"]
-```
-
-### デモモードと本番実機モードの運用分岐
+### 両ペダル物理安全回路 ＆ 3運用モード分岐
 ```mermaid
 flowchart TD
-    Start{"起動用途を選択"} -->|PC単体デモ・完成作品試聴| Demo["run_demo_showcase.bat (--demo --monitor-audio)"]
-    Start -->|コンサート本番・実機リハーサル| Prod["start_stage.bat (--production)"]
-    Demo --> DemoState["仮想奏者ON / ホール音響シンセON / 完成MP3プレイヤー＆シナリオ表示"]
-    Prod --> ProdState["仮想奏者OFF / PC発音完全OFF / 実機Disklavier & UR22直結 / F10投影"]
+    ModeSel{"運用モード選択"} -->|ブラウザ即試聴| Pages["GitHub Pages (web-demo/)\n10 MP3 + WebAudio 100曲"]
+    ModeSel -->|PCスタジオ体験| StudioDemo["run_demo_showcase.bat\n/studio?demo=1 + 仮想デモ + Synth"]
+    ModeSel -->|コンサート本番実機| StageProd["start_stage.bat (--production)\n/stage + Disklavier USB-MIDI + F10"]
+    StudioDemo --> Safety["L5 安全ゲート: <=30音上限 / Vel 18..112 / 60ms再打鍵保護 / CC#64・67間引き / <10ms PANIC"]
+    StageProd --> Safety
 ```
 
 ---
 
-## 5. 使い方（クイックスタート）
+## 4. 使い方 ＆ GitHub Pages デモの有効化手順
 
-1. **初回セットアップ（PyTorch CUDA・RTX 3070 コーパス学習含む）**:
+### 4.1 GitHub Pages 公開デモを有効化する手順（初回1回のみ）
+本リポジトリには `.github/workflows/deploy-pages.yml` が組み込まれています：
+1. GitHub 上の本リポジトリで **Settings** → **Pages** を開く。
+2. **Build and deployment** → **Source** で **`GitHub Actions`** を選択して保存する。
+3. `main` ブランチへプッシュすると軽量テスト・100曲整合性チェックが自動実行され、`web-demo/` が **`https://ai-avalon.github.io/Disklavier-Auto/`** へ自動デプロイされます。
+
+### 4.2 Windows 11 ローカル環境での起動・検証ランチャー
+
+1. **初回環境構築（`.venv`, PyTorch CUDA, Ollama 診断, RTX 3070 学習）**:
    ```bat
    setup_environment.bat
    ```
-   `.venv` 構築、必須パッケージ（`torch` CUDA 12.4、`lameenc` 等）導入、`src.stage.config_scanner` による環境診断、および `train/train_phrase_transformer.py` によるモデル重み構築を一括実行します。
-2. **デモ・試聴モード（PCスピーカーで体験）**:
+2. **制作・試聴スタジオ（`/studio` ＋ 仮想デモ ＋ PC ホール音響シンセ）**:
    ```bat
    run_demo_showcase.bat
    ```
-   `http://localhost:8000/?demo=1` が開き、4幕アークのリアルタイム対話、`推敲書き直し (Retake)`、`作品を完成させ通し演奏`、および完成デモMP3試聴が利用できます。
-3. **本番・リハーサル実機モード**:
-   - Yamaha Disklavier 側メニューで **`Delay In = OFF`** に設定し、USB-MIDI と Steinberg UR22（Ch1: AKG C519ML / Ch2: ピアノ参照マイク）を接続した状態で起動します：
+   `http://localhost:8000/studio?demo=1` が開き、100曲レパートリー試聴、5ch パート別ミキサー比較、和声 X 線、およびライブ舞台対話が即使えます。
+3. **コンサート本番・Disklavier 実機モード（`/stage`）**:
+   - Yamaha Disklavier 本体の設定で **`Delay In = OFF`** にした上で USB-MIDI と Steinberg UR22 を接続し実行します：
    ```bat
    start_stage.bat
    ```
-   - 開演前に上部の `VDL/NLMS校正` と `記憶初期化` を押し、`F10` キーで操作バーを格納して客席へ投影します。
-4. **全自動テスト ＆ 10回反復検証**:
+   - `http://localhost:8000/stage` が `--production`（仮想奏者・PCモニター発音 OFF）で起動し、**`F10`** キーで操作バーを消して投影できます。
+4. **全自動テスト・100曲/10 MP3 検証・Playwright 検査・10回反復 LLM 検証**:
    ```bat
    run_self_check.bat
    ```
-   `tests/test_stage_system.py`、`pytest tests/`、`validate_system_integrity.py`、および実Ollama・4幕構成・完成音源検証・安全ゲート10回連続ループ（`scripts/run_10x_iterative_refinement.py`）を一括実行します。
+5. **100曲ライブラリ再生成 / 再研磨（オプション）**:
+   ```bat
+   .venv\Scripts\python.exe scripts/compose_100_pieces.py --count 100
+   ```
 
 ---
 
-## 6. 詳細ドキュメント
-- アーキテクチャ設計詳細: [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md)
-- 操作・運用・トラブルシューティング: [`docs/USER_GUIDE.md`](docs/USER_GUIDE.md)
-- 実機ハードウェア手動安全テスト手順: [`docs/HARDWARE_TEST_PROCEDURE.md`](docs/HARDWARE_TEST_PROCEDURE.md)
-- 4幕共同作曲マスターワーク解説: [`docs/demos/COMPOSITION_SHOWCASE.md`](docs/demos/COMPOSITION_SHOWCASE.md)
+## 5. ドキュメント一覧
+- **全コード監査 ＆ 3周自律改善ログ**: [`docs/AUDIT_AND_IMPROVEMENT_LOG.md`](docs/AUDIT_AND_IMPROVEMENT_LOG.md)
+- **システム設計・リアライザー仕様**: [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md)
+- **スタジオ＆舞台HUD 操作ガイド**: [`docs/USER_GUIDE.md`](docs/USER_GUIDE.md)
+- **100曲ライブラリ ＆ 代表10曲詳細**: [`docs/demos/COMPOSITION_SHOWCASE.md`](docs/demos/COMPOSITION_SHOWCASE.md)
+- **実機ハードウェア手動安全テスト手順**: [`docs/HARDWARE_TEST_PROCEDURE.md`](docs/HARDWARE_TEST_PROCEDURE.md)

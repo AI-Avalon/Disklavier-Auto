@@ -32,6 +32,11 @@ from src.stage.corpus_phrase_model import (
     CorpusPhraseModelManager,
     PhraseBlueprint,
 )
+from src.stage.harmonic_beauty_realizer import (
+    BeautyHarmonyAuditor,
+    HarmonicBeautyRealizer,
+    parse_chord_symbol,
+)
 from src.stage.layer1_perception import midi_to_note_name
 from src.stage.layer2_intent_llm import MusicalIntentSchema
 from src.stage.musicality_critic import MusicalityAuditReport, MusicalityCritic
@@ -125,6 +130,8 @@ class CandidatePhrase:
     masterwork_pct: Dict[str, int] = field(default_factory=dict)
     lh_idiom: str = "arpeggio_root_5th_10th"
     blueprint_source: str = "rtx3070_transformer"
+    chord_timeline: List[Dict[str, Any]] = field(default_factory=list)
+    beauty_summary: Dict[str, Any] = field(default_factory=dict)
 
 
 @dataclass
@@ -992,16 +999,54 @@ class MultipleCandidateComposer:
         ]
 
         candidates: List[CandidatePhrase] = []
+        act_num_cur = int(macro_dict["act_number"])
+        bar_dur_cur = 1.65 if act_num_cur != 4 else 1.85
+        syms_2 = (list(intent.chord_progression[:2]) + ["Dm9", "A7sus4"])[:2]
+        ch_a = parse_chord_symbol(syms_2[0], intent.tonal_center)
+        ch_b = parse_chord_symbol(syms_2[1], intent.tonal_center)
+
         for idx_spec, (cid, label_ja, strat) in enumerate(specs):
-            evs, c64, c67, lh_idiom = self._build_polyphonic_candidate(
-                strat,
-                human_notes,
-                intent,
-                self.turn_counter,
-                corpus_refs[idx_spec % len(corpus_refs) :],
-                macro_dict,
-                blueprint,
-            )
+            if cid != "D":
+                lh_idiom_sel = {
+                    "contrary_open_polyphony": blueprint.lh_idiom if not macro_dict.get("directive_override_flags", {}).get("boost_lh_inner") else "arpeggio_root_5th_10th",
+                    "suspension_inner_voice": "pedal_point_inner_voice",
+                    "overtone_clear_high_spread": "una_corda_choral_recall" if act_num_cur == 4 else "syncopated_offbeat_harmony",
+                }.get(strat, blueprint.lh_idiom)
+                evs, c64, c67 = HarmonicBeautyRealizer.realize_2bar_candidate(
+                    human_notes=human_notes,
+                    tonality=intent.tonal_center,
+                    chord_symbols=syms_2,
+                    act_number=act_num_cur,
+                    phrase_function=str(macro_dict["phrase_function"]),
+                    strategy=strat,
+                    bridge_pitch=int(macro_dict["voice_leading_bridge_pitch"]),
+                    target_apex=int(macro_dict["target_apex_pitch"]),
+                    lh_idiom=lh_idiom_sel,
+                    blueprint_offsets=list(blueprint.melody_degree_offsets),
+                    agogic_ratios=list(blueprint.agogic_ratios),
+                    velocity_curve=list(blueprint.velocity_curve),
+                    pedal_strategy=intent.pedal_strategy,
+                )
+                lh_idiom = lh_idiom_sel
+            else:
+                evs, c64, c67, lh_idiom = self._build_polyphonic_candidate(
+                    strat,
+                    human_notes,
+                    intent,
+                    self.turn_counter,
+                    corpus_refs[idx_spec % len(corpus_refs) :],
+                    macro_dict,
+                    blueprint,
+                )
+
+            note_init = [e for e in evs if int(e.get("pitch", 0) or 0) > 0]
+            max_t_init = max((float(e.get("onset_s", 0.0)) + float(e.get("duration_s", 0.3)) for e in note_init), default=bar_dur_cur * 2.0)
+            cand_tl = [
+                {"bar": 1, "start_s": 0.0, "end_s": round(bar_dur_cur, 3), "chord": ch_a.symbol, "roman": ch_a.roman, "function_ja": ch_a.function_ja, "_spec": ch_a},
+                {"bar": 2, "start_s": round(bar_dur_cur, 3), "end_s": round(max(bar_dur_cur * 2.0, max_t_init + 0.1), 3), "chord": ch_b.symbol, "roman": ch_b.roman, "function_ja": ch_b.function_ja, "_spec": ch_b},
+            ]
+            public_cand_tl = [{k: v for k, v in seg.items() if k != "_spec"} for seg in cand_tl]
+
             audit = MusicalityCritic.audit_candidate(
                 evs,
                 human_notes=human_notes,
@@ -1014,6 +1059,15 @@ class MultipleCandidateComposer:
 
             if cid != "D" and not audit.passed:
                 evs, c64, c67 = self._repair_to_polyphonic_standard(evs, human_notes, intent, audit, macro_plan=macro_dict)
+                repaired_notes = HarmonicBeautyRealizer.resolve_vertical_clashes(
+                    [e for e in evs if int(e.get("pitch", 0) or 0) > 0], cand_tl
+                )
+                repaired_notes = HarmonicBeautyRealizer.resolve_vertical_clashes(repaired_notes, cand_tl)
+                rep_end = max((float(e.get("onset_s", 0.0)) + float(e.get("duration_s", 0.3)) for e in repaired_notes), default=bar_dur_cur * 2.0)
+                cc_evs_rep, c64, c67 = HarmonicBeautyRealizer.build_chord_synced_pedals(
+                    cand_tl, [{"act": act_num_cur, "start_s": 0.0, "end_s": rep_end + 0.25}], rep_end + 0.25
+                )
+                evs = repaired_notes + cc_evs_rep
                 audit = MusicalityCritic.audit_candidate(
                     evs,
                     human_notes=human_notes,
@@ -1032,6 +1086,11 @@ class MultipleCandidateComposer:
             )
             seq_pitches = [int(e["pitch"]) for e in evs if int(e.get("pitch", 0)) > 0][:4]
             sample_notes_str = "-".join(midi_to_note_name(p) for p in seq_pitches) or "--"
+
+            note_only = [e for e in evs if int(e.get("pitch", 0) or 0) > 0]
+            b_rep = BeautyHarmonyAuditor.audit_piece(
+                note_only, cand_tl, c64, c67, tonality=intent.tonal_center
+            )
 
             candidates.append(
                 CandidatePhrase(
@@ -1056,11 +1115,25 @@ class MultipleCandidateComposer:
                     masterwork_pct=audit.masterwork_pct,
                     lh_idiom=lh_idiom,
                     blueprint_source=blueprint.source,
+                    chord_timeline=public_cand_tl,
+                    beauty_summary={
+                        "beauty_score": b_rep.beauty_score,
+                        "consonance_score": b_rep.consonance_score,
+                        "avg_polyphony": b_rep.avg_polyphony,
+                        "mono_ratio_pct": b_rep.mono_ratio_pct,
+                    },
                 )
             )
 
         eligible = [c for c in candidates if c.candidate_id != "D"]
-        best = max(eligible or candidates, key=lambda c: (1 if c.audit_passed else 0, c.total_score))
+        best = max(
+            eligible or candidates,
+            key=lambda c: (
+                1 if float((c.beauty_summary or {}).get("consonance_score", 0.0)) >= 90.0 else 0,
+                1 if c.audit_passed else 0,
+                c.total_score + float((c.beauty_summary or {}).get("consonance_score", 0.0)) * 0.15,
+            ),
+        )
         best.adopted = True
         best.rejection_tag_ja = ""
         best.problem_note_indices = []

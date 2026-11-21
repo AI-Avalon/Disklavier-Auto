@@ -4,8 +4,8 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "disklavier-auto"
-version = "2.1.0"
-description = "Autonomous Virtuoso & Physical Safety Studio for Yamaha Disklavier on Apple Silicon"
+version = "3.0.0"
+description = "Autonomous 4-Act Co-Composition Studio & Physical Safety Engine for Yamaha Disklavier (Windows 11 / RTX 3070)"
 readme = "README.md"
 requires-python = ">=3.11"
 dependencies = [
@@ -31,9 +31,13 @@ dev = [
 ]
 
 [tool.pytest.ini_options]
+pythonpath = ["."]
 testpaths = ["tests"]
 python_files = ["test_*.py"]
 addopts = "-q"
+filterwarnings = [
+  "ignore:Setting the shape on a NumPy array has been deprecated:DeprecationWarning:sounddevice",
+]
 
 [tool.ruff]
 line-length = 120
@@ -42,3 +46,4 @@ exclude = [".venv", "data", "obsidian_vault"]
 
 [tool.ruff.lint.per-file-ignores]
 "validate_system_integrity.py" = ["E402"]
+"scripts/*.py" = ["E402"]

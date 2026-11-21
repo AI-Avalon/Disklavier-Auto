@@ -1,0 +1,223 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <link rel="icon" href="./favicon.ico" />
+  <title>Disklavier-Auto — 100曲高精度作曲スタジオ ＆ 公開試聴デモ</title>
+  <link rel="stylesheet" href="./style.css" />
+</head>
+<body>
+  <div class="studio-shell">
+    <header class="topbar">
+      <div class="topbar-left">
+        <span class="brand">DISKLAVIER-AUTO / STUDIO</span>
+        <span class="brand-sub" id="catalog-stats-pill">100曲読込中...</span>
+      </div>
+      <div class="topbar-right">
+        <span class="status-chip" id="audio-engine-chip">静的Webデモ (Pages対応)</span>
+        <a class="btn sm" href="https://github.com/AI-Avalon/Disklavier-Auto" target="_blank" rel="noopener">GitHub リポジトリ</a>
+        <button class="btn sm vermilion" id="btn-panic" type="button">全音停止</button>
+      </div>
+    </header>
+
+    <div class="studio-body">
+      <aside class="sidebar" aria-label="100曲レパートリーブラウザ">
+        <div class="sidebar-head">
+          <div class="sidebar-title-row">
+            <span class="panel-heading">100曲レパートリー</span>
+            <span class="mono-sub" id="filtered-count">0 / 100</span>
+          </div>
+          <div class="filter-pills" id="filter-pills">
+            <button class="btn active" data-filter="all" type="button">全100曲</button>
+            <button class="btn" data-filter="showcase" type="button">代表MP3 (10)</button>
+            <button class="btn" data-filter="cello" type="button">Mode B: チェロ (50)</button>
+            <button class="btn" data-filter="piano" type="button">Mode A: ピアノ (50)</button>
+          </div>
+          <div class="filter-controls">
+            <select class="field" id="filter-tonality" aria-label="調性フィルタ">
+              <option value="all">すべての調性</option>
+            </select>
+            <select class="field" id="filter-score" aria-label="美しさスコアフィルタ">
+              <option value="0">全合格曲 (88+)</option>
+              <option value="95">特選 (95+)</option>
+              <option value="97">最高峰 (97+)</option>
+            </select>
+          </div>
+          <input class="field search-input" id="filter-search" type="search" placeholder="曲名・調性・和声で検索..." aria-label="楽曲検索" />
+        </div>
+        <div class="piece-list" id="piece-list"></div>
+      </aside>
+
+      <main class="studio-main">
+        <!-- Playback & Audition Deck -->
+        <section class="card" aria-label="ワンクリック試聴デッキ">
+          <div class="deck-title-row">
+            <div>
+              <div class="work-title" id="work-title">曲を選択してください</div>
+              <div class="work-subtitle" id="work-subtitle">--</div>
+            </div>
+            <div class="act-arc">
+              <span class="act-pill active" id="act-pill-1">第1幕: 問いかけ</span>
+              <span class="act-pill" id="act-pill-2">第2幕: 発展転調</span>
+              <span class="act-pill climax" id="act-pill-3">第3幕: 多声頂点</span>
+              <span class="act-pill" id="act-pill-4">第4幕: 回想終止</span>
+            </div>
+          </div>
+
+          <div class="deck-controls">
+            <button class="btn primary-fill" id="btn-play" type="button">再生 (WebAudio)</button>
+            <button class="btn" id="btn-replay-delib" type="button">推敲リプレイ</button>
+            <button class="btn" id="btn-download-midi" type="button">MIDI ダウンロード</button>
+            <div class="seek-wrap">
+              <label for="seek-slider" class="mono-sub">位置</label>
+              <input class="seek-slider" id="seek-slider" type="range" min="0" max="1000" value="0" aria-label="再生位置シークバー" />
+              <span class="time-readout" id="time-readout">00:00 / 00:00</span>
+            </div>
+            <div class="vu-box">
+              <span class="mono-sub">LEVEL</span>
+              <span class="vu-bar"><span class="vu-fill" id="vu-fill"></span></span>
+              <span id="dbfs-readout">-60.0 dBFS</span>
+            </div>
+          </div>
+
+          <div class="mp3-deck-row">
+            <div class="mp3-audio-wrap">
+              <span class="mono-sub" id="mp3-label">代表曲ホール物理録音MP3:</span>
+              <audio id="mp3-player" controls preload="metadata"></audio>
+            </div>
+            <span class="mono-sub" id="audio-tech-meta">44.1kHz Stereo Hall Synth | Space: 再生/停止 | ←/→: ±3秒 | 譜面クリックでシーク</span>
+          </div>
+        </section>
+
+        <!-- Middle 2-Column: Mixer + Harmony X-Ray -->
+        <div class="mid-grid">
+          <section class="card" aria-label="パート別聴き比べミキサー">
+            <div class="card-head">
+              <span class="panel-heading">パート別 聴き比べミキサー</span>
+              <button class="btn sm" id="btn-mixer-reset" type="button">すべてON</button>
+            </div>
+            <div class="mixer-list">
+              <div class="mixer-row">
+                <div class="mixer-label">
+                  <span class="mixer-name">右手 主旋律・内声 (RH)</span>
+                  <span class="mixer-desc">歌唱的旋律 + 3度/6度ハーモニー</span>
+                </div>
+                <div class="mixer-btns">
+                  <button class="btn sm active" data-mix-toggle="rh" type="button">ON</button>
+                  <button class="btn sm" data-mix-solo="rh" type="button">S</button>
+                </div>
+              </div>
+              <div class="mixer-row">
+                <div class="mixer-label">
+                  <span class="mixer-name">左手 伴奏・バス (LH)</span>
+                  <span class="mixer-desc" id="lh-texture-desc">開離10度アルペジオ / 対旋律</span>
+                </div>
+                <div class="mixer-btns">
+                  <button class="btn sm active" data-mix-toggle="lh" type="button">ON</button>
+                  <button class="btn sm" data-mix-solo="lh" type="button">S</button>
+                </div>
+              </div>
+              <div class="mixer-row">
+                <div class="mixer-label">
+                  <span class="mixer-name" id="human-part-label">チェロ / 対話パート</span>
+                  <span class="mixer-desc">同一和声タイムライン同期対旋律</span>
+                </div>
+                <div class="mixer-btns">
+                  <button class="btn sm active" data-mix-toggle="human" type="button">ON</button>
+                  <button class="btn sm" data-mix-solo="human" type="button">S</button>
+                </div>
+              </div>
+              <div class="mixer-row">
+                <div class="mixer-label">
+                  <span class="mixer-name">ダンパー共鳴 (CC#64)</span>
+                  <span class="mixer-desc">和音境界シンクロ踏み替え持続</span>
+                </div>
+                <div class="mixer-btns">
+                  <button class="btn sm active" data-mix-toggle="cc64" type="button">ON</button>
+                </div>
+              </div>
+              <div class="mixer-row">
+                <div class="mixer-label">
+                  <span class="mixer-name">ウナ・コルダ音色 (CC#67)</span>
+                  <span class="mixer-desc">連続高域倍音ソフト化フィルタ</span>
+                </div>
+                <div class="mixer-btns">
+                  <button class="btn sm active" data-mix-toggle="cc67" type="button">ON</button>
+                </div>
+              </div>
+            </div>
+          </section>
+
+          <section class="card" aria-label="和声X線モニター">
+            <div class="card-head">
+              <span class="panel-heading">和声 X 線モニター (Harmony X-Ray)</span>
+              <span class="mono-sub" id="xray-function">トニック</span>
+            </div>
+            <div class="xray-top">
+              <div>
+                <span class="xray-chord-big" id="xray-chord">Dm9</span>
+                <span class="xray-roman" id="xray-roman">i9</span>
+                <span class="xray-next" id="xray-next-chord">→ Gm11 (iv7)</span>
+              </div>
+              <span class="mono-sub" id="xray-tonality">ニ短調 / 76 BPM</span>
+            </div>
+            <div class="xray-metrics">
+              <div class="metric-tile">
+                <div class="metric-k">協和率 (CONSONANCE)</div>
+                <div class="metric-v" id="xray-consonance">--</div>
+              </div>
+              <div class="metric-tile">
+                <div class="metric-k">同時発音数 (POLY)</div>
+                <div class="metric-v" id="xray-polyphony">--</div>
+              </div>
+              <div class="metric-tile">
+                <div class="metric-k">単音率 (MONO RATIO)</div>
+                <div class="metric-v" id="xray-mono">--</div>
+              </div>
+            </div>
+            <div class="chord-strip" id="xray-progression"></div>
+            <div class="pedal-gauges">
+              <div class="pedal-box">
+                <div class="pedal-head"><span>DAMPER (R / CC#64)</span><span id="val-cc64">0</span></div>
+                <div class="pedal-track"><div class="pedal-fill-64" id="fill-cc64"></div></div>
+              </div>
+              <div class="pedal-box">
+                <div class="pedal-head"><span>UNA CORDA (L / CC#67)</span><span id="val-cc67">0</span></div>
+                <div class="pedal-track"><div class="pedal-fill-67" id="fill-cc67"></div></div>
+              </div>
+            </div>
+            <div class="audit-bars" id="audit-bars"></div>
+          </section>
+        </div>
+
+        <!-- Lower Workspace: Synchronized Score & Deliberation Replay -->
+        <section class="card" aria-label="楽譜・推敲ワークスペース">
+          <div class="tablist" role="tablist">
+            <button class="tab-btn" id="tab-score" role="tab" aria-selected="true" aria-controls="panel-score" type="button">同期大譜表 ＆ ピアノロール</button>
+            <button class="tab-btn" id="tab-delib" role="tab" aria-selected="false" aria-controls="panel-delib" type="button">公開推敲リプレイ (ボツ案検証)</button>
+          </div>
+
+          <div id="panel-score" role="tabpanel" aria-labelledby="tab-score">
+            <div class="score-canvas-wrap">
+              <canvas id="canvas-studio-score"></canvas>
+            </div>
+            <div class="composer-note" id="composer-note-full"></div>
+          </div>
+
+          <div id="panel-delib" role="tabpanel" aria-labelledby="tab-delib" hidden>
+            <div class="delib-memo" id="delib-monologue">--</div>
+            <div class="delib-grid" id="delib-grid"></div>
+          </div>
+        </section>
+      </main>
+    </div>
+  </div>
+
+  <script>
+    window.DISKLAVIER_LIVE_MODE = false;
+    window.DISKLAVIER_ASSET_BASE = "./";
+  </script>
+  <script src="./app.js"></script>
+</body>
+</html>

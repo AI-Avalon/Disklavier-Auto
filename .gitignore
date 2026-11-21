@@ -10,6 +10,8 @@ __pycache__/
 node_modules/
 dist/
 data/telemetry/exports/
+data/telemetry/playwright_rounds/
+data/telemetry/playwright_audit_round_*.json
 data/workspace_state.json
 data/telemetry/*.sqlite
 data/telemetry/*.sqlite-shm
@@ -18,7 +20,6 @@ data/telemetry/*.png
 data/maestro-v3.0.0/
 data/midi/
 *.wav
-!docs/demos/*.wav
 !docs/demos/*.mp3
 !docs/demos/*.mid
 !docs/demos/*.musicxml

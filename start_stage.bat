@@ -1,8 +1,6 @@
 @echo off
-chcp 65001 >nul
 setlocal EnableDelayedExpansion
 cd /d "%~dp0"
-set "PYTHONIOENCODING=utf-8"
 set "PYTHONUTF8=1"
 set "OLLAMA_FLASH_ATTENTION=1"
 set "OLLAMA_KV_CACHE_TYPE=q8_0"
@@ -38,7 +36,7 @@ if errorlevel 1 (
 )
 
 python -m src.stage.cli_banner stage_open
-start "" cmd /c "timeout /t 2 /nobreak >nul && start http://localhost:8000"
+start "" cmd /c "timeout /t 2 /nobreak >nul && start http://localhost:8000/stage"
 
 python -m src.stage.cli_banner stage_run
 python -m src.stage.stage_server --host 127.0.0.1 --port 8000 --production

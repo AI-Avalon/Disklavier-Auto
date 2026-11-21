@@ -115,6 +115,30 @@ class WorkTitleSchema(BaseModel):
     title_en: str = Field(..., description="対応する英語タイトル")
 
 
+class ActDesignSchema(BaseModel):
+    act: int = Field(..., ge=1, le=4)
+    chords: List[str] = Field(..., min_length=4, max_length=4)
+    lh_texture: Literal[
+        "open_arpeggio_10th",
+        "broken_chord_barcarolle",
+        "chorale_voicing",
+        "countermelody_tenor",
+        "alberti_lyrical",
+    ]
+    melody_offsets: List[int] = Field(..., min_length=8, max_length=8)
+    dynamic_vel: int = Field(..., ge=48, le=90)
+
+
+class LLMFullPieceDesignSchema(BaseModel):
+    title_ja: str = Field(..., description="28文字以内の純日本語クラシック作品名（例: ニ短調の対話的幻想曲）")
+    title_en: str = Field(..., description="Concise English classical title (max 60 chars)")
+    tonal_center: str
+    bpm: float = Field(..., ge=60.0, le=102.0)
+    composer_note_ja: str = Field(..., description="改行なし1文(25-55文字)の和声・終止メモ")
+    seed_degrees: List[int] = Field(..., min_length=6, max_length=8)
+    acts: List[ActDesignSchema] = Field(..., min_length=4, max_length=4)
+
+
 BANNED_PHRASES = (
     # Musical theory contradictions
     "長三度の空虚五度",
@@ -871,3 +895,130 @@ class MusicalIntentEngine:
                 perception, human_notes, policy, turn_result, directive_hints
             )
         return policy
+
+    def design_full_4act_piece(
+        self,
+        mode: str,
+        tonality: str,
+        bpm: float,
+        seed_motif_hint: str,
+        corpus_laws: Optional[Dict[str, Any]] = None,
+        prog_variant: int = 0,
+        retake_feedback: str = "",
+    ) -> Tuple[Dict[str, Any], str]:
+        """
+        Uses Ollama (RTX 3070, keep_alive=-1, FlashAttention/Q8 KV) + TokenEconomizer
+        to design a cohesive 4-Act polyphonic piece (functional chord progressions,
+        cantabile melody degree contours, LH textures, dynamics, and grounded title).
+        Falls back cleanly to functional harmony blueprints when Ollama is unavailable.
+        """
+        from src.stage.harmonic_beauty_realizer import (
+            LH_TEXTURES,
+            TONALITY_SPECS,
+            build_functional_4act_chords,
+        )
+
+        ton_key = tonality if tonality in TONALITY_SPECS else "D_minor"
+        t_spec = TONALITY_SPECS[ton_key]
+        progs = build_functional_4act_chords(ton_key, variant=prog_variant)
+        base_tex = LH_TEXTURES[prog_variant % len(LH_TEXTURES)]
+        tex_2 = LH_TEXTURES[(prog_variant + 1) % len(LH_TEXTURES)]
+        tex_3 = LH_TEXTURES[(prog_variant + 2) % len(LH_TEXTURES)]
+        tex_4 = "chorale_voicing" if prog_variant % 2 == 0 else "open_arpeggio_10th"
+
+        default_acts = [
+            {"act": 1, "chords": progs[1], "lh_texture": base_tex, "melody_offsets": [0, 3, 2, 5, 4, 2, 5, 4], "dynamic_vel": 62},
+            {"act": 2, "chords": progs[2], "lh_texture": tex_2, "melody_offsets": [2, 4, 6, 5, 7, 5, 8, 6], "dynamic_vel": 70},
+            {"act": 3, "chords": progs[3], "lh_texture": tex_3, "melody_offsets": [4, 7, 5, 9, 7, 11, 8, 5], "dynamic_vel": 82},
+            {"act": 4, "chords": progs[4], "lh_texture": tex_4, "melody_offsets": [4, 2, 5, 3, 2, 0, 2, 0], "dynamic_vel": 54},
+        ]
+        inst_ja = "チェロと自動演奏ピアノ" if mode == "cello" else "2台ピアノ連弾"
+        inst_en = "Cello and Disklavier" if mode == "cello" else "Two Pianos"
+        form_ja = ("幻想曲", "エレジー", "対話的前奏曲", "夜想曲")[prog_variant % 4]
+        form_en = ("Fantasia", "Elegy", "Dialogic Prelude", "Nocturne")[prog_variant % 4]
+        ton_ja = str(t_spec["ja"])
+        ton_en = ton_key.replace("_", " ")
+        fallback = {
+            "title_ja": f"{ton_ja}の{form_ja} 第{prog_variant + 1}番 — {inst_ja}のための4幕対話",
+            "title_en": f"{form_en} No.{prog_variant + 1} in {ton_en} for {inst_en}",
+            "tonal_center": ton_key,
+            "bpm": float(bpm),
+            "seed_degrees": [0, 3, 2, 5, 4, 2, 5, 4],
+            "prog_variant": prog_variant,
+            "acts": default_acts,
+            "composer_note_ja": f"{ton_ja}の4幕構成。第1幕で提示した動機を{progs[1][0]}→{progs[1][-1]}の半終止で問いかけ、第3幕頂点を経て第4幕で{progs[4][-1]}へ完全終止する。",
+        }
+        if not self.use_ollama:
+            return fallback, "rule_fallback"
+
+        try:
+            import ollama
+
+            law_str = (corpus_laws or {}).get("law_summary", "gap_fill>=0.75,spread=18st")
+            retake_str = f" | RETAKE={retake_feedback}" if retake_feedback else ""
+            prompt = (
+                f"MODE={mode}|KEY={ton_key}({ton_ja})|BPM={bpm:.0f}|SEED={seed_motif_hint}|CORPUS={law_str}{retake_str}\n"
+                f"標準和声候補: Act1={progs[1]}, Act2={progs[2]}, Act3={progs[3]}, Act4={progs[4]}\n"
+                "規則: (1)〇〇風/AIポエム/『叫び』/英語調名禁止。(2)title_jaは格調高い28文字以内の日本語クラシック曲名。"
+                "(3)4幕(問いかけ->模進転調->頂点->ウナコルダ終止)でlh_textureを幕ごとに変え、melody_offsetsは跳躍+逆行回復を含む整数8個(連番禁止)。"
+                "(4)composer_note_jaは実務的な和声解説1文(28-65文字・句点止め、メタ指示語禁止)。"
+            )
+            client = ollama.Client(host=self.ollama_host, timeout=max(24.0, self.timeout_s))
+            resp = client.chat(
+                model=self.model_name,
+                messages=[
+                    {"role": "system", "content": "あなたはクラシック作曲家である。簡潔で有効なJSONのみ出力せよ。"},
+                    {"role": "user", "content": prompt},
+                ],
+                format=LLMFullPieceDesignSchema.model_json_schema(),
+                options={"temperature": 0.35, "num_ctx": 1536, "num_predict": 850},
+                keep_alive=-1,
+                think=False,
+            )
+            raw = resp["message"]["content"] if isinstance(resp, dict) else resp.message.content
+            parsed = LLMFullPieceDesignSchema.model_validate_json(raw)
+
+            from src.stage.harmonic_beauty_realizer import sanitize_chamber_title_ja, sanitize_composer_note_ja
+
+            title_ja = EMOJI_PATTERN.sub("", parsed.title_ja).replace("！", "").replace("!", "").strip()
+            title_en = EMOJI_PATTERN.sub("", parsed.title_en).replace("!", "").strip()
+            note_ja = EMOJI_PATTERN.sub("", parsed.composer_note_ja).replace("\n", " ").replace("！", "。").replace("!", "。").strip()
+            title_ja = sanitize_chamber_title_ja(title_ja, ton_ja, mode, prog_variant + 1)
+            if any(b in title_ja for b in BANNED_PHRASES) or any(p.search(title_ja) for p in CONTRADICTION_REGEXES):
+                title_ja = fallback["title_ja"]
+            if not title_en or len(title_en) < 6:
+                title_en = fallback["title_en"]
+            note_ja = sanitize_composer_note_ja(note_ja, ton_ja, [c for a in parsed.acts for c in a.chords])
+            if (
+                not note_ja
+                or len(note_ja) < 15
+                or len(note_ja) > 136
+                or any(b in note_ja for b in BANNED_PHRASES)
+                or any(p.search(note_ja) for p in CONTRADICTION_REGEXES)
+            ):
+                note_ja = fallback["composer_note_ja"]
+
+            acts_out = []
+            for act_idx in range(4):
+                a = parsed.acts[act_idx]
+                acts_out.append(
+                    {
+                        "act": act_idx + 1,
+                        "chords": [str(c).strip() for c in a.chords[:4]],
+                        "lh_texture": a.lh_texture,
+                        "melody_offsets": [max(-5, min(14, int(x))) for x in a.melody_offsets[:8]],
+                        "dynamic_vel": max(48, min(90, int(a.dynamic_vel))),
+                    }
+                )
+            return {
+                "title_ja": title_ja[:72],
+                "title_en": title_en[:84],
+                "tonal_center": ton_key,
+                "bpm": float(parsed.bpm or bpm),
+                "seed_degrees": [max(-5, min(12, int(x))) for x in parsed.seed_degrees[:8]],
+                "prog_variant": prog_variant,
+                "acts": acts_out,
+                "composer_note_ja": note_ja[:140],
+            }, f"ollama:{self.model_name}"
+        except Exception:
+            return fallback, "rule_fallback"

@@ -89,7 +89,11 @@ async def _asgi_request(
 
 
 def test_local_only_and_skills_present() -> None:
-    assert not Path(".github/workflows").exists(), ".github/workflows must NOT exist"
+    wf_dir = Path(".github/workflows")
+    if wf_dir.exists():
+        # Only static GitHub Pages deploy workflow is permitted; no cloud GPU/training workflows
+        files = {p.name for p in wf_dir.iterdir() if p.is_file()}
+        assert files <= {"deploy-pages.yml"}, f"Unexpected workflows in .github/workflows: {files}"
     for skill_name in (
         "live-performance-japanese-ui",
         "human-virtuoso-expressive-midi",

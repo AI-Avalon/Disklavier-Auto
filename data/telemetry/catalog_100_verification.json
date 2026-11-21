@@ -1,0 +1,127 @@
+{
+  "passed": true,
+  "pieces_verified": 100,
+  "mode_b_count": 50,
+  "mode_a_count": 50,
+  "avg_beauty_score": 97.75,
+  "min_beauty_score": 95.07,
+  "avg_consonance_score": 97.05,
+  "avg_dissonant_pair_pct": 0.65,
+  "avg_polyphony": 5.01,
+  "avg_mono_ratio_pct": 1.12,
+  "max_mono_ratio_pct": 1.7,
+  "showcase_mp3_count": 10,
+  "mp3_metrics": [
+    {
+      "file": "web-demo/audio/showcase_01.mp3",
+      "size_kb": 1051.0,
+      "sample_rate": 44100,
+      "duration_s": 67.27,
+      "rms": 0.1297,
+      "dbfs": -17.74,
+      "peak": 0.5768,
+      "clipping": 0,
+      "has_nan_or_inf": false
+    },
+    {
+      "file": "web-demo/audio/showcase_02.mp3",
+      "size_kb": 900.0,
+      "sample_rate": 44100,
+      "duration_s": 57.6,
+      "rms": 0.1296,
+      "dbfs": -17.75,
+      "peak": 0.5234,
+      "clipping": 0,
+      "has_nan_or_inf": false
+    },
+    {
+      "file": "web-demo/audio/showcase_03.mp3",
+      "size_kb": 944.5,
+      "sample_rate": 44100,
+      "duration_s": 60.45,
+      "rms": 0.1299,
+      "dbfs": -17.73,
+      "peak": 0.5069,
+      "clipping": 0,
+      "has_nan_or_inf": false
+    },
+    {
+      "file": "web-demo/audio/showcase_04.mp3",
+      "size_kb": 1008.2,
+      "sample_rate": 44100,
+      "duration_s": 64.52,
+      "rms": 0.1296,
+      "dbfs": -17.75,
+      "peak": 0.5745,
+      "clipping": 0,
+      "has_nan_or_inf": false
+    },
+    {
+      "file": "web-demo/audio/showcase_05.mp3",
+      "size_kb": 841.2,
+      "sample_rate": 44100,
+      "duration_s": 53.84,
+      "rms": 0.131,
+      "dbfs": -17.66,
+      "peak": 0.5818,
+      "clipping": 0,
+      "has_nan_or_inf": false
+    },
+    {
+      "file": "web-demo/audio/showcase_06.mp3",
+      "size_kb": 1022.0,
+      "sample_rate": 44100,
+      "duration_s": 65.41,
+      "rms": 0.1282,
+      "dbfs": -17.84,
+      "peak": 0.6624,
+      "clipping": 0,
+      "has_nan_or_inf": false
+    },
+    {
+      "file": "web-demo/audio/showcase_07.mp3",
+      "size_kb": 900.0,
+      "sample_rate": 44100,
+      "duration_s": 57.6,
+      "rms": 0.1288,
+      "dbfs": -17.8,
+      "peak": 0.6321,
+      "clipping": 0,
+      "has_nan_or_inf": false
+    },
+    {
+      "file": "web-demo/audio/showcase_08.mp3",
+      "size_kb": 910.6,
+      "sample_rate": 44100,
+      "duration_s": 58.28,
+      "rms": 0.1275,
+      "dbfs": -17.89,
+      "peak": 0.6823,
+      "clipping": 0,
+      "has_nan_or_inf": false
+    },
+    {
+      "file": "web-demo/audio/showcase_09.mp3",
+      "size_kb": 823.3,
+      "sample_rate": 44100,
+      "duration_s": 52.69,
+      "rms": 0.1286,
+      "dbfs": -17.81,
+      "peak": 0.6304,
+      "clipping": 0,
+      "has_nan_or_inf": false
+    },
+    {
+      "file": "web-demo/audio/showcase_10.mp3",
+      "size_kb": 739.2,
+      "sample_rate": 44100,
+      "duration_s": 47.31,
+      "rms": 0.129,
+      "dbfs": -17.79,
+      "peak": 0.5962,
+      "clipping": 0,
+      "has_nan_or_inf": false
+    }
+  ],
+  "violations": []
+}

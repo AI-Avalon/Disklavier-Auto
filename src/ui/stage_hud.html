@@ -4,11 +4,7 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <link rel="icon" href="/favicon.ico" />
-  <title>Disklavier-Auto — 舞台プロセス可視化システム</title>
-  <link rel="preconnect" href="https://fonts.googleapis.com" />
-  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-  <link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,500;0,600;1,400&family=JetBrains+Mono:wght@400;500&family=Noto+Serif+JP:wght@400;500;600&display=swap" rel="stylesheet" />
-  <script src="https://cdn.jsdelivr.net/npm/vexflow@4.2.5/build/cjs/vexflow.js" defer></script>
+  <title>Disklavier-Auto — 舞台投影 HUD (/stage)</title>
   <style>
     :root {
       --bg-stage: #060608;
@@ -17,8 +13,8 @@
       --ink-adopted: #EAE6DF;
       --ink-rejected: #5A5852;
       --ink-vermilion: #C83E2B;
-      --font-serif: "Noto Serif JP", "Cormorant Garamond", "Yu Mincho", "Hiragino Mincho ProN", Georgia, serif;
-      --font-mono: "JetBrains Mono", "Cascadia Mono", "Consolas", monospace;
+      --font-serif: "Yu Mincho", "Hiragino Mincho ProN", "Noto Serif JP", Georgia, serif;
+      --font-mono: "Cascadia Mono", "JetBrains Mono", "Consolas", monospace;
     }
 
     * {
@@ -461,7 +457,7 @@
 
     .cand-card.rejected {
       border-color: #1A1916;
-      opacity: 0.72;
+      opacity: 0.86;
     }
 
     .cand-head {
@@ -485,7 +481,7 @@
     }
 
     .cand-card.rejected .cand-title {
-      color: var(--ink-rejected);
+      color: #8C877E;
     }
 
     .cand-badge {
@@ -617,7 +613,7 @@
       right: 12px;
       font-family: var(--font-mono);
       font-size: 10px;
-      color: #363430;
+      color: #736F66;
       pointer-events: none;
     }
   </style>
@@ -627,9 +623,10 @@
     <!-- Minimal Top Bar (F10 Toggleable) -->
     <header class="control-bar" id="control-bar">
       <div class="bar-group">
-        <span class="brand-mark">DISKLAVIER-AUTO / STAGE SCORE</span>
-        <button class="btn" id="btn-mode-piano" onclick="setMode('piano')">Mode A: Piano &harr; Piano</button>
-        <button class="btn active" id="btn-mode-cello" onclick="setMode('cello')">Mode B: Cello &harr; Disklavier</button>
+        <a class="btn" id="btn-back-studio" href="/studio" style="text-decoration:none;">Studio</a>
+        <span class="brand-mark">DISKLAVIER-AUTO / STAGE</span>
+        <button class="btn" id="btn-mode-piano" onclick="setMode('piano')">Mode A: Piano</button>
+        <button class="btn active" id="btn-mode-cello" onclick="setMode('cello')">Mode B: Cello</button>
         <button class="btn" id="btn-demo" onclick="toggleDemo()">Virtual Demo: OFF</button>
         <button class="btn" id="btn-audio" onclick="toggleAudioMonitor()">Audio Monitor: ON</button>
         <span class="audio-pill" id="audio-status-pill">
@@ -644,16 +641,18 @@
           type="text"
           id="mc-input"
           class="mc-input"
-          placeholder="指示・推敲 (例: 解決せず問いかけのまま)"
+          style="width:176px;"
+          placeholder="指示 (例: 解決せず問いかけて)"
           onkeydown="if (event.key === 'Enter') sendDirective()"
         />
         <button class="btn" onclick="sendDirective()">送信</button>
-        <button class="btn" id="btn-retake" onclick="retakeLastTurn()">推敲書き直し (Retake)</button>
-        <button class="btn active" id="btn-synthesize" onclick="synthesizeCompleteWork()">作品を完成させ通し演奏</button>
-        <button class="btn" id="btn-calibrate" onclick="runCalibration()">VDL/NLMS校正</button>
+        <button class="btn" id="btn-retake" onclick="retakeLastTurn()">推敲 Retake</button>
+        <button class="btn active" id="btn-synthesize" onclick="synthesizeCompleteWork()">1曲完成出力</button>
+        <button class="btn" id="btn-calibrate" onclick="runCalibration()">VDL校正</button>
         <button class="btn" onclick="triggerTurn()">次ターン</button>
-        <button class="btn" onclick="resetGraph()">記憶初期化</button>
-        <button class="btn panic-btn" onclick="triggerPanic()">PANIC: 全音停止</button>
+        <button class="btn" onclick="resetGraph()">初期化</button>
+        <button class="btn" id="btn-f10-toggle" onclick="toggleProjectionMode()">F10 投影</button>
+        <button class="btn panic-btn" onclick="triggerPanic()">PANIC</button>
       </div>
     </header>
 
@@ -843,12 +842,16 @@
       timers: [],
     };
 
+    function toggleProjectionMode() {
+      document.getElementById("control-bar").classList.toggle("hidden-bar");
+      document.getElementById("demo-deck").classList.toggle("hidden-bar");
+      document.getElementById("stage-shell").classList.toggle("projection-clean");
+    }
+
     window.addEventListener("keydown", (ev) => {
       if (ev.key === "F10") {
         ev.preventDefault();
-        document.getElementById("control-bar").classList.toggle("hidden-bar");
-        document.getElementById("demo-deck").classList.toggle("hidden-bar");
-        document.getElementById("stage-shell").classList.toggle("projection-clean");
+        toggleProjectionMode();
       }
     });
 
@@ -1392,10 +1395,10 @@
         ctx.fill();
         ctx.stroke();
 
-        ctx.fillStyle = isLatest ? COLOR_VERMILION : (node.kind === "human" ? COLOR_ADOPTED : COLOR_REJECTED);
-        ctx.font = "10px 'JetBrains Mono', monospace";
-        const lbl = (node.label || node.id).slice(0, 22);
-        const textX = Math.max(8, Math.min(w - 140, x - 34));
+        ctx.fillStyle = isLatest ? COLOR_VERMILION : (node.kind === "human" ? COLOR_ADOPTED : "#8C877E");
+        ctx.font = "10px 'Cascadia Mono', monospace";
+        const lbl = (node.label || node.id).replace(/:$/, "").replace(/_/g, " ").slice(0, 26);
+        const textX = Math.max(10, Math.min(w - 165, x - 48));
         const textY = node.kind === "human" ? y - 10 : y + 15;
         ctx.fillText(lbl, textX, textY);
       });
@@ -1525,8 +1528,11 @@
 
       // Zone A
       const p = state.perception || {};
+      const vramTxt = (state.gpu_vram_gb !== null && state.gpu_vram_gb !== undefined)
+        ? `VRAM ${Number(state.gpu_vram_gb).toFixed(1)} GB`
+        : "VRAM --";
       document.getElementById("meta-perception").textContent =
-        `${state.mode === "piano" ? "MODE A: PIANO" : "MODE B: CELLO"} | VRAM 0.0 GB`;
+        `${state.mode === "piano" ? "MODE A: PIANO" : "MODE B: CELLO"} | ${vramTxt}`;
       document.getElementById("val-f0").textContent =
         `${Number(p.f0_hz || 0).toFixed(1)} Hz (${p.note_name || "--"})`;
       document.getElementById("val-art").textContent = p.articulation || "legato";
@@ -1562,7 +1568,8 @@
       document.getElementById("val-stance").textContent = intent.phrase_function || intent.interaction_stance || "listen";
       document.getElementById("val-tonal").textContent = intent.tonal_center || "D_dorian";
       document.getElementById("val-chords").textContent = (intent.chord_progression || []).slice(0, 4).join(" - ");
-      document.getElementById("val-voicing").textContent = (intent.voicing_structure || "LH_P5 + RH_9th").slice(0, 28);
+      const beautyInfo = adoptedCand && adoptedCand.beauty_summary ? ` | 協和${adoptedCand.beauty_summary.consonance_score}%` : "";
+      document.getElementById("val-voicing").textContent = `${(adoptedCand && adoptedCand.lh_idiom) || "open_arpeggio"}${beautyInfo}`;
       const econ = intent.token_economizer || {};
       document.getElementById("val-econ").textContent = `${Number(econ.compression_ratio_pct || 0).toFixed(1)}% saved`;
 
@@ -1616,16 +1623,27 @@
       } catch (_) {}
     }
 
+    let activeWs = null;
+    let wsReconnectMs = 600;
     function connectWebSocket() {
+      if (activeWs && (activeWs.readyState === WebSocket.OPEN || activeWs.readyState === WebSocket.CONNECTING)) {
+        return;
+      }
       const proto = location.protocol === "https:" ? "wss:" : "ws:";
       const ws = new WebSocket(`${proto}//${location.host}/ws/stage`);
+      activeWs = ws;
+      ws.onopen = () => {
+        wsReconnectMs = 600;
+      };
       ws.onmessage = (ev) => {
         try {
           updateHUD(JSON.parse(ev.data));
         } catch (_) {}
       };
       ws.onclose = () => {
-        setTimeout(connectWebSocket, 1200);
+        if (activeWs === ws) activeWs = null;
+        setTimeout(connectWebSocket, wsReconnectMs);
+        wsReconnectMs = Math.min(6000, Math.round(wsReconnectMs * 1.6));
       };
     }
 
