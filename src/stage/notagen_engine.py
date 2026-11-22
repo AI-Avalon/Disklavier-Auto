@@ -1315,10 +1315,8 @@ class NotaGenLiveEngine:
 
     def _select_backend(self, requested: str = "auto") -> str:
         req = str(requested or "auto").lower()
-        if req in ("transformer_abc_fallback", "anticipatory_transformer", "midigpt_cpu"):
+        if req in ("notagen_small", "transformer_abc_fallback", "anticipatory_transformer", "midigpt_cpu"):
             return req
-        if req == "notagen_small":
-            return "notagen_small" if (_HAS_TORCH or self._detect_notagen_checkpoint()) else "transformer_abc_fallback"
         if req == "ollama_abc_stream" and self.use_ollama:
             return "ollama_abc_stream"
 
