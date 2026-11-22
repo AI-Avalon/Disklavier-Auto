@@ -16,12 +16,24 @@ Core Architecture:
 
 from __future__ import annotations
 
+from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass, field
 from pathlib import Path
+import threading
+import time
 from typing import Any, Dict, List, Optional, Tuple
 
 import numpy as np
-from symusic import Note, Score, Track
+
+try:
+    from symusic import Note, Score, Track
+
+    _HAS_SYMUSIC = True
+except Exception:  # pragma: no cover
+    Note = Any  # type: ignore[misc,assignment]
+    Score = Any  # type: ignore[misc,assignment]
+    Track = Any  # type: ignore[misc,assignment]
+    _HAS_SYMUSIC = False
 
 from src.stage.co_composition_architect import (
     SCALE_INTERVALS,
@@ -142,6 +154,10 @@ class CompositionTurnResult:
     adopted_candidate: CandidatePhrase
     corpus_source: str
     corpus_refs_used: List[Dict[str, Any]] = field(default_factory=list)
+    parallel_compose_ms: float = 0.0
+    sum_worker_ms: float = 0.0
+    parallel_speedup_ratio: float = 1.0
+    worker_timings_ms: Dict[str, float] = field(default_factory=dict)
 
 
 class ZeroConfigCorpusLoader:
@@ -195,12 +211,29 @@ class ZeroConfigCorpusLoader:
         extracted: List[Dict[str, Any]] = []
         for mf in midi_files[: self.max_files]:
             try:
-                sc = Score(str(mf))
-                tpq = max(1, int(sc.ticks_per_quarter))
                 all_notes: List[Tuple[int, int, int, int]] = []
-                for tr in sc.tracks:
-                    for n in tr.notes:
-                        all_notes.append((int(n.time), int(n.pitch), int(n.duration), int(n.velocity)))
+                if _HAS_SYMUSIC:
+                    sc = Score(str(mf))
+                    tpq = max(1, int(sc.ticks_per_quarter))
+                    for tr in sc.tracks:
+                        for n in tr.notes:
+                            all_notes.append((int(n.time), int(n.pitch), int(n.duration), int(n.velocity)))
+                else:
+                    import mido
+
+                    mid = mido.MidiFile(str(mf))
+                    tpq = max(1, int(mid.ticks_per_beat))
+                    for tr in mid.tracks:
+                        abs_t = 0
+                        active_on: Dict[int, Tuple[int, int]] = {}
+                        for msg in tr:
+                            abs_t += int(getattr(msg, "time", 0))
+                            if msg.type == "note_on" and int(msg.velocity) > 0:
+                                active_on[int(msg.note)] = (abs_t, int(msg.velocity))
+                            elif msg.type == "note_off" or (msg.type == "note_on" and int(msg.velocity) == 0):
+                                prev = active_on.pop(int(msg.note), None)
+                                if prev is not None:
+                                    all_notes.append((prev[0], int(msg.note), max(tpq // 4, abs_t - prev[0]), prev[1]))
                 all_notes.sort(key=lambda x: x[0])
                 if len(all_notes) < 8:
                     continue
@@ -312,7 +345,20 @@ class ZeroConfigCorpusLoader:
         return [self.patterns[int(i)] for i in idx_top]
 
 
-def _events_to_symusic_score(events: List[Dict[str, Any]], tpq: int = 480) -> Score:
+def _events_to_symusic_score(events: List[Dict[str, Any]], tpq: int = 480) -> Any:
+    if not _HAS_SYMUSIC:
+        note_count = sum(1 for ev in events if int(ev.get("pitch", ev.get("note", 0)) or 0) > 0)
+
+        class _FallbackTrack:
+            def __init__(self, count: int) -> None:
+                self.notes = [None] * count
+
+        class _FallbackScore:
+            def __init__(self, count: int) -> None:
+                self.tracks = [_FallbackTrack(count)]
+
+        return _FallbackScore(note_count)
+
     sc = Score(tpq)
     tr_rh = Track(name="Piano_RH")
     tr_lh = Track(name="Piano_LH")
@@ -435,6 +481,14 @@ class MultipleCandidateComposer:
         self.corpus_loader = corpus_loader or ZeroConfigCorpusLoader()
         self.phrase_model = phrase_model or CorpusPhraseModelManager()
         self.turn_counter: int = 0
+        self._counter_lock = threading.Lock()
+        self._candidate_pool = ThreadPoolExecutor(max_workers=4, thread_name_prefix="L3CandWorker")
+
+    def close(self) -> None:
+        try:
+            self._candidate_pool.shutdown(wait=False, cancel_futures=True)
+        except Exception:
+            pass
 
     def _safe_pitch_outside_mud(
         self,
@@ -923,14 +977,189 @@ class MultipleCandidateComposer:
         )
         return note_evs + ped_evs, c64, c67
 
+    def _compose_and_audit_single_candidate(
+        self,
+        idx_spec: int,
+        cid: str,
+        label_ja: str,
+        strat: str,
+        human_notes: List[Dict[str, Any]],
+        intent: MusicalIntentSchema,
+        turn_idx: int,
+        corpus_refs: List[Dict[str, Any]],
+        macro_dict: Dict[str, Any],
+        blueprint: PhraseBlueprint,
+        human_mode: str,
+        tonic_pc: int,
+        valid_pcs: List[int],
+        act_num_cur: int,
+        bar_dur_cur: float,
+        syms_2: List[str],
+        ch_a: Any,
+        ch_b: Any,
+    ) -> Tuple[CandidatePhrase, float]:
+        t_start = time.perf_counter()
+        if cid != "D":
+            lh_idiom_sel = {
+                "contrary_open_polyphony": blueprint.lh_idiom
+                if not macro_dict.get("directive_override_flags", {}).get("boost_lh_inner")
+                else "arpeggio_root_5th_10th",
+                "suspension_inner_voice": "pedal_point_inner_voice",
+                "overtone_clear_high_spread": "una_corda_choral_recall"
+                if act_num_cur == 4
+                else "syncopated_offbeat_harmony",
+            }.get(strat, blueprint.lh_idiom)
+            evs, c64, c67 = HarmonicBeautyRealizer.realize_2bar_candidate(
+                human_notes=human_notes,
+                tonality=intent.tonal_center,
+                chord_symbols=syms_2,
+                act_number=act_num_cur,
+                phrase_function=str(macro_dict["phrase_function"]),
+                strategy=strat,
+                bridge_pitch=int(macro_dict["voice_leading_bridge_pitch"]),
+                target_apex=int(macro_dict["target_apex_pitch"]),
+                lh_idiom=lh_idiom_sel,
+                blueprint_offsets=list(blueprint.melody_degree_offsets),
+                agogic_ratios=list(blueprint.agogic_ratios),
+                velocity_curve=list(blueprint.velocity_curve),
+                pedal_strategy=intent.pedal_strategy,
+            )
+            lh_idiom = lh_idiom_sel
+        else:
+            evs, c64, c67, lh_idiom = self._build_polyphonic_candidate(
+                strat,
+                human_notes,
+                intent,
+                turn_idx,
+                corpus_refs[idx_spec % len(corpus_refs) :] if corpus_refs else [],
+                macro_dict,
+                blueprint,
+            )
+
+        note_init = [e for e in evs if int(e.get("pitch", 0) or 0) > 0]
+        max_t_init = max(
+            (float(e.get("onset_s", 0.0)) + float(e.get("duration_s", 0.3)) for e in note_init),
+            default=bar_dur_cur * 2.0,
+        )
+        cand_tl = [
+            {
+                "bar": 1,
+                "start_s": 0.0,
+                "end_s": round(bar_dur_cur, 3),
+                "chord": ch_a.symbol,
+                "roman": ch_a.roman,
+                "function_ja": ch_a.function_ja,
+                "_spec": ch_a,
+            },
+            {
+                "bar": 2,
+                "start_s": round(bar_dur_cur, 3),
+                "end_s": round(max(bar_dur_cur * 2.0, max_t_init + 0.1), 3),
+                "chord": ch_b.symbol,
+                "roman": ch_b.roman,
+                "function_ja": ch_b.function_ja,
+                "_spec": ch_b,
+            },
+        ]
+        public_cand_tl = [{k: v for k, v in seg.items() if k != "_spec"} for seg in cand_tl]
+
+        audit = MusicalityCritic.audit_candidate(
+            evs,
+            human_notes=human_notes,
+            tonal_center=intent.tonal_center,
+            scale_pcs=(tonic_pc, valid_pcs),
+            register_range=intent.register_range,
+            human_mode=human_mode,
+            macro_plan=macro_dict,
+        )
+
+        if cid != "D" and not audit.passed:
+            evs, c64, c67 = self._repair_to_polyphonic_standard(
+                evs, human_notes, intent, audit, macro_plan=macro_dict
+            )
+            repaired_notes = HarmonicBeautyRealizer.resolve_vertical_clashes(
+                [e for e in evs if int(e.get("pitch", 0) or 0) > 0], cand_tl
+            )
+            repaired_notes = HarmonicBeautyRealizer.resolve_vertical_clashes(repaired_notes, cand_tl)
+            rep_end = max(
+                (float(e.get("onset_s", 0.0)) + float(e.get("duration_s", 0.3)) for e in repaired_notes),
+                default=bar_dur_cur * 2.0,
+            )
+            cc_evs_rep, c64, c67 = HarmonicBeautyRealizer.build_chord_synced_pedals(
+                cand_tl,
+                [{"act": act_num_cur, "start_s": 0.0, "end_s": rep_end + 0.25}],
+                rep_end + 0.25,
+            )
+            evs = repaired_notes + cc_evs_rep
+            audit = MusicalityCritic.audit_candidate(
+                evs,
+                human_notes=human_notes,
+                tonal_center=intent.tonal_center,
+                scale_pcs=(tonic_pc, valid_pcs),
+                register_range=intent.register_range,
+                human_mode=human_mode,
+                macro_plan=macro_dict,
+            )
+
+        sc = _events_to_symusic_score(evs)
+        sym_count = sum(len(tr.notes) for tr in sc.tracks)
+        pitches = sorted({int(e["pitch"]) for e in evs if int(e.get("pitch", 0)) > 0})
+        pitch_range_str = (
+            f"{midi_to_note_name(pitches[0])}-{midi_to_note_name(pitches[-1])}" if pitches else "--"
+        )
+        seq_pitches = [int(e["pitch"]) for e in evs if int(e.get("pitch", 0)) > 0][:4]
+        sample_notes_str = "-".join(midi_to_note_name(p) for p in seq_pitches) or "--"
+
+        note_only = [e for e in evs if int(e.get("pitch", 0) or 0) > 0]
+        b_rep = BeautyHarmonyAuditor.audit_piece(
+            note_only, cand_tl, c64, c67, tonality=intent.tonal_center
+        )
+
+        cand = CandidatePhrase(
+            candidate_id=cid,
+            label_ja=label_ja,
+            strategy=strat,
+            events=evs,
+            total_score=audit.total_score,
+            subscores=audit.subscores,
+            subscores_pct=audit.subscores_pct,
+            adopted=False,
+            rejection_tag_ja=audit.rejection_tag_ja,
+            symusic_note_count=sym_count,
+            pitch_range_str=pitch_range_str,
+            sample_notes_str=sample_notes_str,
+            problem_note_indices=audit.problem_note_indices,
+            rejection_detail=audit.rejection_detail,
+            audit_passed=audit.passed,
+            pedal_cc64_curve=c64,
+            pedal_cc67_curve=c67,
+            masterwork_total=audit.masterwork_total,
+            masterwork_pct=audit.masterwork_pct,
+            lh_idiom=lh_idiom,
+            blueprint_source=blueprint.source,
+            chord_timeline=public_cand_tl,
+            beauty_summary={
+                "beauty_score": b_rep.beauty_score,
+                "consonance_score": b_rep.consonance_score,
+                "avg_polyphony": b_rep.avg_polyphony,
+                "mono_ratio_pct": b_rep.mono_ratio_pct,
+            },
+        )
+        elapsed_ms = round((time.perf_counter() - t_start) * 1000.0, 2)
+        return cand, elapsed_ms
+
     def compose_turn(
         self,
         human_notes: List[Dict[str, Any]],
         intent: MusicalIntentSchema,
         human_mode: str = "cello",
         macro_plan: Optional[Any] = None,
+        parallel: bool = True,
     ) -> CompositionTurnResult:
-        self.turn_counter += 1
+        with self._counter_lock:
+            self.turn_counter += 1
+            cur_turn_idx = self.turn_counter
+
         human_pitches = [
             int(n.get("pitch", n.get("note", 54)))
             for n in human_notes
@@ -998,132 +1227,69 @@ class MultipleCandidateComposer:
             ("D", "対照検証案（音階単調・低中域混濁）", "contrastive_flaw_check"),
         ]
 
-        candidates: List[CandidatePhrase] = []
         act_num_cur = int(macro_dict["act_number"])
         bar_dur_cur = 1.65 if act_num_cur != 4 else 1.85
         syms_2 = (list(intent.chord_progression[:2]) + ["Dm9", "A7sus4"])[:2]
         ch_a = parse_chord_symbol(syms_2[0], intent.tonal_center)
         ch_b = parse_chord_symbol(syms_2[1], intent.tonal_center)
 
-        for idx_spec, (cid, label_ja, strat) in enumerate(specs):
-            if cid != "D":
-                lh_idiom_sel = {
-                    "contrary_open_polyphony": blueprint.lh_idiom if not macro_dict.get("directive_override_flags", {}).get("boost_lh_inner") else "arpeggio_root_5th_10th",
-                    "suspension_inner_voice": "pedal_point_inner_voice",
-                    "overtone_clear_high_spread": "una_corda_choral_recall" if act_num_cur == 4 else "syncopated_offbeat_harmony",
-                }.get(strat, blueprint.lh_idiom)
-                evs, c64, c67 = HarmonicBeautyRealizer.realize_2bar_candidate(
-                    human_notes=human_notes,
-                    tonality=intent.tonal_center,
-                    chord_symbols=syms_2,
-                    act_number=act_num_cur,
-                    phrase_function=str(macro_dict["phrase_function"]),
-                    strategy=strat,
-                    bridge_pitch=int(macro_dict["voice_leading_bridge_pitch"]),
-                    target_apex=int(macro_dict["target_apex_pitch"]),
-                    lh_idiom=lh_idiom_sel,
-                    blueprint_offsets=list(blueprint.melody_degree_offsets),
-                    agogic_ratios=list(blueprint.agogic_ratios),
-                    velocity_curve=list(blueprint.velocity_curve),
-                    pedal_strategy=intent.pedal_strategy,
-                )
-                lh_idiom = lh_idiom_sel
-            else:
-                evs, c64, c67, lh_idiom = self._build_polyphonic_candidate(
+        t_wall_0 = time.perf_counter()
+        if parallel:
+            futures = [
+                self._candidate_pool.submit(
+                    self._compose_and_audit_single_candidate,
+                    idx_spec,
+                    cid,
+                    label_ja,
                     strat,
                     human_notes,
                     intent,
-                    self.turn_counter,
-                    corpus_refs[idx_spec % len(corpus_refs) :],
+                    cur_turn_idx,
+                    corpus_refs,
                     macro_dict,
                     blueprint,
+                    human_mode,
+                    tonic_pc,
+                    valid_pcs,
+                    act_num_cur,
+                    bar_dur_cur,
+                    syms_2,
+                    ch_a,
+                    ch_b,
                 )
-
-            note_init = [e for e in evs if int(e.get("pitch", 0) or 0) > 0]
-            max_t_init = max((float(e.get("onset_s", 0.0)) + float(e.get("duration_s", 0.3)) for e in note_init), default=bar_dur_cur * 2.0)
-            cand_tl = [
-                {"bar": 1, "start_s": 0.0, "end_s": round(bar_dur_cur, 3), "chord": ch_a.symbol, "roman": ch_a.roman, "function_ja": ch_a.function_ja, "_spec": ch_a},
-                {"bar": 2, "start_s": round(bar_dur_cur, 3), "end_s": round(max(bar_dur_cur * 2.0, max_t_init + 0.1), 3), "chord": ch_b.symbol, "roman": ch_b.roman, "function_ja": ch_b.function_ja, "_spec": ch_b},
+                for idx_spec, (cid, label_ja, strat) in enumerate(specs)
             ]
-            public_cand_tl = [{k: v for k, v in seg.items() if k != "_spec"} for seg in cand_tl]
-
-            audit = MusicalityCritic.audit_candidate(
-                evs,
-                human_notes=human_notes,
-                tonal_center=intent.tonal_center,
-                scale_pcs=(tonic_pc, valid_pcs),
-                register_range=intent.register_range,
-                human_mode=human_mode,
-                macro_plan=macro_dict,
-            )
-
-            if cid != "D" and not audit.passed:
-                evs, c64, c67 = self._repair_to_polyphonic_standard(evs, human_notes, intent, audit, macro_plan=macro_dict)
-                repaired_notes = HarmonicBeautyRealizer.resolve_vertical_clashes(
-                    [e for e in evs if int(e.get("pitch", 0) or 0) > 0], cand_tl
+            results = [f.result() for f in futures]
+        else:
+            results = [
+                self._compose_and_audit_single_candidate(
+                    idx_spec,
+                    cid,
+                    label_ja,
+                    strat,
+                    human_notes,
+                    intent,
+                    cur_turn_idx,
+                    corpus_refs,
+                    macro_dict,
+                    blueprint,
+                    human_mode,
+                    tonic_pc,
+                    valid_pcs,
+                    act_num_cur,
+                    bar_dur_cur,
+                    syms_2,
+                    ch_a,
+                    ch_b,
                 )
-                repaired_notes = HarmonicBeautyRealizer.resolve_vertical_clashes(repaired_notes, cand_tl)
-                rep_end = max((float(e.get("onset_s", 0.0)) + float(e.get("duration_s", 0.3)) for e in repaired_notes), default=bar_dur_cur * 2.0)
-                cc_evs_rep, c64, c67 = HarmonicBeautyRealizer.build_chord_synced_pedals(
-                    cand_tl, [{"act": act_num_cur, "start_s": 0.0, "end_s": rep_end + 0.25}], rep_end + 0.25
-                )
-                evs = repaired_notes + cc_evs_rep
-                audit = MusicalityCritic.audit_candidate(
-                    evs,
-                    human_notes=human_notes,
-                    tonal_center=intent.tonal_center,
-                    scale_pcs=(tonic_pc, valid_pcs),
-                    register_range=intent.register_range,
-                    human_mode=human_mode,
-                    macro_plan=macro_dict,
-                )
+                for idx_spec, (cid, label_ja, strat) in enumerate(specs)
+            ]
 
-            sc = _events_to_symusic_score(evs)
-            sym_count = sum(len(tr.notes) for tr in sc.tracks)
-            pitches = sorted({int(e["pitch"]) for e in evs if int(e.get("pitch", 0)) > 0})
-            pitch_range_str = (
-                f"{midi_to_note_name(pitches[0])}-{midi_to_note_name(pitches[-1])}" if pitches else "--"
-            )
-            seq_pitches = [int(e["pitch"]) for e in evs if int(e.get("pitch", 0)) > 0][:4]
-            sample_notes_str = "-".join(midi_to_note_name(p) for p in seq_pitches) or "--"
-
-            note_only = [e for e in evs if int(e.get("pitch", 0) or 0) > 0]
-            b_rep = BeautyHarmonyAuditor.audit_piece(
-                note_only, cand_tl, c64, c67, tonality=intent.tonal_center
-            )
-
-            candidates.append(
-                CandidatePhrase(
-                    candidate_id=cid,
-                    label_ja=label_ja,
-                    strategy=strat,
-                    events=evs,
-                    total_score=audit.total_score,
-                    subscores=audit.subscores,
-                    subscores_pct=audit.subscores_pct,
-                    adopted=False,
-                    rejection_tag_ja=audit.rejection_tag_ja,
-                    symusic_note_count=sym_count,
-                    pitch_range_str=pitch_range_str,
-                    sample_notes_str=sample_notes_str,
-                    problem_note_indices=audit.problem_note_indices,
-                    rejection_detail=audit.rejection_detail,
-                    audit_passed=audit.passed,
-                    pedal_cc64_curve=c64,
-                    pedal_cc67_curve=c67,
-                    masterwork_total=audit.masterwork_total,
-                    masterwork_pct=audit.masterwork_pct,
-                    lh_idiom=lh_idiom,
-                    blueprint_source=blueprint.source,
-                    chord_timeline=public_cand_tl,
-                    beauty_summary={
-                        "beauty_score": b_rep.beauty_score,
-                        "consonance_score": b_rep.consonance_score,
-                        "avg_polyphony": b_rep.avg_polyphony,
-                        "mono_ratio_pct": b_rep.mono_ratio_pct,
-                    },
-                )
-            )
+        wall_ms = round((time.perf_counter() - t_wall_0) * 1000.0, 2)
+        candidates = [cand for cand, _ in results]
+        worker_timings = {cand.candidate_id: ms for cand, ms in results}
+        sum_worker_ms = round(sum(worker_timings.values()), 2)
+        speedup = round(sum_worker_ms / max(0.01, wall_ms), 2)
 
         eligible = [c for c in candidates if c.candidate_id != "D"]
         best = max(
@@ -1140,10 +1306,14 @@ class MultipleCandidateComposer:
         best.rejection_detail = {}
 
         return CompositionTurnResult(
-            turn_id=self.turn_counter,
+            turn_id=cur_turn_idx,
             intent=intent,
             candidates=candidates,
             adopted_candidate=best,
             corpus_source=f"{self.corpus_loader.source_mode} + {blueprint.source}",
             corpus_refs_used=corpus_refs,
+            parallel_compose_ms=wall_ms,
+            sum_worker_ms=sum_worker_ms,
+            parallel_speedup_ratio=speedup,
+            worker_timings_ms=worker_timings,
         )

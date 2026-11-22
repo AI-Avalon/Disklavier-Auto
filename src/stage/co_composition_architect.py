@@ -307,12 +307,43 @@ class CoCompositionArchitect:
             return 3
         return 4
 
+    def preview_turn_architecture(
+        self,
+        human_notes: List[Dict[str, Any]],
+        directive_hints: Optional[Dict[str, Any]] = None,
+        mode: str = "cello",
+    ) -> MacroTurnPlan:
+        """Non-mutating speculative preview of next turn architecture (safe for Worker 5)."""
+        return self._compute_turn_plan(
+            human_notes=human_notes,
+            directive_hints=directive_hints,
+            mode=mode,
+            explicit_retake=False,
+            mutate_state=False,
+        )
+
     def plan_turn_architecture(
         self,
         human_notes: List[Dict[str, Any]],
         directive_hints: Optional[Dict[str, Any]] = None,
         mode: str = "cello",
         explicit_retake: bool = False,
+    ) -> MacroTurnPlan:
+        return self._compute_turn_plan(
+            human_notes=human_notes,
+            directive_hints=directive_hints,
+            mode=mode,
+            explicit_retake=explicit_retake,
+            mutate_state=True,
+        )
+
+    def _compute_turn_plan(
+        self,
+        human_notes: List[Dict[str, Any]],
+        directive_hints: Optional[Dict[str, Any]] = None,
+        mode: str = "cello",
+        explicit_retake: bool = False,
+        mutate_state: bool = True,
     ) -> MacroTurnPlan:
         hints = directive_hints or {}
         raw_dir = str(hints.get("raw_text") or "").strip()
@@ -323,11 +354,27 @@ class CoCompositionArchitect:
 
         turn_num = self.turn_history[-1]["turn_number"] if is_retake else (len(self.turn_history) + 1)
 
-        # Capture human Seed Motif on Turn 1
+        # Capture human Seed Motif on Turn 1 (non-mutating during speculative preview)
         if self.thematic_dna is None or turn_num == 1:
             inferred_home = str(hints.get("tonal_hint") or ("D_dorian" if mode == "cello" else "D_minor"))
-            self.register_human_seed(human_notes, home_tonality=inferred_home)
-        dna = self.thematic_dna
+            if mutate_state:
+                dna = self.register_human_seed(human_notes, home_tonality=inferred_home)
+            else:
+                pitches = [
+                    int(n.get("pitch", n.get("note", 0)))
+                    for n in human_notes
+                    if int(n.get("pitch", n.get("note", 0))) > 0
+                ] or [50, 53, 57, 55, 52]
+                ivs = [pitches[i] - pitches[i - 1] for i in range(1, len(pitches))] or [3, 4, -2]
+                dna = ThematicDNA(
+                    seed_pitches=pitches[:8],
+                    seed_intervals=ivs[:7],
+                    seed_rhythm_ratios=[1.0] * min(8, len(pitches)),
+                    home_tonality=inferred_home if inferred_home in SCALE_INTERVALS else "D_dorian",
+                    captured_turn=1,
+                )
+        else:
+            dna = self.thematic_dna
         assert dna is not None
 
         act_num = self._act_for_turn(turn_num)

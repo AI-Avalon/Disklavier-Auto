@@ -39,6 +39,10 @@ python -m src.stage.cli_banner setup_header
 python -m src.stage.cli_banner setup_step2
 
 if defined UV_EXE (
+    if exist "requirements-ci.txt" (
+        "%UV_EXE%" pip install --python "%~dp0.venv\Scripts\python.exe" -r requirements-ci.txt
+        if errorlevel 1 goto :pip_fail
+    )
     "%UV_EXE%" pip install --python "%~dp0.venv\Scripts\python.exe" fastapi uvicorn websockets pydantic mido python-rtmidi sounddevice soundfile numpy scipy matplotlib requests symusic miditok ollama pyyaml httpx pytest ruff lameenc playwright
     if errorlevel 1 goto :pip_fail
     "%UV_EXE%" pip install --python "%~dp0.venv\Scripts\python.exe" "torch==2.6.0+cu124" --index-url https://download.pytorch.org/whl/cu124 --extra-index-url https://pypi.org/simple --index-strategy unsafe-best-match
@@ -49,6 +53,10 @@ if defined UV_EXE (
     if errorlevel 1 goto :pip_fail
 ) else (
     python -m pip install --upgrade pip
+    if exist "requirements-ci.txt" (
+        python -m pip install -r requirements-ci.txt
+        if errorlevel 1 goto :pip_fail
+    )
     python -m pip install fastapi uvicorn websockets pydantic mido python-rtmidi sounddevice soundfile numpy scipy matplotlib requests symusic miditok ollama pyyaml httpx pytest ruff lameenc playwright
     if errorlevel 1 goto :pip_fail
     python -m pip install -e ".[audio,dev]" --no-deps

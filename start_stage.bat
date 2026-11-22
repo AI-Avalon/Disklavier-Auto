@@ -36,7 +36,8 @@ if errorlevel 1 (
 )
 
 python -m src.stage.cli_banner stage_open
-start "" cmd /c "timeout /t 2 /nobreak >nul && start http://localhost:8000/stage"
+if exist "data\telemetry\active_stage_url.txt" del /f /q "data\telemetry\active_stage_url.txt" >nul 2>&1
+start "" powershell -NoProfile -WindowStyle Hidden -Command "for($i=0;$i -lt 40;$i++){if(Test-Path 'data\telemetry\active_stage_url.txt'){$u=(Get-Content 'data\telemetry\active_stage_url.txt' -Raw).Trim();if($u){Start-Process ($u + '/stage');exit}};Start-Sleep -Milliseconds 300};Start-Process 'http://127.0.0.1:8000/stage'"
 
 python -m src.stage.cli_banner stage_run
 python -m src.stage.stage_server --host 127.0.0.1 --port 8000 --production

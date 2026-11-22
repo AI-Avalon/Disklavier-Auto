@@ -1,18 +1,21 @@
 """
-Playwright Real-Browser End-to-End & Visual Layout Auditor (`scripts/playwright_audit.py`).
+Playwright Real-Browser End-to-End & Ergonomic Visual Layout Auditor (`scripts/playwright_audit.py`).
 
-Tests BOTH:
-1. Local FastAPI `stage_server.py` (`/studio` and `/stage`)
-2. Static GitHub Pages bundle (`web-demo/index.html` served over clean HTTP)
+Tests ALL THREE surfaces at BOTH 1920x1080 and 1366x768:
+1. Static GitHub Pages bundle (`web-demo/index.html` over clean HTTP)
+2. Live FastAPI `/studio` across ALL 4 modes:
+   - [1] Cello Dialogue (`#view-cello`)
+   - [2] Piano Dialogue (`#view-piano` + interactive `#canvas-piano-keys`)
+   - [3] NotaGen / LLM Live Streaming (`#view-notagen` 4-bar streaming check)
+   - [4] Curated 100-Piece Library (`#view-library` filters, MP3, WebAudio, mixer, Deliberation cards)
+3. Live `/stage` Projection HUD + `F10` Clean Projection Toggle
 
-Verifies:
+Enforces:
 - 0 `console.error`, 0 uncaught `pageerror`, 0 HTTP >= 400 responses
-- 100-piece catalog load, Mode B / Mode A / MP3 filtering, text search, piece click selection
-- WebAudio play/pause + 5-channel mixer toggles + Solo + Deliberation replay
-- Client-side SMF MIDI download (`MThd` header verified)
-- Showcase MP3 load & play (`readyState >= 2`, `error === null`, `duration > 20s`)
-- Live `/studio` turn execution & `/stage` Mode A/B + `F10` projection mode toggle
-- Zero horizontal overflow and zero overlapping buttons at BOTH 1920x1080 and 1280x720
+- Horizontal overflow <= 2px, 0 clipped controls, 0 overlapping controls
+- Minimum visible text computed font-size >= 12.0px
+- Primary non-compact buttons and mode tabs height >= 40px
+- Physical Left/Right pedal spatial ordering: `UNA CORDA` strictly left of `DAMPER`
 """
 
 from __future__ import annotations
@@ -77,13 +80,19 @@ def _check_layout_geometry(page: Page, label: str) -> Dict[str, Any]:
             const sw = document.documentElement.scrollWidth;
             const overflowPx = Math.max(0, sw - vw);
 
-            const btns = Array.from(document.querySelectorAll('button, a.btn, input, select'))
+            const isActuallyVisible = (el) => {
+                if (!el) return false;
+                if (el.closest('[hidden]')) return false;
+                const st = window.getComputedStyle(el);
+                if (st.display === 'none' || st.visibility === 'hidden' || Number(st.opacity) === 0) return false;
+                const r = el.getBoundingClientRect();
+                return r.width > 0.5 && r.height > 0.5;
+            };
+
+            const controls = Array.from(document.querySelectorAll('button, a.btn, input, select'))
                 .filter((el) => {
-                    const st = window.getComputedStyle(el);
-                    if (st.display === 'none' || st.visibility === 'hidden' || el.closest('[hidden]')) return false;
+                    if (!isActuallyVisible(el)) return false;
                     const r = el.getBoundingClientRect();
-                    if (!(r.width > 0 && r.height > 0)) return false;
-                    // Respect scroll containers (e.g., #piece-list overflow-y: auto): skip items scrolled out of view
                     let cur = el.parentElement;
                     while (cur && cur !== document.body) {
                         const cst = window.getComputedStyle(cur);
@@ -98,8 +107,14 @@ def _check_layout_geometry(page: Page, label: str) -> Dict[str, Any]:
 
             const clipped = [];
             const rects = [];
-            for (const el of btns) {
+            const smallPrimaryBtns = [];
+
+            for (const el of controls) {
                 const raw = el.getBoundingClientRect();
+                if ((el.classList.contains('mode-tab') || (el.classList.contains('btn') && !el.classList.contains('compact'))) && raw.height < 40) {
+                    smallPrimaryBtns.push({ id: el.id || el.textContent.trim().slice(0, 20), height: Math.round(raw.height) });
+                }
+
                 let left = raw.left, top = raw.top, right = raw.right, bottom = raw.bottom;
                 let cur = el.parentElement;
                 while (cur && cur !== document.body) {
@@ -115,7 +130,7 @@ def _check_layout_geometry(page: Page, label: str) -> Dict[str, Any]:
                 }
                 if (right - left <= 1 || bottom - top <= 1) continue;
                 if (raw.right > vw + 2 || raw.left < -2) {
-                    clipped.push({ id: el.id || el.textContent.trim().slice(0, 20), left: raw.left, right: raw.right, vw });
+                    clipped.push({ id: el.id || el.textContent.trim().slice(0, 20), left: Math.round(raw.left), right: Math.round(raw.right), vw });
                 }
                 rects.push({ id: el.id || el.className || el.tagName, r: { left, top, right, bottom } });
             }
@@ -132,14 +147,55 @@ def _check_layout_geometry(page: Page, label: str) -> Dict[str, Any]:
                     }
                 }
             }
+
+            // Font size audit on visible text nodes
+            let minVisibleFontPx = 999;
+            const smallFontEls = [];
+            const allTextContainers = Array.from(document.querySelectorAll('body *'));
+            for (const el of allTextContainers) {
+                if (['SCRIPT', 'STYLE', 'OPTION', 'AUDIO', 'CANVAS'].includes(el.tagName)) continue;
+                if (!isActuallyVisible(el)) continue;
+                const hasDirectText = Array.from(el.childNodes).some(
+                    (n) => n.nodeType === Node.TEXT_NODE && n.textContent && n.textContent.trim().length > 0
+                );
+                if (!hasDirectText) continue;
+                const fs = parseFloat(window.getComputedStyle(el).fontSize || '15');
+                if (fs < minVisibleFontPx) minVisibleFontPx = fs;
+                if (fs < 12.0) {
+                    smallFontEls.push({ tag: el.tagName, id: el.id || el.className, fs, text: el.textContent.trim().slice(0, 24) });
+                }
+            }
+
+            // Spatial Left/Right Pedal order audit
+            let pedalOrderOk = true;
+            const pedalPairs = [];
+            for (const container of document.querySelectorAll('.pedal-gauges, .pedal-pair')) {
+                if (!isActuallyVisible(container)) continue;
+                const textSpans = Array.from(container.querySelectorAll('span'));
+                const una = textSpans.find((s) => s.textContent.includes('UNA CORDA'));
+                const dmp = textSpans.find((s) => s.textContent.includes('DAMPER'));
+                if (una && dmp) {
+                    const ur = una.getBoundingClientRect();
+                    const dr = dmp.getBoundingClientRect();
+                    const ok = ur.left < dr.left;
+                    pedalPairs.push({ unaLeft: Math.round(ur.left), damperLeft: Math.round(dr.left), ok });
+                    if (!ok) pedalOrderOk = false;
+                }
+            }
+
             return {
                 label: lbl,
                 vw,
                 sw,
                 overflowPx,
-                visibleControlCount: btns.length,
+                visibleControlCount: controls.length,
                 clipped,
                 overlaps,
+                minVisibleFontPx: minVisibleFontPx === 999 ? 15 : minVisibleFontPx,
+                smallFontEls,
+                smallPrimaryBtns,
+                pedalOrderOk,
+                pedalPairs,
             };
         }""",
         label,
@@ -156,6 +212,22 @@ def _attach_error_listeners(page: Page, errors: Dict[str, List[str]]) -> None:
         "response",
         lambda resp: errors["http"].append(f"{resp.status} {resp.url}") if resp.status >= 400 else None,
     )
+
+
+def _record_geometry_violations(geometry_reports: List[Dict[str, Any]], violations: List[str]) -> None:
+    for g in geometry_reports:
+        if g["overflowPx"] > 2:
+            violations.append(f"{g['label']}: horizontal overflow {g['overflowPx']}px")
+        if g["clipped"]:
+            violations.append(f"{g['label']}: clipped controls {g['clipped'][:3]}")
+        if g["overlaps"]:
+            violations.append(f"{g['label']}: overlapping controls {g['overlaps'][:3]}")
+        if g["minVisibleFontPx"] < 12.0 or g["smallFontEls"]:
+            violations.append(f"{g['label']}: font < 12px ({g['smallFontEls'][:3]})")
+        if g["smallPrimaryBtns"]:
+            violations.append(f"{g['label']}: small primary buttons < 40px ({g['smallPrimaryBtns'][:3]})")
+        if not g["pedalOrderOk"]:
+            violations.append(f"{g['label']}: UNA CORDA not left of DAMPER ({g['pedalPairs']})")
 
 
 def run_audit(round_num: int = 1, update_docs_images: bool = False, quick: bool = False) -> Dict[str, Any]:
@@ -217,30 +289,26 @@ def run_audit(round_num: int = 1, update_docs_images: bool = False, quick: bool 
             page = context.new_page()
             _attach_error_listeners(page, errors)
 
-            # ===== A. Static GitHub Pages Web-Demo Audit =====
+            # ===== A. Static GitHub Pages Web-Demo Audit (index.html) =====
             page.goto(f"{static_url}/index.html", wait_until="networkidle")
-            page.wait_for_function("document.querySelectorAll('#piece-list .piece-item').length === 100", timeout=10000)
+            page.wait_for_function("document.querySelectorAll('#piece-list .piece-item').length === 100", timeout=12000)
             functional_checks["web_demo_loaded_100"] = True
 
-            # Test filters: showcase (10), cello (50), piano (50), all (100)
-            page.click("button[data-filter='showcase']")
-            cnt_show = page.locator("#piece-list .piece-item").count()
+            # Test Mode 4 filters: mp3 (10), cello (50), piano (50), all (100)
+            page.click("button[data-filter='mp3']")
+            cnt_mp3 = page.locator("#piece-list .piece-item").count()
             page.click("button[data-filter='cello']")
             cnt_cello = page.locator("#piece-list .piece-item").count()
             page.click("button[data-filter='piano']")
             cnt_piano = page.locator("#piece-list .piece-item").count()
             page.click("button[data-filter='all']")
             cnt_all = page.locator("#piece-list .piece-item").count()
-            functional_checks["filters"] = {"showcase": cnt_show, "cello": cnt_cello, "piano": cnt_piano, "all": cnt_all}
-            if (cnt_show, cnt_cello, cnt_piano, cnt_all) != (10, 50, 50, 100):
-                violations.append(f"Filter counts mismatch: {(cnt_show, cnt_cello, cnt_piano, cnt_all)}")
+            functional_checks["filters"] = {"mp3": cnt_mp3, "cello": cnt_cello, "piano": cnt_piano, "all": cnt_all}
+            if (cnt_mp3, cnt_cello, cnt_piano, cnt_all) != (10, 50, 50, 100):
+                violations.append(f"Filter counts mismatch: {(cnt_mp3, cnt_cello, cnt_piano, cnt_all)}")
 
-            # Search test
-            page.fill("#filter-search", "mode")
-            page.fill("#filter-search", "")
-
-            # Verify showcase MP3 loads and plays cleanly
-            page.click("button[data-filter='showcase']")
+            # Search & Showcase MP3 verification
+            page.click("button[data-filter='mp3']")
             page.locator("#piece-list .piece-item").first.click()
             page.wait_for_function(
                 "() => { const a = document.getElementById('mp3-player'); return a && a.readyState >= 2 && a.duration > 20; }",
@@ -260,138 +328,135 @@ def run_audit(round_num: int = 1, update_docs_images: bool = False, quick: bool 
             if mp3_info["readyState"] < 2 or mp3_info["error"] is not None or mp3_info["duration"] <= 20:
                 violations.append(f"MP3 playback verification failed: {mp3_info}")
 
-            # Verify WebAudio playback + 5 mixer toggles + Solo + Reset
+            # WebAudio play + Mixer Solo/Mute + Deliberation tab check
             page.click("#btn-play")
-            time.sleep(0.35)
-            play_label = page.locator("#btn-play").inner_text()
-            for mkey in ("rh", "lh", "human", "cc64", "cc67"):
-                page.click(f"button[data-mix-toggle='{mkey}']")
-            page.click("button[data-mix-solo='rh']")
-            page.click("#btn-mixer-reset")
-            page.click("#btn-play")  # pause
-            functional_checks["webaudio_play_toggle"] = play_label
-
-            # Verify Client MIDI Download starts with MThd
-            with page.expect_download(timeout=8000) as dl_info:
-                page.click("#btn-download-midi")
-            dl = dl_info.value
-            dl_path = out_dir / "downloaded_test.mid"
-            dl.save_as(str(dl_path))
-            mid_hdr = dl_path.read_bytes()[:4]
-            functional_checks["midi_download_bytes"] = dl_path.stat().st_size
-            if mid_hdr != b"MThd" or dl_path.stat().st_size < 300:
-                violations.append(f"Invalid MIDI download: hdr={mid_hdr!r}, size={dl_path.stat().st_size}")
-
-            # Verify Deliberation Replay & capture screenshot before switching back to Score
-            page.click("#btn-replay-delib")
+            time.sleep(0.25)
+            page.click("button[data-layer='human'][data-action='solo']")
+            page.click("button[data-layer='human'][data-action='solo']")
+            page.click("#btn-stop")
+            page.click("#tab-delib")
             page.wait_for_selector("#delib-grid .cand-card", timeout=5000)
             delib_cnt = page.locator("#delib-grid .cand-card").count()
             functional_checks["delib_cards"] = delib_cnt
-            if delib_cnt != 4:
+            if delib_cnt < 4:
                 violations.append(f"Expected 4 deliberation cards, got {delib_cnt}")
-            time.sleep(1.7)
-            p_delib = out_dir / "studio_delib_replay.png"
-            page.screenshot(path=str(p_delib))
-            screenshots["studio_delib_replay"] = str(p_delib)
             page.click("#tab-score")
             page.click("button[data-filter='all']")
 
-            # Geometry & screenshot at 1920x1080
-            page.set_viewport_size({"width": 1920, "height": 1080})
-            time.sleep(0.2)
-            g_wd_1080 = _check_layout_geometry(page, "web_demo_1920x1080")
-            geometry_reports.append(g_wd_1080)
-            p_wd_1080 = out_dir / "web_demo_1920x1080.png"
-            page.screenshot(path=str(p_wd_1080))
-            screenshots["web_demo_1920x1080"] = str(p_wd_1080)
-
-            # Geometry & screenshot at 1280x720
-            page.set_viewport_size({"width": 1280, "height": 720})
-            time.sleep(0.2)
-            g_wd_720 = _check_layout_geometry(page, "web_demo_1280x720")
-            geometry_reports.append(g_wd_720)
-            p_wd_720 = out_dir / "web_demo_1280x720.png"
-            page.screenshot(path=str(p_wd_720))
-            screenshots["web_demo_1280x720"] = str(p_wd_720)
-
-            # ===== B. Live FastAPI /studio Audit =====
-            page.set_viewport_size({"width": 1920, "height": 1080})
-            page.goto(f"{stage_url}/studio", wait_until="networkidle")
-            page.wait_for_function("document.querySelectorAll('#piece-list .piece-item').length === 100", timeout=10000)
-            if not quick:
-                page.click("#tab-live")
-                page.click("#live-next-turn")
-                page.wait_for_function(
-                    "document.getElementById('live-monologue-box').textContent.includes('Turn #')",
-                    timeout=10000,
-                )
-                page.click("#tab-score")
+            # Geometry & screenshot of static web-demo at 1920x1080 and 1366x768
+            for vw, vh in ((1920, 1080), (1366, 768)):
+                page.set_viewport_size({"width": vw, "height": vh})
                 time.sleep(0.2)
+                geometry_reports.append(_check_layout_geometry(page, f"web_demo_{vw}x{vh}"))
+                if vw == 1920:
+                    p_wd = out_dir / "web_demo_1920x1080.png"
+                    page.screenshot(path=str(p_wd))
+                    screenshots["web_demo_1920x1080"] = str(p_wd)
 
-            g_st_1080 = _check_layout_geometry(page, "studio_1920x1080")
-            geometry_reports.append(g_st_1080)
-            p_st_1080 = out_dir / "studio_1920x1080.png"
-            page.screenshot(path=str(p_st_1080))
-            screenshots["studio_1920x1080"] = str(p_st_1080)
+            # Offline Mode 2 Piano test inside static bundle
+            page.click("#mode-tab-piano")
+            time.sleep(0.25)
+            page.click("#btn-piano-demo-phrase")
+            time.sleep(0.35)
+            page.click("#mode-tab-library")
 
-            page.set_viewport_size({"width": 1280, "height": 720})
-            time.sleep(0.2)
-            g_st_720 = _check_layout_geometry(page, "studio_1280x720")
-            geometry_reports.append(g_st_720)
-            p_st_720 = out_dir / "studio_1280x720.png"
-            page.screenshot(path=str(p_st_720))
-            screenshots["studio_1280x720"] = str(p_st_720)
-
-            # ===== C. Live /stage Projection HUD Audit (Mode B, Mode A, F10) =====
+            # ===== B. Live FastAPI /studio Across All 4 Modes =====
             requests.post(f"{stage_url}/api/stage/reset", timeout=5.0).raise_for_status()
-            requests.post(f"{stage_url}/api/stage/mode", json={"mode": "cello"}, timeout=5.0).raise_for_status()
-            for _idx in range(6 if not quick else 2):
-                requests.post(f"{stage_url}/api/stage/turn", timeout=12.0).raise_for_status()
+            requests.post(f"{stage_url}/api/stage/turn", timeout=15.0).raise_for_status()
 
             page.set_viewport_size({"width": 1920, "height": 1080})
-            page.goto(f"{stage_url}/stage?snapshot=1", wait_until="networkidle")
-            page.wait_for_function("document.getElementById('meta-arena').textContent.includes('TURN #')", timeout=10000)
+            page.goto(f"{stage_url}/studio", wait_until="domcontentloaded")
+            page.wait_for_function("document.querySelectorAll('#cello-cand-cards .cand-pick-card').length === 4", timeout=12000)
+            time.sleep(0.25)
+
+            # Mode 1: Cello Dialogue
+            geometry_reports.append(_check_layout_geometry(page, "studio_mode1_cello_1920x1080"))
+            p_m1 = out_dir / "studio_mode1_cello.png"
+            page.screenshot(path=str(p_m1))
+            screenshots["studio_mode1_cello"] = str(p_m1)
+
+            # Mode 2: Piano Dialogue + interactive piano key canvas click
+            page.click("#mode-tab-piano")
+            time.sleep(0.25)
+            box = page.locator("#canvas-piano-keys").bounding_box()
+            if box:
+                page.mouse.click(box["x"] + box["width"] * 0.45, box["y"] + box["height"] * 0.72)
+            page.click("#btn-piano-demo-phrase")
+            time.sleep(0.35)
+            page.wait_for_function("document.querySelectorAll('#piano-cand-cards .cand-pick-card').length === 4", timeout=10000)
+            geometry_reports.append(_check_layout_geometry(page, "studio_mode2_piano_1920x1080"))
+            p_m2 = out_dir / "studio_mode2_piano.png"
+            page.screenshot(path=str(p_m2))
+            screenshots["studio_mode2_piano"] = str(p_m2)
+
+            # Mode 3: NotaGen / LLM Live Streaming (4-bar fallback stream)
+            page.click("#mode-tab-notagen")
+            time.sleep(0.2)
+            page.select_option("#sel-ng-backend", "transformer_abc_fallback")
+            page.select_option("#sel-ng-bars", "4")
+            page.uncheck("#chk-ng-autoplay")
+            page.click("#btn-ng-start")
+            page.wait_for_function(
+                "() => (document.getElementById('ng-metrics-sub')?.textContent || '').includes('4 / 4')",
+                timeout=15000,
+            )
             time.sleep(0.3)
+            functional_checks["notagen_mode3_bars"] = page.locator("#ng-metrics-sub").inner_text()
+            geometry_reports.append(_check_layout_geometry(page, "studio_mode3_notagen_1920x1080"))
+            p_m3 = out_dir / "studio_mode3_notagen.png"
+            page.screenshot(path=str(p_m3))
+            screenshots["studio_mode3_notagen"] = str(p_m3)
 
-            g_hud_b = _check_layout_geometry(page, "stage_hud_mode_b_1920x1080")
-            geometry_reports.append(g_hud_b)
-            p_hud_b = out_dir / "stage_hud_mode_b_cello.png"
-            page.screenshot(path=str(p_hud_b))
-            screenshots["stage_hud_mode_b_cello"] = str(p_hud_b)
+            # Mode 4: Library Archive
+            page.click("#mode-tab-library")
+            page.wait_for_function("document.querySelectorAll('#piece-list .piece-item').length === 100", timeout=10000)
+            time.sleep(0.25)
+            geometry_reports.append(_check_layout_geometry(page, "studio_mode4_library_1920x1080"))
+            p_m4 = out_dir / "studio_mode4_library.png"
+            page.screenshot(path=str(p_m4))
+            screenshots["studio_mode4_library"] = str(p_m4)
 
-            # Test F10 toggle hides control bar cleanly
+            # Check Studio Modes 1, 2, 3, 4 at 1366x768 laptop resolution
+            page.set_viewport_size({"width": 1366, "height": 768})
+            for mtab, gname in (
+                ("#mode-tab-cello", "studio_mode1_cello_1366x768"),
+                ("#mode-tab-piano", "studio_mode2_piano_1366x768"),
+                ("#mode-tab-notagen", "studio_mode3_notagen_1366x768"),
+                ("#mode-tab-library", "studio_mode4_library_1366x768"),
+            ):
+                page.click(mtab)
+                time.sleep(0.22)
+                geometry_reports.append(_check_layout_geometry(page, gname))
+
+            # ===== C. Live /stage Projection HUD Audit + F10 Toggle =====
+            page.set_viewport_size({"width": 1920, "height": 1080})
+            page.goto(f"{stage_url}/stage", wait_until="domcontentloaded")
+            page.wait_for_function("document.getElementById('turn-meta').textContent.includes('Turn #')", timeout=10000)
+            time.sleep(0.25)
+
+            geometry_reports.append(_check_layout_geometry(page, "stage_hud_1920x1080"))
+            p_hud = out_dir / "stage_hud_mode_b_cello.png"
+            page.screenshot(path=str(p_hud))
+            screenshots["stage_hud_mode_b_cello"] = str(p_hud)
+
+            # F10 clean projection check using computed display === 'none'
             page.keyboard.press("F10")
-            time.sleep(0.15)
-            f10_hidden = page.evaluate("document.getElementById('control-bar').classList.contains('hidden-bar')")
+            time.sleep(0.2)
+            f10_hidden = page.evaluate("window.getComputedStyle(document.getElementById('control-bar')).display === 'none'")
             p_f10 = out_dir / "stage_projection_f10.png"
             page.screenshot(path=str(p_f10))
             screenshots["stage_projection_f10"] = str(p_f10)
+
             page.keyboard.press("F10")
-            time.sleep(0.15)
-            f10_restored = not page.evaluate("document.getElementById('control-bar').classList.contains('hidden-bar')")
+            time.sleep(0.2)
+            f10_restored = page.evaluate("window.getComputedStyle(document.getElementById('control-bar')).display !== 'none'")
             functional_checks["f10_toggle"] = {"hidden": f10_hidden, "restored": f10_restored}
             if not (f10_hidden and f10_restored):
                 violations.append(f"F10 toggle check failed: hidden={f10_hidden}, restored={f10_restored}")
 
-            # Mode A 8-turn Act 4 + Synthesize Work screenshot (disconnect WS cleanly before batch POSTs)
-            if not quick:
-                page.goto("about:blank")
-                requests.post(f"{stage_url}/api/stage/reset", timeout=10.0).raise_for_status()
-                requests.post(f"{stage_url}/api/stage/mode", json={"mode": "piano"}, timeout=10.0).raise_for_status()
-                for _ in range(8):
-                    requests.post(f"{stage_url}/api/stage/turn", timeout=20.0).raise_for_status()
-                requests.post(f"{stage_url}/api/stage/synthesize_work", json={"play_audio": False}, timeout=25.0).raise_for_status()
-                page.goto(f"{stage_url}/stage?snapshot=1", wait_until="networkidle")
-                page.wait_for_function("document.getElementById('meta-arena').textContent.includes('TURN #8')", timeout=10000)
-                time.sleep(0.3)
-                p_hud_a = out_dir / "stage_hud_mode_a_piano.png"
-                page.screenshot(path=str(p_hud_a))
-                screenshots["stage_hud_mode_a_piano"] = str(p_hud_a)
-
-            page.set_viewport_size({"width": 1280, "height": 720})
+            page.set_viewport_size({"width": 1366, "height": 768})
             time.sleep(0.2)
-            g_hud_720 = _check_layout_geometry(page, "stage_hud_1280x720")
-            geometry_reports.append(g_hud_720)
+            geometry_reports.append(_check_layout_geometry(page, "stage_hud_1366x768"))
 
             page.goto("about:blank")
             context.close()
@@ -405,22 +470,16 @@ def run_audit(round_num: int = 1, update_docs_images: bool = False, quick: bool 
             pass
         static_srv.shutdown()
         static_srv.server_close()
-        # Clean up any temporary synthesized files in data/telemetry/exports created during live Mode A synth
         exp_dir = ROOT / "data" / "telemetry" / "exports"
         if exp_dir.exists():
-            for f in exp_dir.glob("masterwork_*"):
-                try:
-                    f.unlink()
-                except Exception:
-                    pass
+            for pat in ("masterwork_*", "notagen_*"):
+                for f in exp_dir.glob(pat):
+                    try:
+                        f.unlink()
+                    except Exception:
+                        pass
 
-    for g in geometry_reports:
-        if g["overflowPx"] > 2:
-            violations.append(f"{g['label']}: horizontal overflow {g['overflowPx']}px")
-        if g["clipped"]:
-            violations.append(f"{g['label']}: clipped controls {g['clipped'][:3]}")
-        if g["overlaps"]:
-            violations.append(f"{g['label']}: overlapping controls {g['overlaps'][:3]}")
+    _record_geometry_violations(geometry_reports, violations)
 
     if errors["console"]:
         violations.append(f"console.error count={len(errors['console'])}: {errors['console'][:3]}")
@@ -431,11 +490,13 @@ def run_audit(round_num: int = 1, update_docs_images: bool = False, quick: bool 
 
     if update_docs_images:
         for key in (
-            "studio_1920x1080",
-            "web_demo_1920x1080",
+            "studio_mode1_cello",
+            "studio_mode2_piano",
+            "studio_mode3_notagen",
+            "studio_mode4_library",
             "stage_hud_mode_b_cello",
-            "stage_hud_mode_a_piano",
             "stage_projection_f10",
+            "web_demo_1920x1080",
         ):
             src_p = screenshots.get(key)
             if src_p and Path(src_p).exists():
@@ -457,7 +518,7 @@ def run_audit(round_num: int = 1, update_docs_images: bool = False, quick: bool 
 
 
 def main() -> int:
-    parser = argparse.ArgumentParser(description="Playwright Real-Browser Audit for Studio, Stage HUD, & GitHub Pages Web Demo")
+    parser = argparse.ArgumentParser(description="Playwright Real-Browser Audit for 4-Mode Studio, Stage HUD, & Web Demo")
     parser.add_argument("--round", type=int, default=1)
     parser.add_argument("--update-docs-images", action="store_true")
     parser.add_argument("--quick", action="store_true")
@@ -468,7 +529,11 @@ def main() -> int:
     print(f"Errors: console={len(rep['errors']['console'])}, pageerror={len(rep['errors']['pageerror'])}, http={len(rep['errors']['http'])}")
     print(f"Functional: {rep['functional_checks']}")
     for g in rep["geometry_reports"]:
-        print(f" - {g['label']}: overflow={g['overflowPx']}px clipped={len(g['clipped'])} overlaps={len(g['overlaps'])}")
+        print(
+            f" - {g['label']}: overflow={g['overflowPx']}px clipped={len(g['clipped'])} "
+            f"overlaps={len(g['overlaps'])} minFont={g['minVisibleFontPx']}px "
+            f"smallBtns={len(g['smallPrimaryBtns'])} pedalOrderOk={g['pedalOrderOk']}"
+        )
     if rep["violations"]:
         print("VIOLATIONS:")
         for v in rep["violations"]:

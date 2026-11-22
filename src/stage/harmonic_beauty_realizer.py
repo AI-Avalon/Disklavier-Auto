@@ -518,9 +518,25 @@ def extract_corpus_musical_laws(corpus_dirs: Optional[List[Path]] = None) -> Dic
     except Exception:
         Score = None  # type: ignore[assignment]
 
-    if Score is not None:
-        for mf in midi_files[:18]:
-            try:
+    def _read_midi_notes_fallback(mf: Path) -> List[Tuple[int, int]]:
+        import mido
+
+        mid = mido.MidiFile(str(mf))
+        out: List[Tuple[int, int]] = []
+        for tr in mid.tracks:
+            abs_t = 0
+            for msg in tr:
+                abs_t += int(getattr(msg, "time", 0))
+                if msg.type == "note_on" and int(getattr(msg, "velocity", 0)) > 0:
+                    p = int(msg.note)
+                    if 21 <= p <= 108:
+                        out.append((abs_t, p))
+        out.sort(key=lambda x: x[0])
+        return out
+
+    for mf in midi_files[:18]:
+        try:
+            if Score is not None:
                 sc = Score(str(mf))
                 notes = sorted(
                     [
@@ -532,24 +548,26 @@ def extract_corpus_musical_laws(corpus_dirs: Optional[List[Path]] = None) -> Dic
                     ],
                     key=lambda x: x[0],
                 )
-                if len(notes) < 24:
-                    continue
-                files_read += 1
-                sample = notes[:120]
-                rh = [p for _, p in sample if p >= 60]
-                lh = [p for _, p in sample if p < 60]
-                if rh and lh:
-                    spreads.append(float(np.median(rh) - np.median(lh)))
-                ivs = [rh[i] - rh[i - 1] for i in range(1, len(rh))]
-                if ivs:
-                    step_ratios.append(sum(1 for iv in ivs if 1 <= abs(iv) <= 2) / len(ivs))
-                for i in range(len(ivs) - 1):
-                    if abs(ivs[i]) >= 5:
-                        big_leaps += 1
-                        if ivs[i] * ivs[i + 1] < 0 and 1 <= abs(ivs[i + 1]) <= 4:
-                            leap_recoveries += 1
-            except Exception:
+            else:
+                notes = _read_midi_notes_fallback(mf)
+            if len(notes) < 24:
                 continue
+            files_read += 1
+            sample = notes[:120]
+            rh = [p for _, p in sample if p >= 60]
+            lh = [p for _, p in sample if p < 60]
+            if rh and lh:
+                spreads.append(float(np.median(rh) - np.median(lh)))
+            ivs = [rh[i] - rh[i - 1] for i in range(1, len(rh))]
+            if ivs:
+                step_ratios.append(sum(1 for iv in ivs if 1 <= abs(iv) <= 2) / len(ivs))
+            for i in range(len(ivs) - 1):
+                if abs(ivs[i]) >= 5:
+                    big_leaps += 1
+                    if ivs[i] * ivs[i + 1] < 0 and 1 <= abs(ivs[i + 1]) <= 4:
+                        leap_recoveries += 1
+        except Exception:
+            continue
 
     gap_fill_rate = round(leap_recoveries / max(1, big_leaps), 2) if big_leaps else 0.78
     median_spread = int(round(float(np.median(spreads)))) if spreads else 22

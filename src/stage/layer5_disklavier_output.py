@@ -47,6 +47,8 @@ class OutputTelemetry:
     energy_limit_10s: float
     total_notes_sent: int
     connected_port: Optional[str]
+    last_dispatch_jitter_ms: float = 0.0
+    max_dispatch_jitter_ms: float = 0.0
 
 
 @dataclass(order=True)
@@ -122,6 +124,8 @@ class DisklavierStageOutputLayer:
         self.panic_count: int = 0
         self.last_panic_elapsed_ms: float = 0.0
         self.total_notes_sent: int = 0
+        self.last_dispatch_jitter_ms: float = 0.0
+        self.max_dispatch_jitter_ms: float = 0.0
         self.sent_events_log: Deque[Dict[str, Any]] = deque(maxlen=256)
 
         # Lookahead queue
@@ -571,6 +575,10 @@ class DisklavierStageOutputLayer:
                 while self._heap and self._heap[0].send_ts <= now:
                     ev = heapq.heappop(self._heap)
                     if ev.kind == "note_on":
+                        jitter_ms = round(max(0.0, (now - ev.send_ts) * 1000.0), 3)
+                        self.last_dispatch_jitter_ms = jitter_ms
+                        if jitter_ms > self.max_dispatch_jitter_ms:
+                            self.max_dispatch_jitter_ms = jitter_ms
                         self.send_note_on_immediate(
                             ev.pitch, ev.velocity, ev.duration_s, ev.channel, now=now
                         )
@@ -622,6 +630,8 @@ class DisklavierStageOutputLayer:
                 energy_limit_10s=self.MAX_10S_ENERGY,
                 total_notes_sent=self.total_notes_sent,
                 connected_port=self.connected_port_name,
+                last_dispatch_jitter_ms=self.last_dispatch_jitter_ms,
+                max_dispatch_jitter_ms=self.max_dispatch_jitter_ms,
             )
 
     def close(self) -> None:

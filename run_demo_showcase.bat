@@ -33,8 +33,9 @@ if errorlevel 1 (
     echo [OK] Ollama server connected.
 )
 
+if exist "data\telemetry\active_stage_url.txt" del /f /q "data\telemetry\active_stage_url.txt" >nul 2>&1
 python -m src.stage.cli_banner demo_open
-start "" cmd /c "timeout /t 2 /nobreak >nul && start http://localhost:8000/studio?demo=1"
+start "" powershell -NoProfile -WindowStyle Hidden -Command "for($i=0;$i -lt 40;$i++){if(Test-Path 'data\telemetry\active_stage_url.txt'){$u=(Get-Content 'data\telemetry\active_stage_url.txt' -Raw).Trim();if($u){Start-Process ($u + '/studio?demo=1');exit}};Start-Sleep -Milliseconds 300};Start-Process 'http://127.0.0.1:8000/studio?demo=1'"
 
 python -m src.stage.cli_banner demo_run
 python -m src.stage.stage_server --host 127.0.0.1 --port 8000 --demo --monitor-audio

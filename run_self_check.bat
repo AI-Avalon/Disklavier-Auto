@@ -59,7 +59,13 @@ if errorlevel 1 (
 )
 
 echo.
-echo [5/6] Running Playwright real-browser audit (/studio, /stage, web-demo)...
+echo [5/6] Running CI simulation and Playwright browser audit (/studio, /stage, web-demo)...
+python scripts/simulate_ci_local.py
+if errorlevel 1 (
+  echo [FAIL] CI local simulation failed!
+  if "%CI_NO_PAUSE%"=="" pause
+  exit /b 1
+)
 python scripts/playwright_audit.py --quick
 if errorlevel 1 (
     echo [FAIL] scripts/playwright_audit.py failed.

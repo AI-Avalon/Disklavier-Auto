@@ -1,1661 +1,828 @@
 <!DOCTYPE html>
 <html lang="ja">
 <head>
-  <meta charset="UTF-8" />
+  <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>DISKLAVIER STAGE HUD | 舞台投影・リアルタイム五線譜</title>
   <link rel="icon" href="/favicon.ico" />
-  <title>Disklavier-Auto — 舞台投影 HUD (/stage)</title>
   <style>
     :root {
       --bg-stage: #060608;
-      --bg-panel: #0A0A0D;
-      --rule-hairline: #23211D;
+      --bg-panel: #0B0B0F;
+      --bg-card: #121217;
+      --rule-hairline: #26241F;
+      --rule-strong: #3E3A32;
       --ink-adopted: #EAE6DF;
-      --ink-rejected: #5A5852;
+      --ink-secondary: #B4AEA3;
+      --ink-dim: #5A5852;
       --ink-vermilion: #C83E2B;
+      --ink-human: #A8C8E8;
+      --ink-ai: #E5C88F;
       --font-serif: "Yu Mincho", "Hiragino Mincho ProN", "Noto Serif JP", Georgia, serif;
+      --font-sans: "Yu Gothic UI", "Hiragino Kaku Gothic ProN", "Meiryo", sans-serif;
       --font-mono: "Cascadia Mono", "JetBrains Mono", "Consolas", monospace;
     }
 
-    * {
-      box-sizing: border-box;
-      margin: 0;
-      padding: 0;
-    }
+    * { box-sizing: border-box; margin: 0; padding: 0; }
 
     html, body {
-      width: 100%;
-      height: 100%;
-      background-color: var(--bg-stage);
-      color: var(--ink-adopted);
-      font-family: var(--font-serif);
-      overflow: hidden;
+      min-height: 100%;
+      background: #060608;
+      color: #EAE6DF;
+      font-family: var(--font-sans);
+      font-size: 15px;
+      line-height: 1.5;
+      overflow-x: hidden;
       -webkit-font-smoothing: antialiased;
     }
 
     .stage-shell {
-      display: grid;
-      grid-template-rows: auto auto auto 1fr;
-      width: 100vw;
-      height: 100vh;
-      background: var(--bg-stage);
+      display: flex;
+      flex-direction: column;
+      min-height: 100vh;
+      width: 100%;
+      max-width: 1900px;
+      margin: 0 auto;
+      padding: 12px 18px 18px;
+      gap: 12px;
+      background: #060608;
     }
 
-    .stage-shell.projection-clean {
-      grid-template-rows: auto 1fr;
+    /* F10 Clean Stage Projection Mode hides interactive chrome */
+    .stage-shell.projection-clean .control-bar,
+    .stage-shell.projection-clean .demo-deck,
+    .stage-shell.projection-clean .meta-arena {
+      display: none !important;
     }
 
-    .macro-arc-bar {
+    .proj-exit-pill,
+    .btn.proj-exit-pill {
+      display: none;
+      position: fixed;
+      top: 12px;
+      right: 16px;
+      z-index: 90;
+    }
+    .stage-shell.projection-clean .proj-exit-pill {
+      display: inline-flex;
+    }
+
+    .btn {
+      min-height: 44px;
+      padding: 8px 14px;
+      background: var(--bg-panel);
+      color: var(--ink-adopted);
+      border: 1px solid var(--rule-strong);
+      font-family: var(--font-sans);
+      font-size: 15px;
+      font-weight: 500;
+      cursor: pointer;
+      text-decoration: none;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      gap: 6px;
+      white-space: nowrap;
+    }
+    .btn:hover { border-color: var(--ink-adopted); background: #19181D; }
+    .btn.active { border-color: var(--ink-adopted); background: #1B1915; font-weight: 700; }
+    .btn.primary-fill { background: var(--ink-adopted); color: #060608; border-color: var(--ink-adopted); font-weight: 700; }
+    .btn.vermilion { border-color: var(--ink-vermilion); color: var(--ink-vermilion); }
+    .btn.vermilion:hover, .btn.vermilion.active { background: var(--ink-vermilion); color: #060608; font-weight: 700; }
+    .btn.compact { min-height: 40px; padding: 6px 12px; font-size: 14px; }
+
+    .field {
+      min-height: 42px;
+      padding: 7px 12px;
+      background: #060608;
+      color: #EAE6DF;
+      border: 1px solid var(--rule-strong);
+      font-family: var(--font-sans);
+      font-size: 15px;
+    }
+
+    /* Control Bar */
+    .control-bar {
       display: flex;
       align-items: center;
       justify-content: space-between;
       gap: 10px;
-      padding: 4px 12px;
-      border-bottom: 1px solid #191815;
-      background: #070709;
-      font-family: var(--font-mono);
-      font-size: 10px;
-      min-height: 28px;
+      padding: 10px 14px;
+      background: var(--bg-panel);
+      border: 1px solid var(--rule-hairline);
+      flex-wrap: wrap;
     }
 
-    .act-steps {
+    .ctrl-group {
       display: flex;
       align-items: center;
-      gap: 4px;
-      flex-wrap: nowrap;
+      gap: 8px;
+      flex-wrap: wrap;
+    }
+
+    .stage-brand {
+      font-family: var(--font-serif);
+      font-size: 18px;
+      font-weight: 700;
+      letter-spacing: 0.06em;
+      color: var(--ink-adopted);
+      margin-right: 6px;
+    }
+
+    /* Zone A: Act Arc & Chord + Factual Stage Memo */
+    .zone-a {
+      background: var(--bg-panel);
+      border: 1px solid var(--rule-hairline);
+      padding: 14px 16px;
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+    }
+
+    .zone-a-top {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      gap: 12px;
+      flex-wrap: wrap;
+    }
+
+    .act-arc {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      flex-wrap: wrap;
     }
 
     .act-pill {
-      padding: 2px 7px;
-      border: 1px solid #23211D;
-      color: var(--ink-rejected);
       font-family: var(--font-serif);
-      font-size: 10.5px;
+      font-size: 14.5px;
+      padding: 6px 12px;
+      border: 1px solid var(--rule-hairline);
+      color: var(--ink-dim);
+      background: #060608;
       white-space: nowrap;
     }
-
     .act-pill.active {
       border-color: var(--ink-adopted);
       color: var(--ink-adopted);
-      background: #141311;
+      background: #171512;
+      font-weight: 700;
     }
-
     .act-pill.climax.active {
       border-color: var(--ink-vermilion);
       color: var(--ink-vermilion);
     }
 
-    .macro-work-title {
-      font-family: var(--font-serif);
-      font-size: 11.5px;
+    .chord-readout {
+      display: flex;
+      align-items: baseline;
+      gap: 12px;
+    }
+    .chord-val {
+      font-family: var(--font-mono);
+      font-size: clamp(28px, 2.5vw, 38px);
+      font-weight: 700;
       color: var(--ink-adopted);
-      white-space: nowrap;
-      overflow: hidden;
-      text-overflow: ellipsis;
-      max-width: 44vw;
     }
-
-    .demo-audio-player {
-      display: inline-flex;
-      align-items: center;
-      gap: 5px;
-    }
-
-    .demo-audio-player audio {
-      height: 22px;
-      width: 175px;
-      filter: invert(0.9) hue-rotate(180deg) saturate(0.2);
-      opacity: 0.85;
-    }
-
-    /* Top Minimal Bar (F10 toggles hidden) */
-    .control-bar {
-      display: flex;
-      align-items: center;
-      justify-content: space-between;
-      gap: 6px;
-      padding: 6px 12px;
-      border-bottom: 1px solid var(--rule-hairline);
-      background: #08080A;
+    .chord-roman {
       font-family: var(--font-mono);
-      font-size: 10.5px;
-      letter-spacing: 0.02em;
-      flex-wrap: wrap;
+      font-size: 18px;
+      color: var(--ink-vermilion);
     }
-
-    .demo-deck {
-      display: flex;
-      align-items: center;
-      justify-content: space-between;
-      gap: 8px;
-      padding: 4px 12px;
-      border-bottom: 1px solid #191815;
-      background: #070709;
+    .turn-meta {
       font-family: var(--font-mono);
-      font-size: 10px;
-      flex-wrap: wrap;
+      font-size: 14px;
+      color: var(--ink-secondary);
     }
 
-    .hidden-bar {
-      display: none !important;
+    .monologue-box {
+      border-left: 4px solid var(--ink-adopted);
+      padding: 12px 16px;
+      background: #060608;
+      font-family: var(--font-serif);
+      font-size: clamp(24px, 1.9vw, 32px);
+      line-height: 1.48;
+      color: var(--ink-adopted);
+      overflow-wrap: anywhere;
     }
 
-    .bar-group {
+    /* Zone B + C Main Stage Split */
+    .stage-main-grid {
+      display: grid;
+      grid-template-columns: minmax(310px, 0.85fr) minmax(0, 1.65fr);
+      gap: 14px;
+      align-items: start;
+    }
+    @media (max-width: 1180px) {
+      .stage-main-grid { grid-template-columns: 1fr; }
+    }
+
+    .panel {
+      background: var(--bg-panel);
+      border: 1px solid var(--rule-hairline);
+      padding: 14px 16px;
       display: flex;
-      align-items: center;
-      gap: 5px;
-      flex-wrap: nowrap;
+      flex-direction: column;
+      gap: 12px;
       min-width: 0;
     }
 
-    .brand-mark {
-      font-family: var(--font-serif);
-      font-size: 12px;
-      font-weight: 600;
-      letter-spacing: 0.06em;
-      color: var(--ink-adopted);
-      margin-right: 4px;
-      white-space: nowrap;
-    }
-
-    .btn {
-      background: transparent;
-      color: var(--ink-rejected);
-      border: 1px solid var(--rule-hairline);
-      padding: 3px 7px;
-      font-family: var(--font-mono);
-      font-size: 10px;
-      cursor: pointer;
-      transition: border-color 0.15s ease, color 0.15s ease;
-      white-space: nowrap;
-    }
-
-    .btn:hover {
-      border-color: var(--ink-adopted);
-      color: var(--ink-adopted);
-    }
-
-    .btn.active {
-      border-color: var(--ink-adopted);
-      color: var(--ink-adopted);
-      background: #141311;
-    }
-
-    .btn.panic-btn {
-      border-color: var(--ink-vermilion);
-      color: var(--ink-vermilion);
-      font-weight: 500;
-    }
-
-    .btn.panic-btn:hover {
-      background: var(--ink-vermilion);
-      color: var(--bg-stage);
-    }
-
-    .audio-pill {
-      display: inline-flex;
+    .panel-title-row {
+      display: flex;
+      justify-content: space-between;
       align-items: center;
       gap: 8px;
-      padding: 3px 9px;
-      border: 1px solid var(--rule-hairline);
-      font-family: var(--font-mono);
-      font-size: 10.5px;
+      border-bottom: 1px solid var(--rule-hairline);
+      padding-bottom: 8px;
+      flex-wrap: wrap;
+    }
+    .panel-title {
+      font-family: var(--font-serif);
+      font-size: 18px;
+      font-weight: 700;
       color: var(--ink-adopted);
-      white-space: nowrap;
+    }
+    .sub-mono {
+      font-family: var(--font-mono);
+      font-size: 13.5px;
+      color: var(--ink-secondary);
     }
 
-    .audio-dot {
-      width: 6px;
-      height: 6px;
-      border-radius: 50%;
-      background: var(--ink-rejected);
+    .metric-tiles {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 8px;
+    }
+    .tile {
+      border: 1px solid #22201A;
+      background: #060608;
+      padding: 10px 12px;
+    }
+    .tile-k {
+      font-family: var(--font-mono);
+      font-size: 13px;
+      color: var(--ink-secondary);
+    }
+    .tile-v {
+      font-family: var(--font-mono);
+      font-size: 18px;
+      font-weight: 600;
+      color: var(--ink-adopted);
+      margin-top: 3px;
     }
 
-    .audio-dot.live {
-      background: var(--ink-vermilion);
+    .breath-bar {
+      height: 12px;
+      background: #171612;
+      border: 1px solid var(--rule-strong);
+      margin-top: 6px;
     }
-
-    .vu-meter {
-      width: 58px;
-      height: 5px;
-      background: #161512;
-      border: 1px solid #2A2722;
-      overflow: hidden;
-    }
-
-    .vu-fill {
+    .breath-fill {
       height: 100%;
       width: 0%;
       background: var(--ink-adopted);
       transition: width 0.08s linear;
     }
+    .breath-fill.ready { background: var(--ink-vermilion); }
 
-    .mc-input {
-      background: var(--bg-stage);
-      color: var(--ink-adopted);
-      border: 1px solid var(--rule-hairline);
-      padding: 3px 7px;
-      font-family: var(--font-serif);
-      font-size: 11px;
-      width: 215px;
-      outline: none;
-    }
-
-    .mc-input:focus {
-      border-color: var(--ink-adopted);
-    }
-
-    .mc-input::placeholder {
-      color: var(--ink-rejected);
-    }
-
-    /* 4-Zone Stage Grid */
-    .stage-grid {
-      display: grid;
-      grid-template-columns: minmax(0, 1fr) minmax(0, 1.18fr);
-      grid-template-rows: 23% 54% 23%;
-      gap: 1px;
-      background: var(--rule-hairline);
-      width: 100%;
-      height: 100%;
-      min-height: 0;
-      min-width: 0;
-    }
-
-    .zone {
-      background: var(--bg-stage);
-      padding: 10px 14px;
-      display: flex;
-      flex-direction: column;
-      min-height: 0;
-      min-width: 0;
-      overflow: hidden;
-    }
-
-    .zone-c {
-      grid-column: 1 / 3;
-      padding: 8px 18px;
-    }
-
-    .zone-d {
-      grid-column: 1 / 3;
-      padding: 8px 18px;
-    }
-
-    .zone-header {
-      display: flex;
-      justify-content: space-between;
-      align-items: baseline;
-      margin-bottom: 6px;
-      border-bottom: 1px solid #181714;
-      padding-bottom: 4px;
-      flex-shrink: 0;
-      gap: 12px;
-    }
-
-    .zone-title {
-      font-family: var(--font-serif);
-      font-size: 12px;
-      letter-spacing: 0.12em;
-      color: var(--ink-rejected);
-      text-transform: uppercase;
-      white-space: nowrap;
-    }
-
-    .zone-meta {
-      font-family: var(--font-mono);
-      font-size: 10.5px;
-      color: var(--ink-rejected);
-      white-space: nowrap;
-      overflow: hidden;
-      text-overflow: ellipsis;
-    }
-
-    .timeline-banner {
-      font-family: var(--font-mono);
-      font-size: 10.5px;
-      color: var(--ink-adopted);
-      letter-spacing: 0.03em;
-    }
-
-    .timeline-banner.audition {
-      color: var(--ink-vermilion);
-    }
-
-    /* Zone A: Perception & Breath */
-    .zone-a-body {
-      display: grid;
-      grid-template-columns: 1fr 220px;
-      gap: 14px;
-      flex: 1;
-      min-height: 0;
-    }
-
-    .canvas-wrap {
-      position: relative;
-      width: 100%;
-      height: 100%;
-      min-height: 0;
-    }
-
-    canvas {
-      display: block;
-      width: 100%;
-      height: 100%;
-    }
-
-    .metrics-col {
-      display: flex;
-      flex-direction: column;
-      justify-content: space-between;
-      font-family: var(--font-mono);
-      font-size: 10.5px;
-    }
-
-    .metric-row {
-      display: flex;
-      justify-content: space-between;
-      border-bottom: 1px solid #141310;
-      padding: 2px 0;
-    }
-
-    .metric-key {
-      color: var(--ink-rejected);
-    }
-
-    .metric-val {
-      color: var(--ink-adopted);
-    }
-
-    .metric-val.vermilion {
-      color: var(--ink-vermilion);
-    }
-
-    .breath-track {
-      width: 100%;
-      height: 5px;
-      background: #141311;
-      border: 1px solid var(--rule-hairline);
-      margin-top: 3px;
-    }
-
-    .breath-fill {
-      height: 100%;
-      width: 0%;
-      background: var(--ink-adopted);
-      transition: width 0.08s linear, background-color 0.15s ease;
-    }
-
-    .breath-fill.ready {
-      background: var(--ink-vermilion);
-    }
-
-    /* Zone B: Thought Trace */
-    .monologue-box {
-      font-family: var(--font-serif);
-      font-size: clamp(14px, 1.25vw, 17px);
-      line-height: 1.5;
-      color: var(--ink-adopted);
-      letter-spacing: 0.015em;
-      margin-bottom: 6px;
-      flex: 1;
-      display: flex;
-      align-items: center;
-      overflow-wrap: anywhere;
-      word-break: break-word;
-      max-width: 100%;
-    }
-
-    .intent-strip {
-      display: flex;
-      flex-wrap: wrap;
-      gap: 12px;
-      font-family: var(--font-mono);
-      font-size: 10.5px;
-      color: var(--ink-rejected);
-      border-top: 1px solid #141310;
-      padding-top: 5px;
-    }
-
-    .intent-strip span strong {
-      color: var(--ink-adopted);
-      font-weight: 500;
-    }
-
-    /* Zone C: Public Pruning Arena (4 Candidates) */
-    .arena-grid {
-      display: grid;
-      grid-template-columns: repeat(2, minmax(0, 1fr));
-      grid-template-rows: repeat(2, minmax(0, 1fr));
-      gap: 8px;
-      flex: 1;
-      min-height: 0;
-      min-width: 0;
-    }
-
-    .cand-card {
-      border: 1px solid var(--rule-hairline);
-      background: var(--bg-panel);
-      padding: 7px 10px;
-      display: flex;
-      flex-direction: column;
-      min-height: 0;
-      min-width: 0;
-      overflow: hidden;
-      transition: border-color 0.22s ease, opacity 0.22s ease;
-    }
-
-    .cand-card.adopted {
-      border-color: var(--ink-adopted);
-      opacity: 1.0;
-    }
-
-    .cand-card.auditioning {
-      border-color: var(--ink-vermilion);
-      opacity: 0.96;
-    }
-
-    .cand-card.rejected {
-      border-color: #1A1916;
-      opacity: 0.86;
-    }
-
-    .cand-head {
-      display: flex;
-      justify-content: space-between;
-      align-items: baseline;
-      margin-bottom: 3px;
-      gap: 6px;
-      min-width: 0;
-    }
-
-    .cand-title {
-      font-family: var(--font-serif);
-      font-size: 11.5px;
-      color: var(--ink-adopted);
-      white-space: nowrap;
-      overflow: hidden;
-      text-overflow: ellipsis;
-      min-width: 0;
-      flex: 1;
-    }
-
-    .cand-card.rejected .cand-title {
-      color: #8C877E;
-    }
-
-    .cand-badge {
-      font-family: var(--font-mono);
-      font-size: 9.5px;
-      padding: 1px 5px;
-      border: 1px solid transparent;
-      white-space: nowrap;
-      overflow: hidden;
-      text-overflow: ellipsis;
-      max-width: 56%;
-      flex-shrink: 0;
-    }
-
-    .cand-badge.adopted {
-      color: var(--ink-adopted);
-      border-color: var(--ink-adopted);
-    }
-
-    .cand-badge.rejected {
-      color: var(--ink-vermilion);
-      border-color: #4A1F19;
-    }
-
-    .cand-badge.sketching {
-      color: var(--ink-rejected);
-      border-color: #2A2823;
-    }
-
-    /* 6-Axis MusicalityCritic Evaluation Bars */
-    .axes-strip {
-      display: grid;
-      grid-template-columns: repeat(6, 1fr);
-      gap: 5px;
-      margin-bottom: 4px;
-      font-family: var(--font-mono);
-      font-size: 9px;
-      color: var(--ink-rejected);
-    }
-
-    .pedal-dual-row {
+    /* Spatial Dual Pedals: LEFT = UNA CORDA (CC#67), RIGHT = DAMPER (CC#64) */
+    .pedal-pair {
       display: grid;
       grid-template-columns: 1fr 1fr;
-      gap: 8px;
-      margin-top: 3px;
+      gap: 10px;
     }
-
-    .pedal-gauge-wrap {
+    .pedal-card {
+      border: 1px solid #23211C;
+      background: #060608;
+      padding: 10px 12px;
+    }
+    .pedal-head {
       display: flex;
-      flex-direction: column;
-      gap: 2px;
+      justify-content: space-between;
+      align-items: baseline;
       font-family: var(--font-mono);
-      font-size: 9.5px;
+      font-size: 14px;
+      color: var(--ink-adopted);
+      margin-bottom: 6px;
     }
-
     .pedal-track {
       position: relative;
-      width: 100%;
-      height: 5px;
-      background: #141311;
-      border: 1px solid var(--rule-hairline);
+      height: 12px;
+      background: #181714;
+      border: 1px solid var(--rule-strong);
     }
-
-    .pedal-half-zone {
+    .pedal-half {
       position: absolute;
       left: 28%;
       width: 35%;
       top: 0;
       bottom: 0;
-      border-left: 1px dashed #4E4A42;
-      border-right: 1px dashed #4E4A42;
+      border-left: 1px dashed var(--ink-dim);
+      border-right: 1px dashed var(--ink-dim);
       pointer-events: none;
     }
+    .fill-67 { height: 100%; width: 0%; background: var(--ink-vermilion); transition: width 0.08s linear; }
+    .fill-64 { height: 100%; width: 0%; background: var(--ink-adopted); transition: width 0.08s linear; }
 
-    .pedal-fill-64 {
+    /* Zone C: Hero Grand Staff + 4 Summary/Rejection Cards */
+    .hero-staff-box {
+      width: 100%;
+      height: 310px;
+      border: 1px solid var(--rule-strong);
+      background: #060608;
+    }
+    .hero-staff-box canvas {
+      width: 100%;
       height: 100%;
-      width: 0%;
-      background: var(--ink-adopted);
-      transition: width 0.08s linear;
+      display: block;
     }
 
-    .pedal-fill-67 {
-      height: 100%;
-      width: 0%;
-      background: var(--ink-vermilion);
-      transition: width 0.08s linear;
+    .cand-summary-grid {
+      display: grid;
+      grid-template-columns: repeat(4, minmax(0, 1fr));
+      gap: 10px;
+    }
+    @media (max-width: 1280px) {
+      .cand-summary-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
     }
 
-    .axis-item {
+    .cand-card {
+      text-align: left;
+      border: 1px solid var(--rule-hairline);
+      background: #060608;
+      padding: 11px 13px;
+      color: var(--ink-adopted);
+      cursor: pointer;
       display: flex;
       flex-direction: column;
-      gap: 2px;
+      gap: 6px;
+      width: 100%;
     }
-
-    .axis-label {
+    .cand-card:hover { border-color: var(--ink-adopted); background: #141318; }
+    .cand-card.adopted { border-color: var(--ink-adopted); background: #13120F; }
+    .cand-card.inspecting { border-width: 2px; border-color: var(--ink-vermilion); }
+    .cand-top {
       display: flex;
       justify-content: space-between;
+      align-items: center;
+      font-family: var(--font-serif);
+      font-size: 16px;
+      font-weight: 700;
     }
-
-    .axis-bar-bg {
-      width: 100%;
-      height: 3px;
-      background: #161512;
+    .cand-score { font-family: var(--font-mono); font-size: 15px; }
+    .cand-reason {
+      font-size: 13.5px;
+      line-height: 1.45;
+      color: var(--ink-vermilion);
     }
+    .cand-card.adopted .cand-reason { color: var(--ink-adopted); }
 
-    .axis-bar-fill {
-      height: 100%;
-      background: var(--ink-rejected);
-      transition: width 0.25s ease;
-    }
-
-    .cand-card.adopted .axis-bar-fill {
-      background: var(--ink-adopted);
-    }
-
-    .cand-card.auditioning .axis-bar-fill {
-      background: var(--ink-vermilion);
-    }
-
-    .cand-staff-wrap {
-      flex: 1;
-      min-height: 0;
-      position: relative;
-    }
-
-    .f10-hint {
-      position: fixed;
-      bottom: 5px;
-      right: 12px;
-      font-family: var(--font-mono);
-      font-size: 10px;
-      color: #736F66;
-      pointer-events: none;
+    /* Zone D: Demo Deck + Directive Meta Arena */
+    .demo-deck,
+    .meta-arena {
+      background: var(--bg-panel);
+      border: 1px solid var(--rule-hairline);
+      padding: 12px 16px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+      flex-wrap: wrap;
     }
   </style>
 </head>
 <body>
   <div class="stage-shell" id="stage-shell">
-    <!-- Minimal Top Bar (F10 Toggleable) -->
+    <button class="btn vermilion proj-exit-pill" id="btn-proj-exit" type="button">操作パネルを表示 (F10)</button>
+
+    <!-- Control Chrome (Hidden in F10 Projection Mode) -->
     <header class="control-bar" id="control-bar">
-      <div class="bar-group">
-        <a class="btn" id="btn-back-studio" href="/studio" style="text-decoration:none;">Studio</a>
-        <span class="brand-mark">DISKLAVIER-AUTO / STAGE</span>
-        <button class="btn" id="btn-mode-piano" onclick="setMode('piano')">Mode A: Piano</button>
-        <button class="btn active" id="btn-mode-cello" onclick="setMode('cello')">Mode B: Cello</button>
-        <button class="btn" id="btn-demo" onclick="toggleDemo()">Virtual Demo: OFF</button>
-        <button class="btn" id="btn-audio" onclick="toggleAudioMonitor()">Audio Monitor: ON</button>
-        <span class="audio-pill" id="audio-status-pill">
-          <span class="audio-dot" id="audio-dot"></span>
-          <span id="audio-status-text">出力待機中</span>
-          <span class="vu-meter"><span class="vu-fill" id="vu-fill"></span></span>
-          <span id="audio-dbfs-val">-- dBFS</span>
-        </span>
+      <div class="ctrl-group">
+        <span class="stage-brand">DISKLAVIER STAGE HUD</span>
+        <a class="btn compact" href="/studio">Studio 4モード画面へ</a>
+        <button class="btn compact active" id="btn-mode-cello" type="button">[B] チェロ対話</button>
+        <button class="btn compact" id="btn-mode-piano" type="button">[A] ピアノ対話</button>
       </div>
-      <div class="bar-group">
-        <input
-          type="text"
-          id="mc-input"
-          class="mc-input"
-          style="width:176px;"
-          placeholder="指示 (例: 解決せず問いかけて)"
-          onkeydown="if (event.key === 'Enter') sendDirective()"
-        />
-        <button class="btn" onclick="sendDirective()">送信</button>
-        <button class="btn" id="btn-retake" onclick="retakeLastTurn()">推敲 Retake</button>
-        <button class="btn active" id="btn-synthesize" onclick="synthesizeCompleteWork()">1曲完成出力</button>
-        <button class="btn" id="btn-calibrate" onclick="runCalibration()">VDL校正</button>
-        <button class="btn" onclick="triggerTurn()">次ターン</button>
-        <button class="btn" onclick="resetGraph()">初期化</button>
-        <button class="btn" id="btn-f10-toggle" onclick="toggleProjectionMode()">F10 投影</button>
-        <button class="btn panic-btn" onclick="triggerPanic()">PANIC</button>
+      <div class="ctrl-group">
+        <button class="btn primary-fill" id="btn-demo-toggle" type="button">デモ開始</button>
+        <button class="btn compact active" id="btn-audio-toggle" type="button">PC音声: ON</button>
+        <button class="btn compact" id="btn-turn-now" type="button">今すぐ応答生成</button>
+        <button class="btn compact" id="btn-retake" type="button">別解釈 (Retake)</button>
+        <button class="btn compact" id="btn-calibrate" type="button">較正</button>
+        <button class="btn compact" id="btn-reset" type="button">第1幕へ</button>
+        <button class="btn compact" id="btn-f10-toggle" type="button">舞台投影モード (F10)</button>
+        <button class="btn compact vermilion" id="btn-panic" type="button">PANIC 全消音</button>
       </div>
     </header>
 
-    <!-- Demo Control Deck & Complete Masterwork Audio Player (Hidden in Production or F10) -->
+    <!-- Zone A: Act Progression, Harmony & Large Factual Chamber Music Memo -->
+    <section class="zone-a">
+      <div class="zone-a-top">
+        <div class="act-arc" id="act-arc">
+          <span class="act-pill active" data-act="1">第1幕: 呈示</span>
+          <span class="act-pill" data-act="2">第2幕: 展開</span>
+          <span class="act-pill climax" data-act="3">第3幕: 頂点</span>
+          <span class="act-pill" data-act="4">第4幕: 終止</span>
+        </div>
+        <div class="chord-readout">
+          <span class="chord-val" id="chord-val">Dm</span>
+          <span class="chord-roman" id="chord-roman">i</span>
+          <span class="turn-meta" id="turn-meta">Turn #0 · 6並列稼働</span>
+        </div>
+      </div>
+      <div class="monologue-box" id="monologue-text">舞台待機中。デモ開始またはチェロ・ピアノの実演奏入力を検知すると、作曲根拠メモと四声大譜表が即時更新されます。</div>
+    </section>
+
+    <!-- Zone B & C: Perception / Spatial Pedals + Large Hero Grand Staff & 4 Cards -->
+    <section class="stage-main-grid">
+      <div class="panel">
+        <div class="panel-title-row">
+          <h2 class="panel-title">音響知覚・物理ペダル</h2>
+          <span class="sub-mono" id="hud-ws-status">WS 待機中</span>
+        </div>
+
+        <div class="metric-tiles">
+          <div class="tile">
+            <div class="tile-k">検出音高 / F0</div>
+            <div class="tile-v" id="hud-f0">-- (-- Hz)</div>
+          </div>
+          <div class="tile">
+            <div class="tile-k">NLMS エコー抑圧</div>
+            <div class="tile-v" id="hud-erle">+0.0 dB</div>
+          </div>
+          <div class="tile">
+            <div class="tile-k">並列生成 / L5ジッター</div>
+            <div class="tile-v" id="hud-latency">-- ms</div>
+          </div>
+          <div class="tile">
+            <div class="tile-k">呼吸検知（発音待機）</div>
+            <div class="tile-v" id="hud-breath">0%</div>
+            <div class="breath-bar"><div class="breath-fill" id="hud-breath-fill"></div></div>
+          </div>
+        </div>
+
+        <!-- Physical Piano Left/Right Dual Pedals -->
+        <div class="pedal-pair" aria-label="物理ペダル配置: 左 UNA CORDA / 右 DAMPER">
+          <div class="pedal-card">
+            <div class="pedal-head">
+              <span>UNA CORDA (L / CC#67)</span>
+              <strong id="hud-p67-val">0</strong>
+            </div>
+            <div class="pedal-track">
+              <div class="pedal-half"></div>
+              <div class="fill-67" id="hud-p67-fill"></div>
+            </div>
+          </div>
+          <div class="pedal-card">
+            <div class="pedal-head">
+              <span>DAMPER (R / CC#64)</span>
+              <strong id="hud-p64-val">0</strong>
+            </div>
+            <div class="pedal-track">
+              <div class="pedal-half"></div>
+              <div class="fill-64" id="hud-p64-fill"></div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="panel">
+        <div class="panel-title-row">
+          <h2 class="panel-title">リアルタイム大譜表・四候補比較</h2>
+          <span class="sub-mono" id="hero-cand-label">表示中: 採用候補</span>
+        </div>
+
+        <div class="hero-staff-box">
+          <canvas id="staff-hero"></canvas>
+        </div>
+
+        <div class="cand-summary-grid">
+          <button class="cand-card adopted inspecting" id="card-A" type="button" data-cid="A">
+            <div class="cand-top"><span>案A</span><span class="cand-score" id="score-A">--%</span></div>
+            <div class="cand-reason" id="reason-A">採用待機中</div>
+          </button>
+          <button class="cand-card" id="card-B" type="button" data-cid="B">
+            <div class="cand-top"><span>案B</span><span class="cand-score" id="score-B">--%</span></div>
+            <div class="cand-reason" id="reason-B">比較待機中</div>
+          </button>
+          <button class="cand-card" id="card-C" type="button" data-cid="C">
+            <div class="cand-top"><span>案C</span><span class="cand-score" id="score-C">--%</span></div>
+            <div class="cand-reason" id="reason-C">比較待機中</div>
+          </button>
+          <button class="cand-card" id="card-D" type="button" data-cid="D">
+            <div class="cand-top"><span>案D</span><span class="cand-score" id="score-D">--%</span></div>
+            <div class="cand-reason" id="reason-D">比較待機中</div>
+          </button>
+        </div>
+      </div>
+    </section>
+
+    <!-- Zone D1: Demo Quick Deck -->
     <section class="demo-deck" id="demo-deck">
-      <div class="bar-group">
-        <span style="color: var(--ink-rejected);">対話シナリオ:</span>
-        <button class="btn active" id="preset-cello_low_legato" onclick="applyPreset('cello_low_legato')">チェロ低音問いかけ</button>
-        <button class="btn" id="preset-cello_leap_spiccato" onclick="applyPreset('cello_leap_spiccato')">跳躍スピッカート</button>
-        <button class="btn" id="preset-piano_chromatic_cadence" onclick="applyPreset('piano_chromatic_cadence')">半音階終止</button>
-        <button class="btn" id="preset-overtone_mud_clearance" onclick="applyPreset('overtone_mud_clearance')">倍音クリアランス</button>
-        <button class="btn active" id="btn-audition" onclick="toggleAuditionPreview()">試奏音: ON</button>
+      <div class="ctrl-group">
+        <span class="sub-mono">演奏解釈プリセット:</span>
+        <select class="field" id="sel-preset" aria-label="演奏解釈プリセット">
+          <option value="cello_low_legato">チェロ低音レガート・静的Cantabile</option>
+          <option value="cello_leap_spiccato">チェロ跳躍スピッカート・対位法</option>
+          <option value="piano_chromatic_cadence">ピアノ半音階終止・半ペダル</option>
+          <option value="overtone_mud_clearance">中音域倍音クリアランス・透明声部</option>
+        </select>
+        <button class="btn compact" id="btn-save-work" type="button">作品を保存 (WAV/MP3/XML)</button>
       </div>
-      <div class="bar-group demo-audio-player">
-        <span style="color: var(--ink-rejected);">完成作品試聴:</span>
-        <button class="btn" onclick="playDemoMasterwork('/demos/demo_mode_b_cello_dialogue.mp3', 'Mode B: チェロ対話幻想曲 (.mp3)')">Mode B 完成曲再生</button>
-        <button class="btn" onclick="playDemoMasterwork('/demos/demo_mode_a_piano_dialogue.mp3', 'Mode A: ピアノ対話変奏曲 (.mp3)')">Mode A 完成曲再生</button>
-        <audio id="masterwork-audio" controls preload="none"></audio>
-      </div>
+      <span class="sub-mono" id="hud-save-status">Obsidian / 楽譜出力対応</span>
     </section>
 
-    <!-- Macro-Form 4-Act Architecture Bar -->
-    <section class="macro-arc-bar" id="macro-arc-bar">
-      <div class="act-steps">
-        <span class="act-pill active" id="act-pill-1">第1幕: 問いかけ (半終止)</span>
-        <span style="color: var(--ink-rejected);">&rarr;</span>
-        <span class="act-pill" id="act-pill-2">第2幕: 発展・模進・転調</span>
-        <span style="color: var(--ink-rejected);">&rarr;</span>
-        <span class="act-pill climax" id="act-pill-3">第3幕: 多声クライマックス</span>
-        <span style="color: var(--ink-rejected);">&rarr;</span>
-        <span class="act-pill" id="act-pill-4">第4幕: ウナ・コルダ回想・終止</span>
+    <!-- Zone D2: Live Japanese Directive & VRAM Telemetry Arena -->
+    <section class="meta-arena" id="meta-arena">
+      <div class="ctrl-group" style="flex:1;min-width:260px;">
+        <input class="field" id="inp-directive" type="text" placeholder="口頭/テキスト演奏指示（例：左手をもっと静かに、左ペダルを深めに）" style="flex:1;min-width:220px;" />
+        <button class="btn" id="btn-directive-send" type="button">指示を反映</button>
       </div>
-      <div class="macro-work-title" id="macro-work-title">
-        主題核: <span id="val-seed-motif">--</span> | 接続: <span id="val-bridge">--</span> | 状態: <span id="val-work-status">対話進行中</span>
-      </div>
+      <span class="sub-mono" id="hud-vram">RTX 3070 VRAM: -- / 8.0 GB · 同時発音: 0 / 30 音</span>
     </section>
-
-    <!-- 4-Zone Stage Projection Grid -->
-    <main class="stage-grid">
-      <!-- Zone A: Top-Left Perception & Breath -->
-      <section class="zone zone-a" aria-label="Zone A 知覚と呼吸">
-        <div class="zone-header">
-          <span class="zone-title">Zone A — 知覚・呼吸・両ペダル (L1 / L5 Dual Pedal)</span>
-          <span class="zone-meta" id="meta-perception">MODE B / VRAM 0.0 GB</span>
-        </div>
-        <div class="zone-a-body">
-          <div class="canvas-wrap">
-            <canvas id="canvas-perception"></canvas>
-          </div>
-          <div class="metrics-col">
-            <div>
-              <div class="metric-row">
-                <span class="metric-key">F0 / PITCH</span>
-                <span class="metric-val" id="val-f0">-- Hz (--)</span>
-              </div>
-              <div class="metric-row">
-                <span class="metric-key">ARTICULATION</span>
-                <span class="metric-val" id="val-art">legato</span>
-              </div>
-              <div class="metric-row">
-                <span class="metric-key">VIBRATO / NLMS</span>
-                <span class="metric-val" id="val-nlms">0.0 ct / 0.0 dB</span>
-              </div>
-              <div class="metric-row">
-                <span class="metric-key">ECHO / VOICES</span>
-                <span class="metric-val" id="val-voices">0 / 30 (0 sup)</span>
-              </div>
-              <div class="pedal-dual-row">
-                <div class="pedal-gauge-wrap">
-                  <div class="axis-label"><span class="metric-key">UNA CORDA (L/67)</span><span class="metric-val" id="val-cc67">0</span></div>
-                  <div class="pedal-track"><div class="pedal-fill-67" id="fill-cc67"></div></div>
-                </div>
-                <div class="pedal-gauge-wrap">
-                  <div class="axis-label"><span class="metric-key">DAMPER (R/64)</span><span class="metric-val" id="val-cc64">0</span></div>
-                  <div class="pedal-track"><div class="pedal-half-zone"></div><div class="pedal-fill-64" id="fill-cc64"></div></div>
-                </div>
-              </div>
-            </div>
-            <div>
-              <div class="metric-row">
-                <span class="metric-key">BREATH CADENCE</span>
-                <span class="metric-val" id="val-breath">0%</span>
-              </div>
-              <div class="breath-track">
-                <div class="breath-fill" id="breath-fill"></div>
-              </div>
-            </div>
-          </div>
-        </div>
-      </section>
-
-      <!-- Zone B: Top-Right Performer Thought Trace -->
-      <section class="zone zone-b" aria-label="Zone B 実演家の思考トレース">
-        <div class="zone-header">
-          <span class="zone-title">Zone B — 実演家の思考トレース (L2 TokenEconomizer &times; LLM)</span>
-          <span class="zone-meta" id="meta-intent">RULE / OLLAMA</span>
-        </div>
-        <div class="monologue-box" id="monologue-text">
-          チェロまたはピアノの第一音を待機中。実音検出後に4案の6軸音楽性監査と棄却理由を記録する。
-        </div>
-        <div class="intent-strip">
-          <span>STANCE: <strong id="val-stance">listen</strong></span>
-          <span>TONAL: <strong id="val-tonal">D_dorian</strong></span>
-          <span>CHORDS: <strong id="val-chords">Dm9 - Gm11 - A7sus4</strong></span>
-          <span>VOICING: <strong id="val-voicing">LH_P5 + RH_9th</strong></span>
-          <span>ECONOMIZER: <strong id="val-econ">0% saved</strong></span>
-        </div>
-      </section>
-
-      <!-- Zone C: Center Main Public Pruning & Score Arena -->
-      <section class="zone zone-c" aria-label="Zone C 公開推敲・楽譜アリーナ">
-        <div class="zone-header">
-          <span class="zone-title">Zone C — 公開推敲・大譜表アリーナ (MusicalityCritic 6-Axis &times; Dual-Pedal Curves)</span>
-          <span class="timeline-banner" id="timeline-banner">待機中 — 人間フレーズ終止後に4候補を順次推敲する</span>
-          <span class="zone-meta" id="meta-arena">TURN #0 | CORPUS: builtin_seed_dictionary</span>
-        </div>
-        <div class="arena-grid" id="arena-grid">
-          <article class="cand-card" id="card-A">
-            <div class="cand-head">
-              <span class="cand-title" id="title-A">Candidate A — 対位法反行・両手開離ボイシング案</span>
-              <span class="cand-badge sketching" id="badge-A">待機</span>
-            </div>
-            <div class="axes-strip" id="axes-A"></div>
-            <div class="cand-staff-wrap"><canvas id="staff-A"></canvas></div>
-          </article>
-          <article class="cand-card" id="card-B">
-            <div class="cand-head">
-              <span class="cand-title" id="title-B">Candidate B — 掛留解決・立体内声ポリフォニー案</span>
-              <span class="cand-badge sketching" id="badge-B">待機</span>
-            </div>
-            <div class="axes-strip" id="axes-B"></div>
-            <div class="cand-staff-wrap"><canvas id="staff-B"></canvas></div>
-          </article>
-          <article class="cand-card" id="card-C">
-            <div class="cand-head">
-              <span class="cand-title" id="title-C">Candidate C — 高次倍音回避・透明色彩ボイシング案</span>
-              <span class="cand-badge sketching" id="badge-C">待機</span>
-            </div>
-            <div class="axes-strip" id="axes-C"></div>
-            <div class="cand-staff-wrap"><canvas id="staff-C"></canvas></div>
-          </article>
-          <article class="cand-card" id="card-D">
-            <div class="cand-head">
-              <span class="cand-title" id="title-D">Candidate D — 対照検証案（音階単調・低中域混濁）</span>
-              <span class="cand-badge sketching" id="badge-D">待機</span>
-            </div>
-            <div class="axes-strip" id="axes-D"></div>
-            <div class="cand-staff-wrap"><canvas id="staff-D"></canvas></div>
-          </article>
-        </div>
-      </section>
-
-      <!-- Zone D: Bottom Motif Memory Graph -->
-      <section class="zone zone-d" aria-label="Zone D 公演モチーフ記憶グラフ">
-        <div class="zone-header">
-          <span class="zone-title">Zone D — 公演モチーフ記憶グラフ (Motif Memory Graph)</span>
-          <span class="zone-meta" id="meta-graph">NODES: 0 | EDGES: 0</span>
-        </div>
-        <div class="canvas-wrap">
-          <canvas id="canvas-graph"></canvas>
-        </div>
-      </section>
-    </main>
   </div>
-  <div class="f10-hint">F10: UIバー表示切替</div>
 
   <script>
-    const COLOR_STAGE = "#060608";
-    const COLOR_ADOPTED = "#EAE6DF";
-    const COLOR_REJECTED = "#5A5852";
-    const COLOR_VERMILION = "#C83E2B";
+    (() => {
+      "use strict";
+      const $ = (id) => document.getElementById(id);
+      let latestState = null;
+      let inspectedCid = null;
+      let projClean = false;
 
-    let latestState = null;
-    let audioEnabled = true;
-    let auditionPreviewEnabled = true;
-    let audioCtx = null;
-    let lastAnimatedTurnId = -1;
-    let animPhaseState = {
-      turnId: -1,
-      stepIdx: 3, // 0=sketch, 1..3=rejecting, 4=locked/performing
-      rejectedIds: new Set(),
-      activeRejectId: "",
-      adoptedLocked: true,
-      bannerText: "待機中",
-      playheadFrac: 0.0,
-      turnStartPerf: 0,
-      timers: [],
-    };
-
-    function toggleProjectionMode() {
-      document.getElementById("control-bar").classList.toggle("hidden-bar");
-      document.getElementById("demo-deck").classList.toggle("hidden-bar");
-      document.getElementById("stage-shell").classList.toggle("projection-clean");
-    }
-
-    window.addEventListener("keydown", (ev) => {
-      if (ev.key === "F10") {
-        ev.preventDefault();
-        toggleProjectionMode();
-      }
-    });
-
-    function ensureAudioContext() {
-      if (!audioCtx) {
-        const AC = window.AudioContext || window.webkitAudioContext;
-        if (AC) audioCtx = new AC();
-      }
-      if (audioCtx && audioCtx.state === "suspended") {
-        audioCtx.resume().catch(() => {});
-      }
-    }
-
-    function midiToFreq(midi) {
-      return 440.0 * Math.pow(2.0, (midi - 69) / 12.0);
-    }
-
-    function playMonitorPianoNote(midi, velocity, delayS, durationS, mutedAudition = false, cc64Val = 64, cc67Val = 40) {
-      if (!audioEnabled) return;
-      ensureAudioContext();
-      if (!audioCtx || audioCtx.state !== "running") return;
-
-      const now = audioCtx.currentTime + Math.max(0, delayS);
-      const damperExtra = (cc64Val / 127.0) * 0.45;
-      const dur = Math.max(0.10, Math.min(2.4, (durationS || 0.4) + damperExtra));
-      const veil = Math.max(0, Math.min(1, cc67Val / 127.0));
-      const gainVal = mutedAudition
-        ? 0.032
-        : Math.max(0.025, Math.min(0.18, (velocity / 112.0) * 0.14 * (1.0 - 0.16 * veil)));
-
-      const osc1 = audioCtx.createOscillator();
-      const osc2 = audioCtx.createOscillator();
-      const filter = audioCtx.createBiquadFilter();
-      const gain = audioCtx.createGain();
-      const f0 = midiToFreq(midi);
-
-      osc1.type = "triangle";
-      osc1.frequency.setValueAtTime(f0, now);
-      osc2.type = "sine";
-      osc2.frequency.setValueAtTime(f0 * 2.0, now);
-
-      // Una Corda (CC#67) attenuates upper partials continuously via lowpass filter
-      filter.type = "lowpass";
-      filter.frequency.setValueAtTime(4800 - veil * 3100, now);
-
-      gain.gain.setValueAtTime(0.0001, now);
-      gain.gain.linearRampToValueAtTime(gainVal, now + 0.006 + veil * 0.014);
-      gain.gain.exponentialRampToValueAtTime(0.0008, now + dur + (mutedAudition ? 0.08 : 0.22));
-
-      osc1.connect(filter);
-      osc2.connect(filter);
-      filter.connect(gain);
-      gain.connect(audioCtx.destination);
-      osc1.start(now);
-      osc2.start(now);
-      osc1.stop(now + dur + 0.25);
-      osc2.stop(now + dur + 0.25);
-    }
-
-    async function postJson(url, body) {
-      try {
-        const res = await fetch(url, {
+      function postJson(url, body = {}) {
+        return fetch(url, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify(body || {}),
-        });
-        return await res.json();
-      } catch (e) {
-        return null;
+          body: JSON.stringify(body),
+        }).catch(() => null);
       }
-    }
 
-    async function setMode(mode) {
-      await postJson("/api/stage/mode", { mode });
-      fetchStateOnce();
-    }
-
-    async function toggleDemo() {
-      const next = !(latestState && latestState.demo_enabled);
-      if (next) {
-        audioEnabled = true;
-        ensureAudioContext();
+      function pitchToDiatonic(midi) {
+        const steps = [0, 0, 1, 1, 2, 3, 3, 4, 4, 5, 5, 6];
+        const m = Math.round(midi);
+        return (Math.floor(m / 12) - 1) * 7 + steps[((m % 12) + 12) % 12];
       }
-      await postJson("/api/stage/demo", { enabled: next });
-      fetchStateOnce();
-    }
 
-    async function toggleAudioMonitor() {
-      audioEnabled = !audioEnabled;
-      if (audioEnabled) ensureAudioContext();
-      await postJson("/api/stage/audio_monitor", { enabled: audioEnabled, audition_preview: auditionPreviewEnabled });
-      fetchStateOnce();
-    }
-
-    async function toggleAuditionPreview() {
-      auditionPreviewEnabled = !auditionPreviewEnabled;
-      const btn = document.getElementById("btn-audition");
-      btn.textContent = `試奏オーディション音: ${auditionPreviewEnabled ? "ON" : "OFF"}`;
-      btn.classList.toggle("active", auditionPreviewEnabled);
-      await postJson("/api/stage/audio_monitor", { enabled: audioEnabled, audition_preview: auditionPreviewEnabled });
-    }
-
-    async function applyPreset(preset) {
-      ensureAudioContext();
-      await postJson("/api/stage/preset", { preset });
-      fetchStateOnce();
-    }
-
-    async function injectDirective(text) {
-      ensureAudioContext();
-      await postJson("/api/stage/directive", { text });
-      await postJson("/api/stage/turn", {});
-      fetchStateOnce();
-    }
-
-    async function sendDirective() {
-      const inp = document.getElementById("mc-input");
-      const text = inp.value.trim();
-      if (!text) return;
-      await postJson("/api/stage/directive", { text });
-      await postJson("/api/stage/turn", {});
-      inp.value = "";
-      fetchStateOnce();
-    }
-
-    async function triggerTurn() {
-      ensureAudioContext();
-      await postJson("/api/stage/turn", {});
-      fetchStateOnce();
-    }
-
-    async function retakeLastTurn() {
-      ensureAudioContext();
-      const inp = document.getElementById("mc-input");
-      const txt = inp ? inp.value.trim() : "";
-      document.getElementById("timeline-banner").textContent = "公開推敲リハーサル: 直前フレーズを書き直し中...";
-      await postJson("/api/stage/retake", { text: txt });
-      if (inp && txt) inp.value = "";
-      fetchStateOnce();
-    }
-
-    async function synthesizeCompleteWork() {
-      ensureAudioContext();
-      document.getElementById("val-work-status").textContent = "ホール音響で1曲統合・書き出し中...";
-      const res = await postJson("/api/stage/synthesize_work", { play_audio: false });
-      if (res && res.ok) {
-        const audioUrl = (res.assets && (res.assets.mp3_url || res.assets.wav_url)) || "";
-        if (audioUrl) {
-          playDemoMasterwork(audioUrl, `${res.title_ja} (${res.total_duration_s}秒)`);
+      function drawHeroStaff(events, chords) {
+        const canvas = $("staff-hero");
+        if (!canvas) return;
+        const rect = canvas.getBoundingClientRect();
+        if (rect.width < 20 || rect.height < 20) return;
+        const dpr = Math.min(window.devicePixelRatio || 1, 2);
+        const w = Math.floor(rect.width * dpr);
+        const h = Math.floor(rect.height * dpr);
+        if (canvas.width !== w || canvas.height !== h) {
+          canvas.width = w;
+          canvas.height = h;
         }
-      }
-      fetchStateOnce();
-    }
+        const ctx = canvas.getContext("2d");
+        ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
 
-    function playDemoMasterwork(url, labelText) {
-      const player = document.getElementById("masterwork-audio");
-      const statusEl = document.getElementById("val-work-status");
-      if (statusEl && labelText) statusEl.textContent = labelText;
-      if (!player || !url) return;
-      player.src = url;
-      player.play().catch(() => {});
-    }
+        const width = rect.width;
+        const height = rect.height;
+        ctx.fillStyle = "#060608";
+        ctx.fillRect(0, 0, width, height);
 
-    async function runCalibration() {
-      const res = await postJson("/api/stage/calibrate", {});
-      if (res && res.ok) {
-        document.getElementById("timeline-banner").textContent =
-          `校正完了: VDL=${res.vdl_base_ms}ms / NLMS ERLE=${res.nlms_erle_db}dB (${res.connected_port})`;
-      }
-      fetchStateOnce();
-    }
+        const padLeft = 56;
+        const padRight = 24;
+        const usableW = Math.max(80, width - padLeft - padRight);
+        const trebleBaseY = Math.round(height * 0.43);
+        const bassBaseY = Math.round(height * 0.84);
+        const stepPx = Math.max(4.4, Math.min(6.4, height / 47));
 
-    async function resetGraph() {
-      await postJson("/api/stage/reset", {});
-      fetchStateOnce();
-    }
-
-    async function triggerPanic() {
-      await postJson("/api/stage/panic", {});
-      fetchStateOnce();
-    }
-
-    function fitCanvas(canvas) {
-      const rect = canvas.parentElement.getBoundingClientRect();
-      const dpr = Math.min(2, window.devicePixelRatio || 1);
-      const w = Math.max(120, Math.floor(rect.width));
-      const h = Math.max(60, Math.floor(rect.height));
-      if (canvas.width !== w * dpr || canvas.height !== h * dpr) {
-        canvas.width = w * dpr;
-        canvas.height = h * dpr;
-      }
-      const ctx = canvas.getContext("2d");
-      ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
-      return { ctx, w, h };
-    }
-
-    function renderPerceptionCanvas(state) {
-      const canvas = document.getElementById("canvas-perception");
-      const { ctx, w, h } = fitCanvas(canvas);
-      ctx.fillStyle = COLOR_STAGE;
-      ctx.fillRect(0, 0, w, h);
-
-      ctx.strokeStyle = "#181714";
-      ctx.lineWidth = 1;
-      for (const frac of [0.25, 0.5, 0.75]) {
-        const y = Math.round(h * frac) + 0.5;
-        ctx.beginPath();
-        ctx.moveTo(0, y);
-        ctx.lineTo(w, y);
-        ctx.stroke();
-      }
-
-      // Draw continuous Dual-Pedal reference waveforms behind/below F0 trajectory
-      const cands = (state && state.candidates) || [];
-      const adopted = cands.find((c) => c.adopted) || cands[0];
-      if (adopted) {
-        const c64 = adopted.pedal_cc64_curve || [];
-        const c67 = adopted.pedal_cc67_curve || [];
-        const drawPedalTrail = (pts, strokeStyle, dashed) => {
-          if (pts.length < 2) return;
-          const tMax = Math.max(1.2, ...pts.map((p) => Number(p.t || 0)));
-          ctx.save();
-          ctx.strokeStyle = strokeStyle;
-          ctx.lineWidth = 1.1;
-          if (dashed) ctx.setLineDash([3, 3]);
+        ctx.strokeStyle = "#302D27";
+        ctx.lineWidth = 1;
+        for (let i = 0; i < 5; i++) {
+          const yt = trebleBaseY - i * 2 * stepPx;
           ctx.beginPath();
-          pts.forEach((pt, idx) => {
-            const x = 8 + (Number(pt.t || 0) / tMax) * (w - 16);
-            const y = h - 6 - (Number(pt.val || 0) / 127.0) * (h * 0.34);
-            if (idx === 0) ctx.moveTo(x, y);
-            else ctx.lineTo(x, y);
+          ctx.moveTo(padLeft - 12, yt);
+          ctx.lineTo(width - padRight, yt);
+          ctx.stroke();
+
+          const yb = bassBaseY - i * 2 * stepPx;
+          ctx.beginPath();
+          ctx.moveTo(padLeft - 12, yb);
+          ctx.lineTo(width - padRight, yb);
+          ctx.stroke();
+        }
+        ctx.strokeStyle = "#5A5852";
+        ctx.lineWidth = 2;
+        ctx.beginPath();
+        ctx.moveTo(padLeft - 12, trebleBaseY - 8 * stepPx);
+        ctx.lineTo(padLeft - 12, bassBaseY);
+        ctx.stroke();
+
+        ctx.fillStyle = "#8C857A";
+        ctx.font = "600 14px serif";
+        ctx.fillText("G", 20, trebleBaseY - stepPx);
+        ctx.fillText("F", 20, bassBaseY - 5 * stepPx);
+
+        const notes = (events || []).map((e) => ({
+          p: Number(e.pitch ?? e.p ?? 60),
+          t: Number(e.onset_s ?? e.t ?? 0),
+          d: Math.max(0.1, Number(e.duration_s ?? e.d ?? 0.5)),
+          h: String(e.hand ?? e.h ?? "rh"),
+        }));
+        const minT = notes.length ? Math.min(...notes.map((n) => n.t)) : 0;
+        const maxT = notes.length ? Math.max(minT + 3.2, ...notes.map((n) => n.t + n.d)) : 4;
+        const span = Math.max(1.2, maxT - minT);
+
+        if (Array.isArray(chords) && chords.length) {
+          ctx.fillStyle = "#B4AEA3";
+          ctx.font = '600 14px "Cascadia Mono", monospace';
+          chords.slice(0, 6).forEach((ch, idx) => {
+            const cx = padLeft + (idx / Math.max(1, Math.min(6, chords.length))) * usableW;
+            ctx.fillText(String(ch), cx + 4, Math.max(15, trebleBaseY - 10.6 * stepPx));
           });
-          ctx.stroke();
-          ctx.restore();
+        }
+
+        notes.forEach((n) => {
+          const x = padLeft + ((n.t - minT) / span) * usableW;
+          const tail = Math.max(8, (n.d / span) * usableW);
+          const treble = n.h === "rh" || (n.h !== "lh" && n.p >= 60);
+          const ref = treble ? 30 : 18;
+          const baseY = treble ? trebleBaseY : bassBaseY;
+          const delta = Math.max(-7, Math.min(13, pitchToDiatonic(n.p) - ref));
+          const y = baseY - delta * stepPx;
+
+          const color = n.h === "human" ? "#A8C8E8" : n.h === "lh" ? "#C4BDB0" : "#EAE6DF";
+          ctx.fillStyle = n.h === "human" ? "rgba(168, 200, 232, 0.25)" : "rgba(234, 230, 223, 0.16)";
+          ctx.fillRect(x, y - stepPx * 0.4, tail, stepPx * 0.8);
+          ctx.fillStyle = color;
+          ctx.beginPath();
+          ctx.ellipse(x + 4, y, stepPx * 0.95, stepPx * 0.7, -0.22, 0, Math.PI * 2);
+          ctx.fill();
+        });
+      }
+
+      let lastRenderedTurn = -1;
+
+      function formatCandReason(cand) {
+        if (!cand) return "比較待機中";
+        if (cand.adopted) {
+          const bs = cand.beauty_summary;
+          if (bs && typeof bs === "object") {
+            if (bs.summary_ja) return String(bs.summary_ja);
+            const cons = Math.round(Number(bs.consonance_score ?? 0));
+            const poly = Number(bs.avg_polyphony ?? 0).toFixed(1);
+            const mono = Number(bs.mono_ratio_pct ?? 0).toFixed(1);
+            return `採用: 協和 ${cons}% / 平均${poly}声 / 単音${mono}%`;
+          }
+          return String(bs || "採用（両手声部連結・ペダル監査通過）");
+        }
+        return String(cand.rejection_tag_ja || cand.rejection_detail || "スコア基準未達により棄却");
+      }
+
+      function renderState(s) {
+        if (!s) return;
+        latestState = s;
+        const intent = s.intent || {};
+        const p = s.perception || {};
+        const out = s.output || {};
+        const th = s.telemetry_hud || {};
+        const actNum = Number(intent.act_number || 1);
+        const turnId = Number(s.turn_id || 0);
+
+        $("act-arc")?.querySelectorAll(".act-pill").forEach((el) => {
+          el.classList.toggle("active", Number(el.dataset.act || 1) === actNum);
+        });
+
+        const chords = intent.chord_progression || [];
+        if ($("chord-val")) $("chord-val").textContent = chords[0] || intent.tonal_center || "Dm";
+        if ($("chord-roman")) $("chord-roman").textContent = intent.phrase_function || "i";
+        if ($("turn-meta")) $("turn-meta").textContent = `Turn #${s.turn_id || 0} · ${th.active_workers || 6}/${th.total_workers || 6} 並列稼働`;
+        if ($("monologue-text") && intent.monologue_ja) $("monologue-text").textContent = intent.monologue_ja;
+
+        const isCello = s.mode !== "piano";
+        $("btn-mode-cello")?.classList.toggle("active", isCello);
+        $("btn-mode-piano")?.classList.toggle("active", !isCello);
+        $("btn-demo-toggle")?.classList.toggle("vermilion", Boolean(s.demo_enabled));
+        if ($("btn-demo-toggle")) $("btn-demo-toggle").textContent = s.demo_enabled ? "デモ停止" : "デモ開始";
+        $("btn-audio-toggle")?.classList.toggle("active", Boolean(s.monitor_audio));
+        if ($("btn-audio-toggle")) $("btn-audio-toggle").textContent = `PC音声: ${s.monitor_audio ? "ON" : "OFF"}`;
+
+        if ($("hud-f0")) {
+          const hz = p.f0_hz ? `${Number(p.f0_hz).toFixed(1)} Hz` : "-- Hz";
+          $("hud-f0").textContent = `${p.note_name || "--"} (${hz})`;
+        }
+        if ($("hud-erle")) $("hud-erle").textContent = `+${Number(p.nlms_erle_db || 0).toFixed(1)} dB`;
+        if ($("hud-latency")) {
+          const pcMs = Number(th.parallel_compose_ms || 0).toFixed(1);
+          const jitMs = Number(th.l5_jitter_ms || 0).toFixed(1);
+          $("hud-latency").textContent = `${pcMs}ms / ${jitMs}ms`;
+        }
+        const bPct = Math.max(0, Math.min(100, Math.round(Number(p.breath_gauge || 0) * 100)));
+        if ($("hud-breath")) $("hud-breath").textContent = `${bPct}%`;
+        if ($("hud-breath-fill")) {
+          $("hud-breath-fill").style.width = `${bPct}%`;
+          $("hud-breath-fill").classList.toggle("ready", Boolean(p.turn_ready));
+        }
+
+        const p67 = Math.max(0, Math.min(127, Math.round(out.pedal_cc67 ?? p.pedal_cc67 ?? 0)));
+        const p64 = Math.max(0, Math.min(127, Math.round(out.pedal_cc64 ?? p.pedal_cc64 ?? 0)));
+        if ($("hud-p67-val")) $("hud-p67-val").textContent = String(p67);
+        if ($("hud-p67-fill")) $("hud-p67-fill").style.width = `${(p67 / 127) * 100}%`;
+        if ($("hud-p64-val")) $("hud-p64-val").textContent = String(p64);
+        if ($("hud-p64-fill")) $("hud-p64-fill").style.width = `${(p64 / 127) * 100}%`;
+
+        if ($("hud-vram")) {
+          $("hud-vram").textContent = `RTX 3070 VRAM: ${Number(th.vram_used_gb || 0).toFixed(1)} / ${Number(th.vram_total_gb || 8).toFixed(1)} GB · 同時発音: ${out.active_voices || 0} / ${out.hard_limit || 30} 音`;
+        }
+
+        const cands = s.candidates || [];
+        const adopted = cands.find((c) => c.adopted) || cands[0];
+        if (turnId !== lastRenderedTurn && adopted) {
+          inspectedCid = adopted.candidate_id;
+          lastRenderedTurn = turnId;
+        }
+        if (!inspectedCid || !cands.some((c) => c.candidate_id === inspectedCid)) {
+          inspectedCid = adopted ? adopted.candidate_id : "A";
+        }
+
+        ["A", "B", "C", "D"].forEach((cid) => {
+          const cand = cands.find((c) => c.candidate_id === cid);
+          const card = $(`card-${cid}`);
+          const scEl = $(`score-${cid}`);
+          const rsEl = $(`reason-${cid}`);
+          if (!card || !scEl || !rsEl) return;
+          card.classList.toggle("adopted", Boolean(cand?.adopted));
+          card.classList.toggle("inspecting", cid === inspectedCid);
+          if (cand) {
+            const pct = cand.total_score <= 1.0 ? cand.total_score * 100 : cand.total_score;
+            scEl.textContent = `${Number(pct || 0).toFixed(1)}%`;
+            rsEl.textContent = formatCandReason(cand);
+          }
+        });
+
+        const shown = cands.find((c) => c.candidate_id === inspectedCid) || adopted;
+        if ($("hero-cand-label") && shown) {
+          $("hero-cand-label").textContent = shown.adopted ? `表示中: 案${shown.candidate_id}（採用候補）` : `表示中: 案${shown.candidate_id}（棄却案確認中）`;
+        }
+        drawHeroStaff(shown?.events || [], chords);
+      }
+
+      function toggleF10(force) {
+        projClean = force != null ? Boolean(force) : !projClean;
+        $("stage-shell")?.classList.toggle("projection-clean", projClean);
+        requestAnimationFrame(() => renderState(latestState));
+      }
+
+      ["A", "B", "C", "D"].forEach((cid) => {
+        $(`card-${cid}`)?.addEventListener("click", () => {
+          inspectedCid = cid;
+          renderState(latestState);
+        });
+      });
+
+      $("btn-mode-cello")?.addEventListener("click", () => postJson("/api/stage/mode", { mode: "cello" }));
+      $("btn-mode-piano")?.addEventListener("click", () => postJson("/api/stage/mode", { mode: "piano" }));
+      $("btn-demo-toggle")?.addEventListener("click", () => postJson("/api/stage/demo", { enabled: !Boolean(latestState?.demo_enabled) }));
+      $("btn-audio-toggle")?.addEventListener("click", () => postJson("/api/stage/audio_monitor", { enabled: !Boolean(latestState?.monitor_audio) }));
+      $("btn-turn-now")?.addEventListener("click", () => postJson("/api/stage/turn", {}));
+      $("btn-retake")?.addEventListener("click", () => postJson("/api/stage/retake", { text: "別解釈を再計算" }));
+      $("btn-calibrate")?.addEventListener("click", () => postJson("/api/stage/calibrate", {}));
+      $("btn-reset")?.addEventListener("click", () => postJson("/api/stage/reset", {}));
+      $("btn-panic")?.addEventListener("click", () => postJson("/api/stage/panic", {}));
+      $("btn-f10-toggle")?.addEventListener("click", () => toggleF10(true));
+      $("btn-proj-exit")?.addEventListener("click", () => toggleF10(false));
+      $("sel-preset")?.addEventListener("change", (e) => postJson("/api/stage/preset", { preset: e.target.value }));
+      $("btn-directive-send")?.addEventListener("click", () => {
+        const text = $("inp-directive")?.value?.trim();
+        if (text) postJson("/api/stage/directive", { text });
+      });
+      $("btn-save-work")?.addEventListener("click", async () => {
+        const res = await postJson("/api/stage/synthesize_work", { play_audio: false });
+        const data = res ? await res.json().catch(() => null) : null;
+        if ($("hud-save-status")) {
+          const url = data?.assets?.mp3_url || data?.assets?.wav_url || data?.assets?.mid_url;
+          $("hud-save-status").textContent = url ? `保存完了: ${url}` : "作品を書き出しました";
+        }
+      });
+
+      window.addEventListener("keydown", (e) => {
+        if (e.key === "F10") { e.preventDefault(); toggleF10(); }
+        if (e.key === "Escape") { postJson("/api/stage/panic", {}); }
+      });
+
+      function startWs() {
+        const proto = location.protocol === "https:" ? "wss:" : "ws:";
+        const ws = new WebSocket(`${proto}//${location.host}/ws/stage`);
+        ws.onopen = () => { if ($("hud-ws-status")) $("hud-ws-status").textContent = "WS 60fps 接続済み"; };
+        ws.onmessage = (ev) => {
+          try { renderState(JSON.parse(ev.data)); } catch (_) {}
         };
-        drawPedalTrail(c64, "rgba(234, 230, 223, 0.42)", false);
-        drawPedalTrail(c67, "rgba(200, 62, 43, 0.58)", true);
+        ws.onclose = () => {
+          if ($("hud-ws-status")) $("hud-ws-status").textContent = "再接続中...";
+          setTimeout(startWs, 1500);
+        };
       }
 
-      const hist = (state && state.perception && state.perception.pitch_history) || [];
-      if (hist.length >= 2) {
-        ctx.strokeStyle = COLOR_ADOPTED;
-        ctx.lineWidth = 1.6;
-        ctx.beginPath();
-        hist.forEach((hz, idx) => {
-          const midi = hz > 20 ? 69 + 12 * Math.log2(hz / 440) : 55;
-          const normY = 1 - Math.max(0.10, Math.min(0.88, (midi - 36) / 48));
-          const x = (idx / Math.max(1, hist.length - 1)) * (w - 16) + 8;
-          const y = normY * (h - 16) + 8;
-          if (idx === 0) ctx.moveTo(x, y);
-          else ctx.lineTo(x, y);
-        });
-        ctx.stroke();
-
-        const lastHz = hist[hist.length - 1];
-        const lastMidi = lastHz > 20 ? 69 + 12 * Math.log2(lastHz / 440) : 55;
-        const ny = 1 - Math.max(0.10, Math.min(0.88, (lastMidi - 36) / 48));
-        ctx.fillStyle = COLOR_VERMILION;
-        ctx.beginPath();
-        ctx.arc(w - 8, ny * (h - 16) + 8, 3.2, 0, Math.PI * 2);
-        ctx.fill();
-      } else {
-        ctx.fillStyle = COLOR_REJECTED;
-        ctx.font = "11px 'JetBrains Mono', monospace";
-        ctx.fillText("AWAITING INPUT TRAJECTORY", 10, h / 2 + 4);
-      }
-    }
-
-    function midiToStaffStep(midi) {
-      const pcSteps = [0, 0, 1, 1, 2, 3, 3, 4, 4, 5, 5, 6];
-      const oct = Math.floor(midi / 12) - 5;
-      return oct * 7 + pcSteps[((midi % 12) + 12) % 12];
-    }
-
-    function renderAxesStrip(cand) {
-      const el = document.getElementById(`axes-${cand.candidate_id}`);
-      if (!el) return;
-      const pct = cand.subscores_pct || {};
-      const items = [
-        ["反音階", pct.anti_scale ?? 0],
-        ["両手和声", pct.polyphony_harmony ?? 0],
-        ["声部進行", pct.voice_leading ?? 0],
-        ["倍音回避", pct.spectral_clearance ?? 0],
-        ["律動呼吸", pct.rhythmic_diversity ?? 0],
-        ["両ペダル", pct.dual_pedal ?? 0],
-      ];
-      el.innerHTML = items
-        .map(
-          ([lbl, val]) =>
-            `<div class="axis-item">
-               <div class="axis-label"><span>${lbl}</span><span>${val}%</span></div>
-               <div class="axis-bar-bg"><div class="axis-bar-fill" style="width:${Math.max(0, Math.min(100, val))}%"></div></div>
-             </div>`
-        )
-        .join("");
-    }
-
-    function renderCandidateStaff(cand, activePitchesSet) {
-      const cid = cand.candidate_id;
-      const card = document.getElementById(`card-${cid}`);
-      const titleEl = document.getElementById(`title-${cid}`);
-      const badgeEl = document.getElementById(`badge-${cid}`);
-      const canvas = document.getElementById(`staff-${cid}`);
-      if (!card || !canvas) return;
-
-      const isActiveReject = animPhaseState.activeRejectId === cid;
-      const isRejectedVisible = animPhaseState.rejectedIds.has(cid);
-      const isAdoptedLocked = cand.adopted && animPhaseState.adoptedLocked;
-
-      card.classList.toggle("adopted", isAdoptedLocked);
-      card.classList.toggle("auditioning", isActiveReject);
-      card.classList.toggle("rejected", !cand.adopted && isRejectedVisible && !isActiveReject);
-
-      titleEl.textContent = `Candidate ${cid} — ${cand.label_ja} (${cand.pitch_range_str || "--"} / ${cand.total_score})`;
-
-      if (cand.adopted) {
-        if (isAdoptedLocked) {
-          badgeEl.textContent = "採用 LOCKED";
-          badgeEl.className = "cand-badge adopted";
-        } else {
-          badgeEl.textContent = "検証中...";
-          badgeEl.className = "cand-badge sketching";
-        }
-      } else if (isActiveReject || isRejectedVisible) {
-        const detail = cand.rejection_detail || {};
-        badgeEl.textContent = detail.hud_badge_ja || cand.rejection_tag_ja || "[× 棄却]";
-        badgeEl.className = "cand-badge rejected";
-      } else {
-        badgeEl.textContent = "着想スケッチ";
-        badgeEl.className = "cand-badge sketching";
-      }
-
-      renderAxesStrip(cand);
-
-      const { ctx, w, h } = fitCanvas(canvas);
-      ctx.fillStyle = "#0A0A0D";
-      ctx.fillRect(0, 0, w, h);
-
-      // Reserve bottom 24px for Dual-Pedal continuous envelope curves
-      const staffBottom = h - 24;
-      const trebleBaseY = staffBottom * 0.42;
-      const bassBaseY = staffBottom * 0.85;
-      const stepPx = Math.max(2.2, Math.min(3.4, staffBottom * 0.032));
-      const staffColor = isAdoptedLocked ? "#3E3C37" : "#24221E";
-
-      // Grand staff brace bar
-      ctx.strokeStyle = staffColor;
-      ctx.lineWidth = 1.2;
-      ctx.beginPath();
-      ctx.moveTo(24, trebleBaseY - stepPx * 8);
-      ctx.lineTo(24, bassBaseY);
-      ctx.stroke();
-
-      ctx.lineWidth = 1;
-      for (const baseY of [trebleBaseY, bassBaseY]) {
-        for (let line = 0; line < 5; line++) {
-          const y = Math.round(baseY - line * stepPx * 2) + 0.5;
-          ctx.beginPath();
-          ctx.moveTo(24, y);
-          ctx.lineTo(w - 10, y);
-          ctx.stroke();
-        }
-      }
-
-      ctx.fillStyle = isAdoptedLocked ? COLOR_ADOPTED : COLOR_REJECTED;
-      ctx.font = "italic 14px 'Cormorant Garamond', Georgia, serif";
-      ctx.fillText("G", 8, trebleBaseY - stepPx * 2);
-      ctx.fillText("F", 8, bassBaseY - stepPx * 3);
-
-      const noteEvs = (cand.events || []).filter((e) => Number(e.pitch || 0) > 0);
-      const maxT = Math.max(
-        1.2,
-        ...(noteEvs.length ? noteEvs.map((e) => Number(e.onset_s || 0) + Number(e.duration_s || 0.2)) : [1.2])
-      );
-      const drawW = w - 54;
-      const probSet = new Set(cand.problem_note_indices || []);
-
-      if (isAdoptedLocked && animPhaseState.playheadFrac > 0 && animPhaseState.playheadFrac <= 1.05) {
-        const px = 34 + Math.min(1.0, animPhaseState.playheadFrac) * drawW;
-        ctx.strokeStyle = "rgba(200, 62, 43, 0.55)";
-        ctx.lineWidth = 1.5;
-        ctx.beginPath();
-        ctx.moveTo(px, 4);
-        ctx.lineTo(px, h - 4);
-        ctx.stroke();
-      }
-
-      noteEvs.forEach((ev, idx) => {
-        const pitch = Number(ev.pitch);
-        const onset = Number(ev.onset_s || 0);
-        const hand = String(ev.hand || "").toLowerCase();
-        const x = 34 + (onset / maxT) * drawW;
-
-        let y;
-        const isBass = hand === "lh" || (hand !== "rh" && pitch < 60);
-        if (!isBass) {
-          const stepOffset = midiToStaffStep(pitch) - 2;
-          y = trebleBaseY - stepOffset * stepPx;
-          y = Math.max(6, Math.min(trebleBaseY + stepPx * 4, y));
-        } else {
-          const stepOffset = midiToStaffStep(pitch) - (-10);
-          y = bassBaseY - stepOffset * stepPx;
-          y = Math.max(trebleBaseY + stepPx * 5, Math.min(staffBottom - 4, y));
-        }
-
-        const isProblemNote = !cand.adopted && (isActiveReject || isRejectedVisible) && probSet.has(idx);
-        const fracNote = onset / maxT;
-        const isPlayheadNote =
-          isAdoptedLocked &&
-          Math.abs(animPhaseState.playheadFrac - fracNote) < 0.12 &&
-          animPhaseState.playheadFrac > 0;
-        const isSounding = isAdoptedLocked && (activePitchesSet.has(pitch) || isPlayheadNote);
-
-        const noteColor = (isSounding || isProblemNote)
-          ? COLOR_VERMILION
-          : (isAdoptedLocked ? COLOR_ADOPTED : COLOR_REJECTED);
-
-        ctx.fillStyle = noteColor;
-        ctx.strokeStyle = noteColor;
-        ctx.lineWidth = (isSounding || isProblemNote) ? 1.7 : 1.0;
-
-        ctx.beginPath();
-        ctx.ellipse(x, y, 4.0, 2.8, -0.25, 0, Math.PI * 2);
-        ctx.fill();
-
-        const stemUp = isBass ? pitch < 48 : pitch < 71;
-        ctx.beginPath();
-        ctx.moveTo(x + (stemUp ? 3.8 : -3.8), y);
-        ctx.lineTo(x + (stemUp ? 3.8 : -3.8), y + (stemUp ? -13 : 13));
-        ctx.stroke();
-
-        if (isProblemNote) {
-          ctx.beginPath();
-          ctx.arc(x, y, 7.2, 0, Math.PI * 2);
-          ctx.stroke();
-        }
-      });
-
-      // Dual-Pedal Continuous Envelope Strip at bottom of each candidate staff
-      const pedTop = staffBottom + 3;
-      const pedBot = h - 3;
-      const pedH = Math.max(12, pedBot - pedTop);
-      ctx.strokeStyle = "#1E1D19";
-      ctx.lineWidth = 1;
-      ctx.beginPath();
-      ctx.moveTo(24, pedTop);
-      ctx.lineTo(w - 10, pedTop);
-      ctx.stroke();
-
-      // Half-pedal sweet spot band (CC#64: 35..80)
-      ctx.fillStyle = "rgba(234, 230, 223, 0.04)";
-      ctx.fillRect(34, pedTop + pedH * 0.37, drawW, pedH * 0.35);
-
-      const c64 = cand.pedal_cc64_curve || [];
-      const c67 = cand.pedal_cc67_curve || [];
-      const drawCurve = (pts, color, dashed) => {
-        if (pts.length < 2) return;
-        ctx.save();
-        ctx.strokeStyle = color;
-        ctx.lineWidth = dashed ? 1.1 : 1.35;
-        if (dashed) ctx.setLineDash([3, 2]);
-        ctx.beginPath();
-        pts.forEach((pt, idx) => {
-          const x = 34 + Math.min(1.0, Number(pt.t || 0) / maxT) * drawW;
-          const y = pedBot - (Number(pt.val || 0) / 127.0) * (pedH - 2);
-          if (idx === 0) ctx.moveTo(x, y);
-          else ctx.lineTo(x, y);
-        });
-        ctx.stroke();
-        ctx.restore();
-      };
-      drawCurve(c64, isAdoptedLocked ? COLOR_ADOPTED : "#6E6B63", false);
-      drawCurve(c67, isAdoptedLocked ? COLOR_VERMILION : "#683028", true);
-
-      ctx.fillStyle = "#5A5852";
-      ctx.font = "8.5px 'JetBrains Mono', monospace";
-      ctx.fillText("64/67", 4, pedBot - 3);
-
-      // Red strikethrough line across rejected staff once discarded
-      if (!cand.adopted && isRejectedVisible && !isActiveReject) {
-        ctx.strokeStyle = "rgba(200, 62, 43, 0.72)";
-        ctx.lineWidth = 1.6;
-        ctx.beginPath();
-        ctx.moveTo(28, staffBottom * 0.22);
-        ctx.lineTo(w - 14, staffBottom * 0.88);
-        ctx.stroke();
-      }
-    }
-
-    function renderMotifGraph(state) {
-      const canvas = document.getElementById("canvas-graph");
-      const { ctx, w, h } = fitCanvas(canvas);
-      ctx.fillStyle = COLOR_STAGE;
-      ctx.fillRect(0, 0, w, h);
-
-      const graph = (state && state.motif_graph) || { nodes: [], edges: [] };
-      const nodes = graph.nodes || [];
-      const edges = graph.edges || [];
-      document.getElementById("meta-graph").textContent = `NODES: ${nodes.length} | EDGES: ${edges.length}`;
-
-      ctx.strokeStyle = "#191815";
-      ctx.lineWidth = 1;
-      ctx.beginPath();
-      ctx.moveTo(16, h * 0.5);
-      ctx.lineTo(w - 16, h * 0.5);
-      ctx.stroke();
-
-      if (nodes.length === 0) {
-        ctx.fillStyle = COLOR_REJECTED;
-        ctx.font = "12px 'Noto Serif JP', serif";
-        ctx.fillText("開演時ノード数: 0 — 人間の演奏動機を記憶し、AI変奏ノードを時系列に結線する。", 18, h * 0.5 - 10);
-        return;
-      }
-
-      const posMap = {};
-      nodes.forEach((n, idx) => {
-        const x = nodes.length === 1 ? w * 0.5 : 64 + (idx / (nodes.length - 1)) * (w - 170);
-        const y = n.kind === "human" ? h * 0.32 : h * 0.64;
-        posMap[n.id] = { x, y, node: n };
-      });
-
-      edges.forEach((e) => {
-        const src = posMap[e.source];
-        const tgt = posMap[e.target];
-        if (!src || !tgt) return;
-        ctx.strokeStyle = e.relation === "dialogue_flow" ? "#33312D" : COLOR_REJECTED;
-        ctx.lineWidth = e.relation === "dialogue_flow" ? 1 : 1.3;
-        ctx.beginPath();
-        ctx.moveTo(src.x, src.y);
-        ctx.lineTo(tgt.x, tgt.y);
-        ctx.stroke();
-      });
-
-      Object.values(posMap).forEach(({ x, y, node }) => {
-        const isLatest = node.turn === state.turn_id && node.kind === "ai";
-        ctx.fillStyle = isLatest ? COLOR_VERMILION : (node.kind === "human" ? COLOR_ADOPTED : COLOR_STAGE);
-        ctx.strokeStyle = isLatest ? COLOR_VERMILION : COLOR_ADOPTED;
-        ctx.lineWidth = 1.4;
-        ctx.beginPath();
-        ctx.arc(x, y, 5.2, 0, Math.PI * 2);
-        ctx.fill();
-        ctx.stroke();
-
-        ctx.fillStyle = isLatest ? COLOR_VERMILION : (node.kind === "human" ? COLOR_ADOPTED : "#8C877E");
-        ctx.font = "10px 'Cascadia Mono', monospace";
-        const lbl = (node.label || node.id).replace(/:$/, "").replace(/_/g, " ").slice(0, 26);
-        const textX = Math.max(10, Math.min(w - 165, x - 48));
-        const textY = node.kind === "human" ? y - 10 : y + 15;
-        ctx.fillText(lbl, textX, textY);
-      });
-    }
-
-    function startStaggeredTurnAnimation(state) {
-      animPhaseState.timers.forEach((t) => clearTimeout(t));
-      animPhaseState.timers = [];
-
-      const cands = state.candidates || [];
-      const timeline = state.deliberation_timeline || [];
-      if (cands.length === 0 || timeline.length === 0) return;
-
-      animPhaseState.turnId = state.turn_id;
-      animPhaseState.rejectedIds = new Set();
-      animPhaseState.activeRejectId = "";
-      animPhaseState.adoptedLocked = false;
-      animPhaseState.playheadFrac = 0.0;
-
-      timeline.forEach((step) => {
-        const tid = setTimeout(() => {
-          animPhaseState.rejectedIds = new Set(step.rejected_so_far || []);
-          animPhaseState.activeRejectId = step.active_reject_id || "";
-          animPhaseState.adoptedLocked = !!step.adopted_locked;
-          animPhaseState.bannerText = step.label_ja || "";
-
-          const banner = document.getElementById("timeline-banner");
-          if (banner) {
-            banner.textContent = animPhaseState.bannerText;
-            banner.classList.toggle("audition", step.stage === "step2_audition_reject");
-          }
-
-          // Optional WebAudio pianissimo audition fragment when discarding a rejected candidate
-          if (step.stage === "step2_audition_reject" && audioEnabled && auditionPreviewEnabled) {
-            const rejCand = cands.find((c) => c.candidate_id === step.active_reject_id);
-            if (rejCand) {
-              (rejCand.events || [])
-                .filter((e) => Number(e.pitch || 0) > 0)
-                .slice(0, 2)
-                .forEach((ev, idx) => {
-                  playMonitorPianoNote(Number(ev.pitch), 24, idx * 0.08, 0.14, true);
-                });
-            }
-          }
-
-          if (step.stage === "step3_adopt_perform") {
-            animPhaseState.turnStartPerf = performance.now();
-            const adopted = cands.find((c) => c.adopted);
-            if (adopted && audioEnabled) {
-              const cc64Pts = adopted.pedal_cc64_curve || [];
-              const cc67Pts = adopted.pedal_cc67_curve || [];
-              const c64Peak = cc64Pts.length ? Math.max(...cc64Pts.map((x) => Number(x.val || 0))) : 64;
-              const c67Peak = cc67Pts.length ? Math.max(...cc67Pts.map((x) => Number(x.val || 0))) : 40;
-              (adopted.events || []).forEach((ev) => {
-                if (Number(ev.pitch || 0) > 0) {
-                  playMonitorPianoNote(
-                    Number(ev.pitch),
-                    Number(ev.velocity || 64),
-                    Number(ev.onset_s || 0),
-                    Number(ev.duration_s || 0.35),
-                    false,
-                    c64Peak,
-                    c67Peak
-                  );
-                }
-              });
-            }
-          }
-          if (latestState) renderZoneC(latestState);
-        }, Number(step.at_ms || 0));
-        animPhaseState.timers.push(tid);
-      });
-    }
-
-    function renderZoneC(state) {
-      const out = state.output || {};
-      const activeSet = new Set((out.active_pitches || []).map(Number));
-      const cands = state.candidates || [];
-      if (animPhaseState.adoptedLocked && animPhaseState.turnStartPerf > 0) {
-        const elapsed = (performance.now() - animPhaseState.turnStartPerf) / 1000.0;
-        animPhaseState.playheadFrac = Math.min(1.1, elapsed / 1.8);
-      }
-      cands.forEach((cand) => renderCandidateStaff(cand, activeSet));
-    }
-
-    function updateHUD(state) {
-      if (!state) return;
-      latestState = state;
-      audioEnabled = !!state.monitor_audio;
-
-      document.getElementById("btn-mode-piano").classList.toggle("active", state.mode === "piano");
-      document.getElementById("btn-mode-cello").classList.toggle("active", state.mode === "cello");
-      const demoBtn = document.getElementById("btn-demo");
-      demoBtn.textContent = state.demo_enabled ? "Virtual Demo: ON" : "Virtual Demo: OFF";
-      demoBtn.classList.toggle("active", !!state.demo_enabled);
-
-      const audioBtn = document.getElementById("btn-audio");
-      audioBtn.textContent = audioEnabled ? "Audio Monitor: ON" : "Audio Monitor: OFF";
-      audioBtn.classList.toggle("active", audioEnabled);
-
-      // Hide Demo Control Deck in Production Mode
-      const deckEl = document.getElementById("demo-deck");
-      const calBtn = document.getElementById("btn-calibrate");
-      if (state.production_mode) {
-        deckEl.classList.add("hidden-bar");
-        calBtn.style.display = "inline-block";
-      } else {
-        if (!document.getElementById("control-bar").classList.contains("hidden-bar")) {
-          deckEl.classList.remove("hidden-bar");
-        }
-        calBtn.style.display = "inline-block";
-      }
-
-      // Preset button highlight
-      document.querySelectorAll("[id^='preset-']").forEach((btn) => {
-        btn.classList.toggle("active", btn.id === `preset-${state.active_preset}`);
-      });
-
-      // Audio status pill + dBFS meter
-      const aStat = state.audio_status || {};
-      document.getElementById("audio-status-text").textContent = `[${aStat.label_ja || "待機中"}]`;
-      const dbfs = Number(aStat.dbfs ?? -72);
-      document.getElementById("audio-dbfs-val").textContent = `${dbfs.toFixed(1)} dBFS`;
-      const vuPct = Math.max(0, Math.min(100, ((dbfs + 60) / 54) * 100));
-      document.getElementById("vu-fill").style.width = `${vuPct}%`;
-      document.getElementById("audio-dot").classList.toggle("live", audioEnabled && dbfs > -55);
-
-      // Zone A
-      const p = state.perception || {};
-      const vramTxt = (state.gpu_vram_gb !== null && state.gpu_vram_gb !== undefined)
-        ? `VRAM ${Number(state.gpu_vram_gb).toFixed(1)} GB`
-        : "VRAM --";
-      document.getElementById("meta-perception").textContent =
-        `${state.mode === "piano" ? "MODE A: PIANO" : "MODE B: CELLO"} | ${vramTxt}`;
-      document.getElementById("val-f0").textContent =
-        `${Number(p.f0_hz || 0).toFixed(1)} Hz (${p.note_name || "--"})`;
-      document.getElementById("val-art").textContent = p.articulation || "legato";
-      document.getElementById("val-nlms").textContent =
-        `${Number(p.vibrato_cents || 0).toFixed(1)} ct / ${Number(p.nlms_erle_db || 0).toFixed(1)} dB`;
-
-      const out = state.output || {};
-      const vEl = document.getElementById("val-voices");
-      vEl.textContent = `${out.active_voices || 0} / ${out.hard_limit || 30} (${p.echo_suppressed_count || 0} sup)`;
-      vEl.classList.toggle("vermilion", (out.active_voices || 0) >= 25);
-
-      const candsList = state.candidates || [];
-      const adoptedCand = candsList.find((c) => c.adopted);
-      const cc64Live = out.pedal_cc64 || p.pedal_cc64 || (adoptedCand && adoptedCand.pedal_cc64_curve && adoptedCand.pedal_cc64_curve[2] ? adoptedCand.pedal_cc64_curve[2].val : 0);
-      const cc67Live = out.pedal_cc67 || p.pedal_cc67 || (adoptedCand && adoptedCand.pedal_cc67_curve && adoptedCand.pedal_cc67_curve[1] ? adoptedCand.pedal_cc67_curve[1].val : 0);
-      document.getElementById("val-cc64").textContent = `${cc64Live}`;
-      document.getElementById("val-cc67").textContent = `${cc67Live}`;
-      document.getElementById("fill-cc64").style.width = `${Math.round((cc64Live / 127) * 100)}%`;
-      document.getElementById("fill-cc67").style.width = `${Math.round((cc67Live / 127) * 100)}%`;
-
-      const breathPct = Math.round(Number(p.breath_gauge || 0) * 100);
-      document.getElementById("val-breath").textContent = `${breathPct}%`;
-      const fill = document.getElementById("breath-fill");
-      fill.style.width = `${breathPct}%`;
-      fill.classList.toggle("ready", !!p.turn_ready);
-      renderPerceptionCanvas(state);
-
-      // Zone B
-      const intent = state.intent || {};
-      document.getElementById("meta-intent").textContent =
-        `${intent.act_label_ja || "第1幕"} | ${intent.llm_source || "rule"} (${intent.llm_latency_ms || 0} ms)`;
-      document.getElementById("monologue-text").textContent = intent.monologue_ja || "";
-      document.getElementById("val-stance").textContent = intent.phrase_function || intent.interaction_stance || "listen";
-      document.getElementById("val-tonal").textContent = intent.tonal_center || "D_dorian";
-      document.getElementById("val-chords").textContent = (intent.chord_progression || []).slice(0, 4).join(" - ");
-      const beautyInfo = adoptedCand && adoptedCand.beauty_summary ? ` | 協和${adoptedCand.beauty_summary.consonance_score}%` : "";
-      document.getElementById("val-voicing").textContent = `${(adoptedCand && adoptedCand.lh_idiom) || "open_arpeggio"}${beautyInfo}`;
-      const econ = intent.token_economizer || {};
-      document.getElementById("val-econ").textContent = `${Number(econ.compression_ratio_pct || 0).toFixed(1)}% saved`;
-
-      // Macro-Form 4-Act Architecture Bar
-      const macro = state.macro_form || {};
-      const curAct = Number(macro.current_act || intent.act_number || 1);
-      for (let a = 1; a <= 4; a++) {
-        const pill = document.getElementById(`act-pill-${a}`);
-        if (pill) pill.classList.toggle("active", a === curAct);
-      }
-      document.getElementById("val-seed-motif").textContent = macro.seed_motif || intent.seed_motif_str || "--";
-      document.getElementById("val-bridge").textContent = macro.voice_leading_bridge || intent.voice_leading_bridge || "--";
-      const syn = state.synthesized_work || macro.completed_work;
-      if (syn && syn.title_ja) {
-        document.getElementById("val-work-status").textContent = `${syn.title_ja} (${syn.total_duration_s || "--"}秒)`;
-      } else if (intent.is_retake && intent.retake_summary_ja) {
-        document.getElementById("val-work-status").textContent = intent.retake_summary_ja;
-      } else {
-        document.getElementById("val-work-status").textContent = `${macro.turns_recorded || state.turn_id || 0}ターン構成 / 推敲${macro.retake_count || 0}回`;
-      }
-
-      // Zone C
-      document.getElementById("meta-arena").textContent =
-        `TURN #${state.turn_id || 0} | CORPUS: ${state.corpus_source || "builtin"} | PORT: ${out.connected_port || "Virtual"}`;
-      const revKey = Number(state.turn_revision || state.turn_id || 0);
-      const urlParams = new URLSearchParams(window.location.search);
-      if (state.turn_id > 0 && urlParams.get("snapshot") === "1") {
-        lastAnimatedTurnId = revKey;
-        animPhaseState.turnId = state.turn_id;
-        animPhaseState.rejectedIds = new Set(candsList.filter((c) => !c.adopted).map((c) => c.candidate_id));
-        animPhaseState.activeRejectId = "";
-        animPhaseState.adoptedLocked = true;
-        animPhaseState.playheadFrac = 0.56;
-        const adoptedId = adoptedCand ? adoptedCand.candidate_id : "A";
-        document.getElementById("timeline-banner").textContent =
-          `Step 3 確定実演: 案${adoptedId} (${intent.act_label_ja || "第1幕"}) — 両手ポリフォニー＋連続両ペダル実演中`;
-      } else if (state.turn_id > 0 && revKey !== lastAnimatedTurnId) {
-        lastAnimatedTurnId = revKey;
-        startStaggeredTurnAnimation(state);
-      }
-      renderZoneC(state);
-
-      // Zone D
-      renderMotifGraph(state);
-    }
-
-    async function fetchStateOnce() {
-      try {
-        const res = await fetch("/api/stage/state");
-        if (res.ok) updateHUD(await res.json());
-      } catch (_) {}
-    }
-
-    let activeWs = null;
-    let wsReconnectMs = 600;
-    function connectWebSocket() {
-      if (activeWs && (activeWs.readyState === WebSocket.OPEN || activeWs.readyState === WebSocket.CONNECTING)) {
-        return;
-      }
-      const proto = location.protocol === "https:" ? "wss:" : "ws:";
-      const ws = new WebSocket(`${proto}//${location.host}/ws/stage`);
-      activeWs = ws;
-      ws.onopen = () => {
-        wsReconnectMs = 600;
-      };
-      ws.onmessage = (ev) => {
-        try {
-          updateHUD(JSON.parse(ev.data));
-        } catch (_) {}
-      };
-      ws.onclose = () => {
-        if (activeWs === ws) activeWs = null;
-        setTimeout(connectWebSocket, wsReconnectMs);
-        wsReconnectMs = Math.min(6000, Math.round(wsReconnectMs * 1.6));
-      };
-    }
-
-    window.addEventListener("DOMContentLoaded", () => {
-      const params = new URLSearchParams(window.location.search);
-      if (params.get("demo") === "1") {
-        postJson("/api/stage/demo", { enabled: true });
-        postJson("/api/stage/audio_monitor", { enabled: true, audition_preview: true });
-      }
-      fetchStateOnce();
-      connectWebSocket();
-    });
+      fetch("/api/stage/state").then((r) => r.json()).then(renderState).catch(() => {});
+      startWs();
+      window.addEventListener("resize", () => renderState(latestState));
+    })();
   </script>
 </body>
 </html>

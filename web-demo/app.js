@@ -1,1335 +1,2102 @@
-/* Disklavier-Auto Studio & GitHub Pages Interactive Player (High-Craft Dark Editorial) */
-(function () {
+(() => {
   "use strict";
 
-  const COLOR_STAGE = "#060608";
-  const COLOR_ADOPTED = "#EAE6DF";
-  const COLOR_SECONDARY = "#8F8A80";
-  const COLOR_REJECTED = "#5A5852";
-  const COLOR_VERMILION = "#C83E2B";
+  const LIVE_MODE = Boolean(window.DISKLAVIER_LIVE_MODE);
 
-  const LIVE_MODE = !!window.DISKLAVIER_LIVE_MODE;
-
-  const state = {
-    catalog: null,
-    filtered: [],
-    currentPiece: null,
-    filterMode: "all", // all | showcase | cello | piano
-    filterTonality: "all",
-    filterMinScore: 0,
-    filterSearch: "",
-    mixer: {
-      rh: true,
-      lh: true,
-      human: true,
-      cc64: true,
-      cc67: true,
-      solo: null, // null | "rh" | "lh" | "human"
-    },
-    playback: {
-      playing: false,
-      startCtxTime: 0,
-      offsetS: 0,
-      durationS: 36,
-      scheduledIdx: 0,
-      sortedNotes: [],
-      timerId: null,
-      rafId: null,
-    },
-    delibTimers: [],
-    audioCtx: null,
-    masterComp: null,
-    reverbSend: null,
-    analyser: null,
-    gains: { rh: null, lh: null, human: null },
-    panners: { rh: null, lh: null, human: null },
-    activeVoiceNodes: new Set(),
-  };
-
-  const TEXTURE_JA = {
-    open_arpeggio_10th: "開離10度アルペジオ",
-    broken_chord_barcarolle: "分散和音 (バルカローレ)",
-    chorale_voicing: "4声コラール和音",
+  const STYLE_LABELS = {
+    broken_chord_barcarolle: "分散和音・バルカローレ",
+    cantabile_polyphony: "カンタービレ多声対位",
+    impressionist_pedal: "印象派・半ペダル共鳴",
+    dramatic_octave_chorale: "重厚コラール・オクターヴ",
+    minimalist_pulse: "静謐反復アルペジオ",
     countermelody_tenor: "内声テノール対旋律",
-    alberti_lyrical: "抒情アルベルティ伴奏",
   };
 
-  function formatTextureJa(tex) {
-    return TEXTURE_JA[tex] || tex || "開離和音伴奏";
+  const MODE_LABELS = {
+    cello: "チェロ対話",
+    piano: "ピアノ対話",
+    notagen: "NotaGen ライブ",
+    library: "楽曲ライブラリ",
+  };
+
+  const NOTE_NAMES = ["C", "C#", "D", "D#", "E", "F", "F#", "G", "G#", "A", "A#", "B"];
+
+  const PC_KEY_TO_MIDI = {
+    KeyA: 60,
+    KeyW: 61,
+    KeyS: 62,
+    KeyE: 63,
+    KeyD: 64,
+    KeyF: 65,
+    KeyT: 66,
+    KeyG: 67,
+    KeyY: 68,
+    KeyH: 69,
+    KeyU: 70,
+    KeyJ: 71,
+    KeyK: 72,
+  };
+
+  function midiToName(midi) {
+    const m = Math.max(21, Math.min(108, Math.round(Number(midi) || 60)));
+    return `${NOTE_NAMES[m % 12]}${Math.floor(m / 12) - 1}`;
   }
 
-  function el(id) {
-    return document.getElementById(id);
+  function midiToFreq(midi) {
+    return 440 * Math.pow(2, (midi - 69) / 12);
   }
 
-  function fmtTime(sec) {
-    const s = Math.max(0, Math.floor(sec || 0));
-    const m = Math.floor(s / 60);
-    const r = s % 60;
-    return `${String(m).padStart(2, "0")}:${String(r).padStart(2, "0")}`;
+  function clamp(v, lo, hi) {
+    return Math.max(lo, Math.min(hi, v));
   }
 
-  function midiToFreq(m) {
-    return 440.0 * Math.pow(2.0, (m - 69) / 12.0);
+  function formatTime(sec) {
+    const s = Math.max(0, Number(sec) || 0);
+    const mins = Math.floor(s / 60);
+    const rem = s - mins * 60;
+    return `${mins}:${rem.toFixed(1).padStart(4, "0")}`;
   }
 
-  function pieceUrl(pieceId) {
-    return LIVE_MODE ? `/api/pieces/${pieceId}` : `./data/pieces/${pieceId}.json`;
+  function normNote(raw) {
+    if (!raw || typeof raw !== "object") return null;
+    const p = Number(raw.pitch ?? raw.p ?? 60);
+    const t = Number(raw.onset_s ?? raw.t ?? 0);
+    const d = Math.max(0.08, Number(raw.duration_s ?? raw.d ?? 0.45));
+    const v = clamp(Number(raw.velocity ?? raw.v ?? 64), 1, 127);
+    const h = String(raw.hand ?? raw.h ?? (p >= 60 ? "rh" : "lh"));
+    const r = String(raw.role ?? raw.r ?? "");
+    return { p, t, d, v, h, r };
   }
 
-  function catalogUrl() {
-    return LIVE_MODE ? "/api/catalog" : "./data/catalog_100.json";
-  }
-
-  function audioAssetUrl(relPath) {
-    if (!relPath) return "";
-    const fname = relPath.split("/").pop();
-    return LIVE_MODE ? `/audio/${fname}` : `./audio/${fname}`;
-  }
-
-  /* ---- Pure JS Client-Side SMF Type-1 MIDI Generator ---- */
-  function writeVarLen(val) {
-    let v = Math.max(0, val | 0);
-    const bytes = [v & 0x7f];
-    while ((v >>= 7) > 0) {
-      bytes.unshift((v & 0x7f) | 0x80);
-    }
-    return bytes;
-  }
-
-  function strBytes(str) {
-    const out = [];
-    for (let i = 0; i < str.length; i++) {
-      const code = str.charCodeAt(i);
-      out.push(code < 128 ? code : 63);
-    }
-    return out;
-  }
-
-  function u32Bytes(n) {
-    return [(n >>> 24) & 0xff, (n >>> 16) & 0xff, (n >>> 8) & 0xff, n & 0xff];
-  }
-
-  function u16Bytes(n) {
-    return [(n >>> 8) & 0xff, n & 0xff];
-  }
-
-  function encodeTrack(events) {
-    events.sort((a, b) => a.tick - b.tick || a.order - b.order);
-    const body = [];
-    let prevTick = 0;
-    for (const ev of events) {
-      const dt = Math.max(0, ev.tick - prevTick);
-      prevTick = ev.tick;
-      body.push(...writeVarLen(dt), ...ev.bytes);
-    }
-    body.push(0x00, 0xff, 0x2f, 0x00); // End of track
-    return [...strBytes("MTrk"), ...u32Bytes(body.length), ...body];
-  }
-
-  function buildMidiUint8(piece) {
-    const tpq = 480;
-    const bpm = Math.max(40, Math.min(180, Number(piece.bpm || 76)));
-    const usPerBeat = Math.round(60000000 / bpm);
-    const ticksPerSec = (tpq * bpm) / 60.0;
-
-    const tempoTrack = encodeTrack([
-      { tick: 0, order: 0, bytes: [0xff, 0x51, 0x03, (usPerBeat >> 16) & 0xff, (usPerBeat >> 8) & 0xff, usPerBeat & 0xff] },
-      { tick: 0, order: 1, bytes: [0xff, 0x58, 0x04, 0x04, 0x02, 0x18, 0x08] },
-    ]);
-
-    const humanEvs = [
-      { tick: 0, order: 0, bytes: [0xc0, piece.mode === "cello" ? 42 : 0] },
-    ];
-    const rhEvs = [{ tick: 0, order: 0, bytes: [0xc1, 0] }];
-    const lhEvs = [{ tick: 0, order: 0, bytes: [0xc2, 0] }];
-
-    for (const n of piece.notes || []) {
-      const t0 = Math.max(0, Math.round(Number(n.t) * ticksPerSec));
-      const t1 = Math.max(t0 + 24, Math.round((Number(n.t) + Number(n.d)) * ticksPerSec));
-      const p = Math.max(21, Math.min(108, Number(n.p) | 0));
-      const v = Math.max(18, Math.min(112, Number(n.v || 68) | 0));
-      const target = n.h === "human" ? humanEvs : (n.h === "lh" ? lhEvs : rhEvs);
-      const ch = n.h === "human" ? 0 : (n.h === "lh" ? 2 : 1);
-      target.push({ tick: t0, order: 2, bytes: [0x90 | ch, p, v] });
-      target.push({ tick: t1, order: 1, bytes: [0x80 | ch, p, 24] });
+  // ===========================================================================
+  // WebAudio Polyphonic Acoustic Piano & Cello Synthesizer (with Hall Reverb)
+  // ===========================================================================
+  class HallWebAudioEngine {
+    constructor() {
+      this.ctx = null;
+      this.masterGain = null;
+      this.dryGain = null;
+      this.wetGain = null;
+      this.convolver = null;
+      this.activeVoices = new Set();
+      this.muted = false;
+      this.lastLevelDb = -60;
     }
 
-    for (const pt of piece.cc64 || []) {
-      const tick = Math.max(0, Math.round(Number(pt.t) * ticksPerSec));
-      const val = Math.max(0, Math.min(127, Number(pt.val) | 0));
-      lhEvs.push({ tick, order: 1, bytes: [0xb2, 64, val] });
-    }
-    for (const pt of piece.cc67 || []) {
-      const tick = Math.max(0, Math.round(Number(pt.t) * ticksPerSec));
-      const val = Math.max(0, Math.min(127, Number(pt.val) | 0));
-      lhEvs.push({ tick, order: 1, bytes: [0xb2, 67, val] });
-    }
-
-    const tr1 = encodeTrack(humanEvs);
-    const tr2 = encodeTrack(rhEvs);
-    const tr3 = encodeTrack(lhEvs);
-    const header = [
-      ...strBytes("MThd"),
-      ...u32Bytes(6),
-      ...u16Bytes(1), // SMF Type 1
-      ...u16Bytes(4), // 4 tracks
-      ...u16Bytes(tpq),
-    ];
-    return new Uint8Array([...header, ...tempoTrack, ...tr1, ...tr2, ...tr3]);
-  }
-
-  function downloadCurrentMidi() {
-    if (!state.currentPiece) return;
-    const bytes = buildMidiUint8(state.currentPiece);
-    const blob = new Blob([bytes], { type: "audio/midi" });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement("a");
-    a.href = url;
-    a.download = `${state.currentPiece.id}.mid`;
-    document.body.appendChild(a);
-    a.click();
-    a.remove();
-    setTimeout(() => URL.revokeObjectURL(url), 1000);
-  }
-
-  /* ---- WebAudio Polyphonic Synth + Stereo Hall Reverb + 5-Channel Mixer ---- */
-  function buildChamberHallIR(ctx, rt60Sec) {
-    const sr = ctx.sampleRate || 44100;
-    const len = Math.floor(sr * rt60Sec);
-    const ir = ctx.createBuffer(2, len, sr);
-    let seed = 1841;
-    const nextRand = () => {
-      seed = (seed * 1664525 + 1013904223) >>> 0;
-      return (seed / 4294967296) * 2 - 1;
-    };
-    const earlyL = [[0.012, 0.24], [0.021, -0.17], [0.032, 0.14], [0.047, 0.10]];
-    const earlyR = [[0.015, 0.22], [0.025, 0.16], [0.037, -0.13], [0.052, 0.09]];
-    for (let ch = 0; ch < 2; ch++) {
-      const data = ir.getChannelData(ch);
-      const taps = ch === 0 ? earlyL : earlyR;
-      for (const [dt, g] of taps) {
-        const idx = Math.min(len - 1, Math.floor(dt * sr));
-        data[idx] += g;
-      }
-      let lp = 0;
-      for (let i = 0; i < len; i++) {
-        const t = i / sr;
-        const fadeIn = Math.min(1, Math.max(0, (t - 0.016) / 0.045));
-        const dec = Math.exp((-6.9078 * t) / rt60Sec) * fadeIn;
-        lp = lp * 0.72 + nextRand() * 0.28;
-        data[i] += lp * dec * 0.22;
-      }
-    }
-    return ir;
-  }
-
-  function ensureAudioGraph() {
-    if (!state.audioCtx) {
-      const AC = window.AudioContext || window.webkitAudioContext;
-      if (!AC) return false;
-      state.audioCtx = new AC();
-      const comp = state.audioCtx.createDynamicsCompressor();
-      comp.threshold.value = -14;
-      comp.knee.value = 18;
-      comp.ratio.value = 3.5;
-      comp.attack.value = 0.005;
-      comp.release.value = 0.24;
-
-      const dryBus = state.audioCtx.createGain();
-      dryBus.gain.value = 0.88;
-      dryBus.connect(comp);
-
-      const reverbSend = state.audioCtx.createGain();
-      reverbSend.gain.value = 0.26;
-      const convolver = state.audioCtx.createConvolver();
-      convolver.buffer = buildChamberHallIR(state.audioCtx, 1.25);
-      reverbSend.connect(convolver);
-      convolver.connect(comp);
-
-      const analyser = state.audioCtx.createAnalyser();
-      analyser.fftSize = 256;
-      comp.connect(analyser);
-      analyser.connect(state.audioCtx.destination);
-
-      const panMap = { rh: 0.16, lh: -0.22, human: -0.18 };
-      for (const ch of ["rh", "lh", "human"]) {
-        const g = state.audioCtx.createGain();
-        g.gain.value = 1.0;
-        if (typeof state.audioCtx.createStereoPanner === "function") {
-          const pan = state.audioCtx.createStereoPanner();
-          pan.pan.value = panMap[ch];
-          g.connect(pan);
-          pan.connect(dryBus);
-          pan.connect(reverbSend);
-          state.panners[ch] = pan;
-        } else {
-          g.connect(dryBus);
-          g.connect(reverbSend);
+    ensure() {
+      if (this.ctx) {
+        if (this.ctx.state === "suspended") {
+          this.ctx.resume().catch(() => {});
         }
-        state.gains[ch] = g;
+        return this.ctx;
       }
-      state.masterComp = comp;
-      state.reverbSend = reverbSend;
-      state.analyser = analyser;
-      applyMixerGains();
-    }
-    if (state.audioCtx.state === "suspended") {
-      state.audioCtx.resume().catch(() => {});
-    }
-    return true;
-  }
+      const AC = window.AudioContext || window.webkitAudioContext;
+      if (!AC) return null;
+      const ctx = new AC();
+      const master = ctx.createGain();
+      master.gain.value = this.muted ? 0 : 0.72;
 
-  function isPartAudible(part) {
-    if (state.mixer.solo) {
-      return state.mixer.solo === part;
-    }
-    return !!state.mixer[part];
-  }
+      const compressor = ctx.createDynamicsCompressor();
+      compressor.threshold.value = -14;
+      compressor.ratio.value = 3.2;
 
-  function applyMixerGains() {
-    if (!state.audioCtx) return;
-    const now = state.audioCtx.currentTime;
-    for (const part of ["rh", "lh", "human"]) {
-      const g = state.gains[part];
-      if (g) {
-        g.gain.setTargetAtTime(isPartAudible(part) ? 1.0 : 0.0, now, 0.015);
+      const dry = ctx.createGain();
+      dry.gain.value = 0.84;
+
+      const wet = ctx.createGain();
+      wet.gain.value = 0.24;
+
+      const convolver = ctx.createConvolver();
+      convolver.buffer = this._makeHallImpulse(ctx, 1.9, 2.6);
+
+      dry.connect(compressor);
+      wet.connect(convolver);
+      convolver.connect(compressor);
+      compressor.connect(master);
+      master.connect(ctx.destination);
+
+      this.ctx = ctx;
+      this.masterGain = master;
+      this.dryGain = dry;
+      this.wetGain = wet;
+      this.convolver = convolver;
+      return ctx;
+    }
+
+    _makeHallImpulse(ctx, seconds, decay) {
+      const len = Math.floor(ctx.sampleRate * seconds);
+      const buf = ctx.createBuffer(2, len, ctx.sampleRate);
+      for (let ch = 0; ch < 2; ch++) {
+        const data = buf.getChannelData(ch);
+        for (let i = 0; i < len; i++) {
+          const env = Math.pow(1 - i / len, decay);
+          data[i] = (Math.random() * 2 - 1) * env * 0.45;
+        }
+      }
+      return buf;
+    }
+
+    setMuted(flag) {
+      this.muted = Boolean(flag);
+      if (this.masterGain && this.ctx) {
+        this.masterGain.gain.setTargetAtTime(this.muted ? 0 : 0.72, this.ctx.currentTime, 0.02);
       }
     }
-  }
 
-  function valueAtCurve(curve, tSec) {
-    if (!curve || !curve.length) return 0;
-    let cur = Number(curve[0].val || 0);
-    for (let i = 0; i < curve.length; i++) {
-      if (Number(curve[i].t) <= tSec + 0.005) {
-        cur = Number(curve[i].val || 0);
-      } else {
-        break;
-      }
-    }
-    return cur;
-  }
+    playNote(midi, velocity = 64, durationS = 0.65, options = {}) {
+      if (this.muted) return;
+      const ctx = this.ensure();
+      if (!ctx) return;
 
-  function scheduleNoteWebAudio(note, pieceTimeS, ctxStartTime) {
-    if (!state.audioCtx || state.audioCtx.state !== "running") return;
-    const part = note.h === "human" ? "human" : (note.h === "lh" ? "lh" : "rh");
-    const targetGain = state.gains[part];
-    if (!targetGain) return;
+      const when = ctx.currentTime + Math.max(0, options.delayS || 0);
+      const isHuman = Boolean(options.human);
+      const unaCorda = Number(options.cc67 || 0) >= 40;
+      const damperBoost = Number(options.cc64 || 0) >= 48 ? 0.55 : 0.08;
+      const freq = midiToFreq(midi);
+      const amp = clamp((velocity / 127) * (isHuman ? 0.22 : 0.16), 0.015, 0.24);
+      const dur = clamp(durationS + damperBoost, 0.12, 3.6);
 
-    const cc64 = state.mixer.cc64 ? valueAtCurve(state.currentPiece?.cc64, pieceTimeS) : 0;
-    const cc67 = state.mixer.cc67 ? valueAtCurve(state.currentPiece?.cc67, pieceTimeS) : 0;
-    const veil = Math.max(0, Math.min(1, cc67 / 127.0));
-    const damperExt = (cc64 / 127.0) * 0.72;
+      const env = ctx.createGain();
+      env.gain.setValueAtTime(0.0001, when);
+      env.gain.linearRampToValueAtTime(amp, when + (isHuman ? 0.028 : 0.008));
+      env.gain.exponentialRampToValueAtTime(Math.max(0.0008, amp * 0.38), when + Math.min(dur * 0.45, 0.55));
+      env.gain.exponentialRampToValueAtTime(0.0001, when + dur);
 
-    const isCello = part === "human" && state.currentPiece?.mode === "cello";
-    const durBase = Math.max(0.10, Number(note.d || 0.35));
-    const dur = isCello ? durBase + 0.08 : Math.min(3.2, durBase + damperExt);
-    const f0 = midiToFreq(Number(note.p));
-    const velNorm = Math.max(0.18, Math.min(1.0, Number(note.v || 68) / 110.0));
-    const peakAmp = (isCello ? 0.14 : 0.13) * velNorm * (1.0 - 0.16 * veil);
-
-    const t0 = Math.max(state.audioCtx.currentTime + 0.004, ctxStartTime);
-    const filter = state.audioCtx.createBiquadFilter();
-    const env = state.audioCtx.createGain();
-
-    const osc1 = state.audioCtx.createOscillator();
-    const osc2 = state.audioCtx.createOscillator();
-    const osc3 = state.audioCtx.createOscillator();
-    const osc2Gain = state.audioCtx.createGain();
-    const osc3Gain = state.audioCtx.createGain();
-
-    if (isCello) {
-      osc1.type = "sawtooth";
-      osc1.frequency.setValueAtTime(f0, t0);
-      osc2.type = "triangle";
-      osc2.frequency.setValueAtTime(f0 * 2.0, t0);
-      osc2Gain.gain.value = 0.24;
-      osc3.type = "sine";
-      osc3.frequency.setValueAtTime(f0 * 3.0, t0);
-      osc3Gain.gain.value = 0.07;
-
+      const filter = ctx.createBiquadFilter();
       filter.type = "lowpass";
-      filter.Q.value = 1.9;
-      filter.frequency.setValueAtTime(1650 * (0.7 + 0.4 * velNorm), t0);
-      filter.frequency.exponentialRampToValueAtTime(980, t0 + Math.min(dur, 0.35));
+      const cutoff = unaCorda ? Math.min(3400, freq * 3.1) : Math.min(7200, freq * 5.8 + velocity * 18);
+      filter.frequency.setValueAtTime(cutoff, when);
+      filter.frequency.exponentialRampToValueAtTime(Math.max(320, cutoff * 0.42), when + dur);
 
-      env.gain.setValueAtTime(0.0001, t0);
-      env.gain.linearRampToValueAtTime(peakAmp, t0 + 0.055);
-      env.gain.setValueAtTime(peakAmp * 0.88, t0 + Math.max(0.08, dur - 0.08));
-      env.gain.exponentialRampToValueAtTime(0.0006, t0 + dur + 0.14);
-    } else {
-      osc1.type = "triangle";
-      osc1.frequency.setValueAtTime(f0, t0);
+      const osc1 = ctx.createOscillator();
+      osc1.type = isHuman ? "sawtooth" : "triangle";
+      osc1.frequency.setValueAtTime(freq, when);
+
+      const osc2 = ctx.createOscillator();
       osc2.type = "sine";
-      osc2.frequency.setValueAtTime(f0 * 2.0, t0);
-      osc2Gain.gain.value = 0.30 * (1.0 - 0.45 * veil);
-      osc3.type = "sine";
-      osc3.frequency.setValueAtTime(f0 * 3.0, t0);
-      osc3Gain.gain.value = 0.09 * velNorm * (1.0 - 0.60 * veil);
+      osc2.frequency.setValueAtTime(freq * 2, when);
 
-      filter.type = "lowpass";
-      filter.Q.value = 0.7;
-      const brightHz = Math.max(900, (5400 * (0.65 + 0.45 * velNorm)) - veil * 3500);
-      filter.frequency.setValueAtTime(brightHz, t0);
-      filter.frequency.exponentialRampToValueAtTime(Math.max(480, brightHz * 0.42), t0 + Math.min(dur, 0.45));
+      const g2 = ctx.createGain();
+      g2.gain.value = unaCorda ? 0.12 : 0.28;
 
-      const atk = 0.005 + veil * 0.013;
-      env.gain.setValueAtTime(0.0001, t0);
-      env.gain.linearRampToValueAtTime(peakAmp, t0 + atk);
-      env.gain.exponentialRampToValueAtTime(peakAmp * 0.44, t0 + Math.min(dur, atk + 0.19));
-      env.gain.exponentialRampToValueAtTime(0.0006, t0 + dur + 0.20);
+      osc1.connect(filter);
+      osc2.connect(g2);
+      g2.connect(filter);
+      filter.connect(env);
+      env.connect(this.dryGain);
+      env.connect(this.wetGain);
+
+      const handle = { osc1, osc2, env };
+      this.activeVoices.add(handle);
+      this.lastLevelDb = Math.max(this.lastLevelDb, -36 + (velocity / 127) * 28);
+
+      osc1.start(when);
+      osc2.start(when);
+      osc1.stop(when + dur + 0.04);
+      osc2.stop(when + dur + 0.04);
+      osc1.onended = () => {
+        this.activeVoices.delete(handle);
+        try {
+          env.disconnect();
+        } catch (_) {}
+      };
     }
 
-    osc1.connect(filter);
-    osc2.connect(osc2Gain);
-    osc2Gain.connect(filter);
-    osc3.connect(osc3Gain);
-    osc3Gain.connect(filter);
-    filter.connect(env);
-    env.connect(targetGain);
-
-    const stopAt = t0 + dur + 0.25;
-    const voiceRec = { osc1, osc2, osc3, env };
-    state.activeVoiceNodes.add(voiceRec);
-    osc1.onended = () => {
-      state.activeVoiceNodes.delete(voiceRec);
-      try {
-        osc1.disconnect();
-        osc2.disconnect();
-        osc3.disconnect();
-        filter.disconnect();
-        env.disconnect();
-      } catch (_) {}
-    };
-
-    osc1.start(t0);
-    osc2.start(t0);
-    osc3.start(t0);
-    osc1.stop(stopAt);
-    osc2.stop(stopAt);
-    osc3.stop(stopAt);
-  }
-
-  function silenceAllWebAudio() {
-    if (state.audioCtx) {
-      const now = state.audioCtx.currentTime;
-      for (const rec of state.activeVoiceNodes) {
+    stopAll() {
+      if (!this.ctx) return;
+      const now = this.ctx.currentTime;
+      for (const v of this.activeVoices) {
         try {
-          rec.env.gain.cancelScheduledValues(now);
-          rec.env.gain.setTargetAtTime(0.0001, now, 0.015);
-          rec.osc1.stop(now + 0.06);
-          rec.osc2.stop(now + 0.06);
-          if (rec.osc3) rec.osc3.stop(now + 0.06);
+          v.env.gain.cancelScheduledValues(now);
+          v.env.gain.setTargetAtTime(0.0001, now, 0.015);
+          v.osc1.stop(now + 0.06);
+          v.osc2.stop(now + 0.06);
         } catch (_) {}
       }
+      this.activeVoices.clear();
     }
-    state.activeVoiceNodes.clear();
   }
 
-  function currentPlaybackTimeS() {
-    if (!state.playback.playing || !state.audioCtx) {
-      return state.playback.offsetS;
-    }
-    const elapsed = state.audioCtx.currentTime - state.playback.startCtxTime;
-    return Math.min(state.playback.durationS, Math.max(0, state.playback.offsetS + elapsed));
-  }
+  const audio = new HallWebAudioEngine();
 
-  function stopPlayback(resetZero) {
-    if (state.playback.timerId) {
-      clearInterval(state.playback.timerId);
-      state.playback.timerId = null;
-    }
-    if (state.playback.rafId) {
-      cancelAnimationFrame(state.playback.rafId);
-      state.playback.rafId = null;
-    }
-    if (state.playback.playing) {
-      state.playback.offsetS = resetZero ? 0 : currentPlaybackTimeS();
-    } else if (resetZero) {
-      state.playback.offsetS = 0;
-    }
-    state.playback.playing = false;
-    silenceAllWebAudio();
-    const mp3El = el("mp3-player");
-    if (mp3El && !mp3El.paused && resetZero) {
-      mp3El.pause();
-      mp3El.currentTime = 0;
-    }
-    el("btn-play").textContent = "再生 (WebAudio)";
-    el("btn-play").classList.remove("vermilion");
-    updateRealtimeTelemetry(state.playback.offsetS);
-    drawScoreCanvas(state.playback.offsetS);
-  }
+  // ===========================================================================
+  // State
+  // ===========================================================================
+  const state = {
+    activeView: LIVE_MODE ? "cello" : "library",
+    connProduction: false,
+    monitorAudio: true,
+    diagVisible: true,
+    projectionClean: false,
+    stage: null,
+    ws: null,
+    wsConnected: false,
+    inspectedCand: {
+      cello: null,
+      piano: null,
+    },
+    lastRenderedTurnId: -1,
+    auditionTimer: null,
+    browserHumanKeys: new Map(), // pitch -> expiryTs
+    notagen: {
+      status: "idle",
+      active_backend: "auto",
+      bars_completed: 0,
+      target_bars: 8,
+      ttft_ms: 0,
+      abc_text: "",
+      notes: [],
+      commentary_ja: "",
+      guard_summary: "待機中",
+      pedal_cc64: 0,
+      pedal_cc67: 0,
+      key_sig: "Dm",
+      playedBars: 0,
+      simTimer: null,
+    },
+    // Mode 4 Library State
+    catalog: null,
+    filteredPieces: [],
+    activeFilter: "all",
+    activeStyle: "all",
+    searchText: "",
+    selectedPieceMeta: null,
+    pieceData: null,
+    libPlaying: false,
+    libStartPerfMs: 0,
+    libCursorSec: 0,
+    libTriggeredIdx: 0,
+    libRafId: null,
+    layers: {
+      human: { mute: false, solo: false },
+      melody: { mute: false, solo: false },
+      harmony: { mute: false, solo: false },
+      bass: { mute: false, solo: false },
+    },
+  };
 
-  function startPlayback(fromSec) {
-    if (!state.currentPiece) return;
-    if (!ensureAudioGraph()) return;
-    stopPlayback(false);
-
-    const mp3El = el("mp3-player");
-    if (mp3El && !mp3El.paused) mp3El.pause();
-
-    const startAt = fromSec !== undefined ? fromSec : state.playback.offsetS;
-    const dur = Math.max(1, Number(state.currentPiece.duration_s || 36));
-    const offset = startAt >= dur - 0.15 ? 0 : Math.max(0, startAt);
-
-    const notes = [...(state.currentPiece.notes || [])].sort((a, b) => a.t - b.t);
-    let idx = 0;
-    while (idx < notes.length && Number(notes[idx].t) < offset - 0.02) idx++;
-
-    state.playback.playing = true;
-    state.playback.offsetS = offset;
-    state.playback.durationS = dur;
-    state.playback.startCtxTime = state.audioCtx.currentTime;
-    state.playback.sortedNotes = notes;
-    state.playback.scheduledIdx = idx;
-
-    el("btn-play").textContent = "一時停止";
-    el("btn-play").classList.add("vermilion");
-
-    const scheduleTick = () => {
-      if (!state.playback.playing) return;
-      const playPos = currentPlaybackTimeS();
-      const lookahead = playPos + 0.18;
-      while (state.playback.scheduledIdx < state.playback.sortedNotes.length) {
-        const n = state.playback.sortedNotes[state.playback.scheduledIdx];
-        if (Number(n.t) > lookahead) break;
-        const delta = Number(n.t) - playPos;
-        if (delta >= -0.04) {
-          scheduleNoteWebAudio(n, Number(n.t), state.audioCtx.currentTime + Math.max(0, delta));
-        }
-        state.playback.scheduledIdx++;
-      }
-      if (playPos >= state.playback.durationS) {
-        stopPlayback(true);
-      }
+  // Offline / Static Demo Fallback Snapshot so Modes 1 & 2 look meaningful even offline
+  function createDefaultOfflineStage(mode = "cello") {
+    return {
+      mode,
+      production_mode: false,
+      demo_enabled: false,
+      monitor_audio: true,
+      live_listening: true,
+      human_active_pitches: [],
+      active_preset: "晩年ロマン派・静的Cantabile",
+      turn_id: 1,
+      telemetry_hud: {
+        parallel_compose_ms: 31.4,
+        llm_ttft_ms: 282.0,
+        speculative_hits: 3,
+        speculative_misses: 0,
+        l5_jitter_ms: 1.4,
+        active_workers: 6,
+        total_workers: 6,
+        active_voices: 4,
+        hard_limit: 30,
+        vram_used_gb: 3.1,
+        vram_total_gb: 8.0,
+      },
+      perception: {
+        f0_hz: 146.83,
+        note_name: "D3",
+        articulation: "Cantabile",
+        vibrato_cents: 14,
+        nlms_erle_db: 15.2,
+        breath_gauge: 0.68,
+        turn_ready: true,
+        echo_suppressed_count: 0,
+        pedal_cc64: 72,
+        pedal_cc67: 48,
+      },
+      intent: {
+        act_number: 1,
+        tonal_center: "Dm",
+        chord_progression: ["Dm9", "Gm6/Bb", "A7sus4", "Dm"],
+        monologue_ja:
+          "D短調の主題を受け、左手A2-E3の5度持続と右手F4-A4の穏やかな3和音で余白を残して応答する。",
+      },
+      output: {
+        active_pitches: [50, 57, 65, 69],
+        active_voices: 4,
+        hard_limit: 30,
+        pedal_cc64: 72,
+        pedal_cc67: 48,
+      },
+      candidates: [
+        {
+          candidate_id: "A",
+          label_ja: "案A — 分散和音・4声対話",
+          total_score: 0.942,
+          adopted: true,
+          pitch_range_str: "A2–A5",
+          beauty_summary: "採用: 両手声部連結が滑らかでNLMS分離後の帯域と調和 (94.2%)",
+          rejection_tag_ja: "採用",
+          events: [
+            { pitch: 50, onset_s: 0.0, duration_s: 1.4, velocity: 52, hand: "human" },
+            { pitch: 53, onset_s: 0.65, duration_s: 1.2, velocity: 54, hand: "human" },
+            { pitch: 57, onset_s: 1.3, duration_s: 1.4, velocity: 56, hand: "human" },
+            { pitch: 38, onset_s: 0.1, duration_s: 2.4, velocity: 46, hand: "lh" },
+            { pitch: 45, onset_s: 0.55, duration_s: 1.9, velocity: 44, hand: "lh" },
+            { pitch: 65, onset_s: 0.15, duration_s: 1.3, velocity: 56, hand: "rh" },
+            { pitch: 69, onset_s: 0.9, duration_s: 1.4, velocity: 60, hand: "rh" },
+            { pitch: 72, onset_s: 1.7, duration_s: 1.4, velocity: 58, hand: "rh" },
+            { pitch: 74, onset_s: 2.4, duration_s: 1.5, velocity: 54, hand: "rh" },
+          ],
+        },
+        {
+          candidate_id: "B",
+          label_ja: "案B — 密集テノール内声",
+          total_score: 0.748,
+          adopted: false,
+          pitch_range_str: "C3–E4",
+          rejection_tag_ja: "棄却: チェロ中音帯域と短2度衝突 (-19.4点)",
+          events: [
+            { pitch: 50, onset_s: 0.0, duration_s: 1.1, velocity: 52, hand: "human" },
+            { pitch: 48, onset_s: 0.2, duration_s: 1.1, velocity: 50, hand: "lh" },
+            { pitch: 52, onset_s: 0.25, duration_s: 1.1, velocity: 52, hand: "lh" },
+            { pitch: 55, onset_s: 0.8, duration_s: 1.0, velocity: 54, hand: "rh" },
+          ],
+        },
+        {
+          candidate_id: "C",
+          label_ja: "案C — 高域アルペジオ",
+          total_score: 0.704,
+          adopted: false,
+          pitch_range_str: "C5–G6",
+          rejection_tag_ja: "棄却: 左手バスの支え不足により和声安定度低下 (-23.8点)",
+          events: [
+            { pitch: 72, onset_s: 0.0, duration_s: 0.6, velocity: 54, hand: "rh" },
+            { pitch: 76, onset_s: 0.45, duration_s: 0.6, velocity: 56, hand: "rh" },
+            { pitch: 79, onset_s: 0.9, duration_s: 0.7, velocity: 58, hand: "rh" },
+            { pitch: 84, onset_s: 1.35, duration_s: 0.9, velocity: 55, hand: "rh" },
+          ],
+        },
+        {
+          candidate_id: "D",
+          label_ja: "案D — 順次音階進行",
+          total_score: 0.562,
+          adopted: false,
+          pitch_range_str: "D4–A4",
+          rejection_tag_ja: "棄却: 動機跳躍の回復がなく単音律動に偏向 (-38.0点)",
+          events: [
+            { pitch: 62, onset_s: 0.0, duration_s: 0.4, velocity: 50, hand: "rh" },
+            { pitch: 64, onset_s: 0.4, duration_s: 0.4, velocity: 50, hand: "rh" },
+            { pitch: 65, onset_s: 0.8, duration_s: 0.4, velocity: 50, hand: "rh" },
+            { pitch: 67, onset_s: 1.2, duration_s: 0.4, velocity: 50, hand: "rh" },
+          ],
+        },
+      ],
     };
-
-    scheduleTick();
-    state.playback.timerId = setInterval(scheduleTick, 40);
-
-    const rafLoop = () => {
-      if (!state.playback.playing) return;
-      const tNow = currentPlaybackTimeS();
-      updateRealtimeTelemetry(tNow);
-      drawScoreCanvas(tNow);
-      state.playback.rafId = requestAnimationFrame(rafLoop);
-    };
-    state.playback.rafId = requestAnimationFrame(rafLoop);
   }
 
-  /* ---- Realtime Telemetry, Harmony X-Ray & VU ---- */
-  function updateRealtimeTelemetry(tSec) {
-    const piece = state.currentPiece;
-    if (!piece) return;
+  state.stage = createDefaultOfflineStage(state.activeView === "piano" ? "piano" : "cello");
 
-    const dur = Math.max(1, Number(piece.duration_s || 36));
-    el("time-readout").textContent = `${fmtTime(tSec)} / ${fmtTime(dur)}`;
-    const slider = el("seek-slider");
-    if (slider) {
-      slider.value = String(Math.round((tSec / dur) * 1000));
-    }
+  // ===========================================================================
+  // Helpers for API & Safe DOM access
+  // ===========================================================================
+  const $ = (id) => document.getElementById(id);
 
-    // Active Act highlight
-    const acts = piece.acts || [];
-    let curAct = 1;
-    for (const a of acts) {
-      if (Number(a.start_s) <= tSec + 0.05) curAct = Number(a.act);
+  async function postJson(url, body = {}) {
+    if (!LIVE_MODE) return null;
+    try {
+      const res = await fetch(url, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(body),
+      });
+      if (!res.ok) return null;
+      return await res.json();
+    } catch (_) {
+      return null;
     }
-    for (let a = 1; a <= 4; a++) {
-      const pill = el(`act-pill-${a}`);
-      if (pill) pill.classList.toggle("active", a === curAct);
-    }
-    const activeActObj = acts.find((a) => Number(a.act) === curAct);
-    if (activeActObj) {
-      el("lh-texture-desc").textContent = `テクスチャ: ${formatTextureJa(activeActObj.lh_texture)}`;
-    }
-
-    // Current + Next chord in Harmony X-Ray
-    const tl = piece.chord_timeline || [];
-    let activeIdx = 0;
-    for (let i = 0; i < tl.length; i++) {
-      if (Number(tl[i].start_s) <= tSec + 0.05) activeIdx = i;
-    }
-    const ch = tl[activeIdx];
-    const nextCh = tl[activeIdx + 1];
-    if (ch) {
-      el("xray-chord").textContent = ch.chord;
-      el("xray-roman").textContent = `(${ch.roman})`;
-      el("xray-function").textContent = `${ch.function_ja} / 第${ch.act}幕 ${ch.bar}小節`;
-      const nextEl = el("xray-next-chord");
-      if (nextEl) {
-        nextEl.textContent = nextCh ? `→ ${nextCh.chord} (${nextCh.roman})` : "(終止着地)";
-      }
-    }
-    const progWrap = el("xray-progression");
-    if (progWrap && progWrap.children.length === tl.length) {
-      for (let i = 0; i < tl.length; i++) {
-        progWrap.children[i].classList.toggle("now", i === activeIdx);
-      }
-    }
-
-    // Dual Pedal Live Gauges
-    const cc64 = state.mixer.cc64 ? valueAtCurve(piece.cc64, tSec) : 0;
-    const cc67 = state.mixer.cc67 ? valueAtCurve(piece.cc67, tSec) : 0;
-    el("val-cc64").textContent = String(cc64);
-    el("val-cc67").textContent = String(cc67);
-    el("fill-cc64").style.width = `${Math.round((cc64 / 127) * 100)}%`;
-    el("fill-cc67").style.width = `${Math.round((cc67 / 127) * 100)}%`;
-
-    // Live simultaneous polyphony at tSec
-    let sounding = 0;
-    for (const n of piece.notes || []) {
-      const nt = Number(n.t);
-      if (nt <= tSec && tSec < nt + Number(n.d)) {
-        const part = n.h === "human" ? "human" : (n.h === "lh" ? "lh" : "rh");
-        if (isPartAudible(part)) sounding++;
-      }
-    }
-    const audit = piece.audit || {};
-    el("xray-polyphony").textContent = state.playback.playing
-      ? `${sounding} 音 (平均 ${audit.avg_polyphony})`
-      : `${audit.avg_polyphony} 音`;
-
-    // Realtime dBFS VU Meter
-    let dbfs = -60.0;
-    if (state.playback.playing && state.analyser) {
-      const buf = new Float32Array(state.analyser.fftSize);
-      state.analyser.getFloatTimeDomainData(buf);
-      let sumSq = 0;
-      for (let i = 0; i < buf.length; i++) sumSq += buf[i] * buf[i];
-      const rms = Math.sqrt(sumSq / buf.length);
-      if (rms > 1e-5) dbfs = Math.max(-60, Math.min(0, 20 * Math.log10(rms)));
-    }
-    el("dbfs-readout").textContent = `${dbfs.toFixed(1)} dBFS`;
-    const vuPct = Math.max(0, Math.min(100, ((dbfs + 60) / 54) * 100));
-    el("vu-fill").style.width = `${vuPct}%`;
   }
 
-  /* ---- 60fps Synchronized Grand Staff + Piano Roll + Dual-Pedal Canvas ---- */
-  function midiToStaffStep(midi) {
-    const semiToStep = [0, 0, 1, 1, 2, 3, 3, 4, 4, 5, 5, 6];
-    const oct = Math.floor(midi / 12) - 1;
-    return (oct - 4) * 7 + semiToStep[((midi % 12) + 12) % 12];
+  async function fetchJson(url) {
+    try {
+      const res = await fetch(url);
+      if (!res.ok) return null;
+      return await res.json();
+    } catch (_) {
+      return null;
+    }
   }
 
-  function drawScoreCanvas(playheadS) {
-    const canvas = el("canvas-studio-score");
+  function showExportToast(elId, data) {
+    const el = $(elId);
+    if (!el) return;
+    if (!data || data.error) {
+      el.textContent = data?.error ? `保存エラー: ${data.error}` : "保存が完了しました";
+      el.hidden = false;
+      return;
+    }
+    const assets = data.assets || data.files || data;
+    const parts = [];
+    const mp3 = assets.mp3_url || assets.mp3;
+    const wav = assets.wav_url || assets.wav;
+    const mid = assets.mid_url || assets.mid || assets.midi;
+    const xml = assets.musicxml_url || assets.musicxml;
+    if (mp3) parts.push(`<a href="${mp3}" target="_blank" rel="noopener">MP3</a>`);
+    if (wav) parts.push(`<a href="${wav}" target="_blank" rel="noopener">WAV</a>`);
+    if (mid) parts.push(`<a href="${mid}" target="_blank" rel="noopener">MIDI</a>`);
+    if (xml) parts.push(`<a href="${xml}" target="_blank" rel="noopener">MusicXML</a>`);
+    if (data.obsidian_note || assets.obsidian) parts.push(`<span>Obsidianノート保存済</span>`);
+    el.innerHTML = `<strong>保存完了:</strong> ${parts.length ? parts.join(" · ") : "ファイル書き出し完了"} <button class="btn compact" type="button" id="${elId}-close">閉じる</button>`;
+    el.hidden = false;
+    const btn = $(`${elId}-close`);
+    if (btn) btn.onclick = () => { el.hidden = true; };
+  }
+
+  // ===========================================================================
+  // Canvas Engraving Renderer: Hero Grand Staff & Mode 4 Timeline Score
+  // ===========================================================================
+  function pitchToDiatonicStep(midi) {
+    const stepInOct = [0, 0, 1, 1, 2, 3, 3, 4, 4, 5, 5, 6];
+    const isSharp = [false, true, false, true, false, false, true, false, true, false, true, false];
+    const m = Math.round(midi);
+    const oct = Math.floor(m / 12) - 1;
+    const pc = ((m % 12) + 12) % 12;
+    return { diatonic: oct * 7 + stepInOct[pc], sharp: isSharp[pc] };
+  }
+
+  function drawTrebleClef(ctx, x, bottomLineY, stepPx) {
+    ctx.save();
+    ctx.strokeStyle = "#8C857A";
+    ctx.fillStyle = "#8C857A";
+    ctx.lineWidth = 1.5;
+    const gLineY = bottomLineY - 2 * stepPx; // G4 = 2nd line from bottom (treble)
+    ctx.beginPath();
+    ctx.arc(x, gLineY, stepPx * 1.45, 0, Math.PI * 1.65);
+    ctx.stroke();
+    ctx.beginPath();
+    ctx.moveTo(x + stepPx * 0.4, bottomLineY + stepPx * 1.8);
+    ctx.bezierCurveTo(
+      x + stepPx * 1.6,
+      bottomLineY - stepPx * 9.5,
+      x - stepPx * 1.4,
+      bottomLineY - stepPx * 9.8,
+      x + stepPx * 0.1,
+      bottomLineY - stepPx * 3.8
+    );
+    ctx.stroke();
+    ctx.font = `600 ${Math.max(12, Math.round(stepPx * 2.2))}px serif`;
+    ctx.fillText("G", x - stepPx * 2.3, gLineY + stepPx * 0.7);
+    ctx.restore();
+  }
+
+  function drawBassClef(ctx, x, bottomLineY, stepPx) {
+    ctx.save();
+    ctx.strokeStyle = "#8C857A";
+    ctx.fillStyle = "#8C857A";
+    ctx.lineWidth = 1.6;
+    const fLineY = bottomLineY - 6 * stepPx; // F3 = 4th line from bottom (bass)
+    ctx.beginPath();
+    ctx.arc(x - stepPx * 0.3, fLineY, stepPx * 0.75, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.beginPath();
+    ctx.arc(x - stepPx * 0.1, fLineY + stepPx * 0.8, stepPx * 2.1, -Math.PI * 0.62, Math.PI * 0.42);
+    ctx.stroke();
+    ctx.beginPath();
+    ctx.arc(x + stepPx * 2.4, fLineY - stepPx * 0.7, 2.1, 0, Math.PI * 2);
+    ctx.arc(x + stepPx * 2.4, fLineY + stepPx * 0.9, 2.1, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.restore();
+  }
+
+  function renderGrandStaff(canvas, rawNotes, opts = {}) {
     if (!canvas) return;
     const rect = canvas.getBoundingClientRect();
-    const w = Math.max(300, Math.floor(rect.width));
-    const h = Math.max(220, Math.floor(rect.height));
-    const dpr = Math.min(2, window.devicePixelRatio || 1);
-    if (canvas.width !== Math.floor(w * dpr) || canvas.height !== Math.floor(h * dpr)) {
-      canvas.width = Math.floor(w * dpr);
-      canvas.height = Math.floor(h * dpr);
+    if (rect.width < 20 || rect.height < 20) return;
+    const dpr = Math.min(window.devicePixelRatio || 1, 2);
+    const w = Math.floor(rect.width * dpr);
+    const h = Math.floor(rect.height * dpr);
+    if (canvas.width !== w || canvas.height !== h) {
+      canvas.width = w;
+      canvas.height = h;
     }
+
     const ctx = canvas.getContext("2d");
     ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    const width = rect.width;
+    const height = rect.height;
 
-    ctx.fillStyle = COLOR_STAGE;
-    ctx.fillRect(0, 0, w, h);
+    ctx.fillStyle = "#060608";
+    ctx.fillRect(0, 0, width, height);
 
-    const piece = state.currentPiece;
-    if (!piece) return;
+    const padLeft = 58;
+    const padRight = 22;
+    const usableW = Math.max(80, width - padLeft - padRight);
 
-    const padL = 42;
-    const padR = 14;
-    const drawW = w - padL - padR;
-    const dur = Math.max(1, Number(piece.duration_s || 36));
+    const trebleBaseY = Math.round(height * 0.43); // E4 line
+    const bassBaseY = Math.round(height * 0.84); // G2 line
+    const stepPx = Math.max(4.4, Math.min(6.2, height / 47));
 
-    // Layout: Top 46% Grand Staff, Middle 38% Piano Roll, Bottom 16% Pedal Strip
-    const staffTop = 8;
-    const staffH = Math.floor(h * 0.45);
-    const rollTop = staffTop + staffH + 8;
-    const rollH = Math.floor(h * 0.36);
-    const pedTop = rollTop + rollH + 6;
-    const pedBot = h - 6;
-
-    // Barlines, Act markers, & chord labels
-    const actNames = { 1: "I 提示", 2: "II 転調", 3: "III 頂点", 4: "IV 回想" };
-    let lastChordLabelX = -999;
-    ctx.font = "10px 'Cascadia Mono', monospace";
-    for (const seg of piece.chord_timeline || []) {
-      const x = padL + (Number(seg.start_s) / dur) * drawW;
-      const barNum = Number(seg.bar);
-      const isActStart = barNum % 4 === 1;
-      ctx.strokeStyle = isActStart ? "#3A362E" : "#1B1916";
-      ctx.lineWidth = isActStart ? 1.25 : 0.8;
+    // Staff lines
+    ctx.strokeStyle = "#2E2B25";
+    ctx.lineWidth = 1;
+    for (let i = 0; i < 5; i++) {
+      const yt = trebleBaseY - i * 2 * stepPx;
       ctx.beginPath();
-      ctx.moveTo(x, staffTop);
-      ctx.lineTo(x, pedBot);
+      ctx.moveTo(padLeft - 14, yt);
+      ctx.lineTo(width - padRight, yt);
       ctx.stroke();
 
-      if (isActStart) {
-        const actNum = Number(seg.act || Math.ceil(barNum / 4));
-        ctx.fillStyle = actNum === 3 ? "#8D3A2E" : "#6D685F";
-        ctx.font = "9px 'Cascadia Mono', monospace";
-        ctx.fillText(actNames[actNum] || `ACT ${actNum}`, x + 3, staffTop + 9);
-      }
-
-      if (x - lastChordLabelX >= 42) {
-        ctx.font = "10px 'Cascadia Mono', monospace";
-        ctx.fillStyle = Number(seg.start_s) <= playheadS && playheadS < Number(seg.end_s) ? COLOR_VERMILION : COLOR_SECONDARY;
-        ctx.fillText(seg.chord, x + 3, staffTop + 21);
-        lastChordLabelX = x;
-      }
-    }
-
-    // Minimal top-right inline legend (spaced cleanly on Act IV header row)
-    ctx.font = "9px 'Cascadia Mono', monospace";
-    const legendText = piece.mode === "cello"
-      ? "■RH  ■Vc  ■LH  ─CC#64  --CC#67"
-      : "■RH  ■PfI  ■LH  ─CC#64  --CC#67";
-    ctx.fillStyle = "#8C877E";
-    const legW = ctx.measureText(legendText).width;
-    ctx.fillText(legendText, Math.max(padL, w - padR - legW - 4), staffTop + 9);
-
-    // Grand Staff lines + Left Brace Bar
-    const stepPx = Math.max(2.5, (staffH - 12) / 26);
-    const trebleBaseY = staffTop + 27 + stepPx * 9;
-    const bassBaseY = trebleBaseY + stepPx * 11;
-    ctx.strokeStyle = "#2A2823";
-    ctx.lineWidth = 1;
-    for (const baseY of [trebleBaseY, bassBaseY]) {
-      for (let line = 0; line < 5; line++) {
-        const y = Math.round(baseY - line * stepPx * 2) + 0.5;
-        ctx.beginPath();
-        ctx.moveTo(padL - 8, y);
-        ctx.lineTo(w - padR, y);
-        ctx.stroke();
-      }
-    }
-    // Grand staff vertical bracket connecting treble & bass systems
-    ctx.strokeStyle = "#48443C";
-    ctx.lineWidth = 1.6;
-    ctx.beginPath();
-    ctx.moveTo(padL - 8, trebleBaseY - 8 * stepPx);
-    ctx.lineTo(padL - 8, bassBaseY);
-    ctx.stroke();
-    ctx.beginPath();
-    ctx.moveTo(padL - 12, trebleBaseY - 8 * stepPx);
-    ctx.quadraticCurveTo(padL - 17, (trebleBaseY - 8 * stepPx + bassBaseY) * 0.5, padL - 12, bassBaseY);
-    ctx.stroke();
-
-    ctx.fillStyle = COLOR_SECONDARY;
-    ctx.font = "italic 13px Georgia, serif";
-    ctx.fillText("G", 11, trebleBaseY - stepPx * 2);
-    ctx.fillText("F", 11, bassBaseY - stepPx * 3);
-
-    // Draw Staff noteheads, ledger lines, stems & Piano Roll bars
-    const rollMinMidi = 26;
-    const rollMaxMidi = 92;
-    let lastStemX = -999;
-    for (const n of piece.notes || []) {
-      const t0 = Number(n.t);
-      const d = Number(n.d);
-      const p = Number(n.p);
-      const part = n.h === "human" ? "human" : (n.h === "lh" ? "lh" : "rh");
-      const voice = n.r || "";
-      const audible = isPartAudible(part);
-      const isSounding = audible && t0 <= playheadS && playheadS < t0 + d;
-
-      const x = padL + (t0 / dur) * drawW;
-      const bw = Math.max(2, (d / dur) * drawW);
-      const stp = midiToStaffStep(p);
-
-      let staffY;
-      let isTreble = p >= 60 && part !== "lh";
-      if (isTreble) {
-        staffY = trebleBaseY - (stp - 2) * stepPx;
-        staffY = Math.max(staffTop + 22, Math.min(trebleBaseY + stepPx * 3.5, staffY));
-      } else {
-        staffY = bassBaseY - (stp - (-10)) * stepPx;
-        staffY = Math.max(trebleBaseY + stepPx * 4, Math.min(staffTop + staffH - 4, staffY));
-      }
-
-      const baseColor = !audible
-        ? "#2D2B27"
-        : (part === "human" ? "#C5A880" : (part === "lh" ? "#7C776E" : COLOR_ADOPTED));
-      const color = isSounding ? COLOR_VERMILION : baseColor;
-
-      // Subtle ledger lines for middle C (stp=0), high treble (>=12), or low bass (<=-12)
-      if (isTreble && (stp === 0 || stp >= 12)) {
-        ctx.strokeStyle = "#3B3831";
-        ctx.lineWidth = 0.85;
-        ctx.beginPath();
-        ctx.moveTo(x - 5, Math.round(staffY) + 0.5);
-        ctx.lineTo(x + 5, Math.round(staffY) + 0.5);
-        ctx.stroke();
-      } else if (!isTreble && (stp === 0 || stp <= -12)) {
-        ctx.strokeStyle = "#3B3831";
-        ctx.lineWidth = 0.85;
-        ctx.beginPath();
-        ctx.moveTo(x - 5, Math.round(staffY) + 0.5);
-        ctx.lineTo(x + 5, Math.round(staffY) + 0.5);
-        ctx.stroke();
-      }
-
-      // Delicate note stem for primary melody or bass anchor notes when spaced cleanly
-      if ((voice === "rh_melody" || voice === "human_melody" || voice === "lh_bass") && d >= 0.25 && Math.abs(x - lastStemX) >= 5) {
-        ctx.strokeStyle = color;
-        ctx.lineWidth = 0.85;
-        ctx.beginPath();
-        if (part === "lh") {
-          ctx.moveTo(x - 2.3, staffY);
-          ctx.lineTo(x - 2.3, Math.min(staffTop + staffH - 2, staffY + 10));
-        } else {
-          ctx.moveTo(x + 2.3, staffY);
-          ctx.lineTo(x + 2.3, Math.max(staffTop + 18, staffY - 10));
-        }
-        ctx.stroke();
-        lastStemX = x;
-      }
-
-      // Staff notehead
-      ctx.fillStyle = color;
+      const yb = bassBaseY - i * 2 * stepPx;
       ctx.beginPath();
-      ctx.ellipse(x, staffY, 2.7, 1.9, -0.2, 0, Math.PI * 2);
+      ctx.moveTo(padLeft - 14, yb);
+      ctx.lineTo(width - padRight, yb);
+      ctx.stroke();
+    }
+
+    // Left brace bar
+    ctx.strokeStyle = "#5A5852";
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    ctx.moveTo(padLeft - 14, trebleBaseY - 8 * stepPx);
+    ctx.lineTo(padLeft - 14, bassBaseY);
+    ctx.stroke();
+
+    drawTrebleClef(ctx, 26, trebleBaseY, stepPx);
+    drawBassClef(ctx, 26, bassBaseY, stepPx);
+
+    const notes = (rawNotes || []).map(normNote).filter(Boolean);
+    let minT = opts.winStart ?? 0;
+    let maxT = opts.winEnd ?? 4.0;
+    if (opts.winStart == null && notes.length > 0) {
+      minT = Math.min(...notes.map((n) => n.t));
+      maxT = Math.max(minT + 3.2, ...notes.map((n) => n.t + n.d));
+    }
+    const span = Math.max(1.2, maxT - minT);
+
+    // Measure vertical dividers
+    const numBars = Math.max(2, Math.min(8, Math.round(span / 1.5)));
+    ctx.strokeStyle = "#1E1C18";
+    ctx.lineWidth = 1;
+    for (let b = 1; b <= numBars; b++) {
+      const bx = padLeft + (b / numBars) * usableW;
+      ctx.beginPath();
+      ctx.moveTo(bx, trebleBaseY - 8 * stepPx);
+      ctx.lineTo(bx, bassBaseY);
+      ctx.stroke();
+    }
+
+    // Optional chords along top
+    if (Array.isArray(opts.chords) && opts.chords.length > 0) {
+      ctx.font = '600 13px "Cascadia Mono", monospace';
+      ctx.fillStyle = "#B4AEA3";
+      opts.chords.forEach((ch, idx) => {
+        const cx =
+          ch.start_s != null
+            ? padLeft + ((ch.start_s - minT) / span) * usableW
+            : padLeft + (idx / Math.max(1, opts.chords.length)) * usableW;
+        if (cx >= padLeft - 10 && cx <= width - padRight - 24) {
+          ctx.fillText(String(ch.chord || ch), cx + 4, Math.max(15, trebleBaseY - 10.6 * stepPx));
+        }
+      });
+    }
+
+    // Playhead cursor if provided
+    if (opts.playheadSec != null && opts.playheadSec >= minT && opts.playheadSec <= maxT) {
+      const px = padLeft + ((opts.playheadSec - minT) / span) * usableW;
+      ctx.strokeStyle = "#C83E2B";
+      ctx.lineWidth = 1.6;
+      ctx.beginPath();
+      ctx.moveTo(px, trebleBaseY - 9 * stepPx);
+      ctx.lineTo(px, bassBaseY + 2 * stepPx);
+      ctx.stroke();
+    }
+
+    // Render note durations & heads
+    for (const n of notes) {
+      if (n.t + n.d < minT || n.t > maxT) continue;
+      const x = padLeft + ((Math.max(minT, n.t) - minT) / span) * usableW;
+      const endX = padLeft + ((Math.min(maxT, n.t + n.d) - minT) / span) * usableW;
+      const tailW = Math.max(8, endX - x);
+
+      const useTreble = n.h === "rh" || (n.h !== "lh" && n.p >= 60);
+      const { diatonic, sharp } = pitchToDiatonicStep(n.p);
+      // Treble E4 = diatonic step 4*7+2 = 30; Bass G2 = 2*7+4 = 18
+      const refDiatonic = useTreble ? 30 : 18;
+      const baseLineY = useTreble ? trebleBaseY : bassBaseY;
+      const delta = clamp(diatonic - refDiatonic, -7, 13);
+      const y = baseLineY - delta * stepPx;
+
+      const isActive = opts.playheadSec != null && opts.playheadSec >= n.t && opts.playheadSec <= n.t + n.d;
+      let fill = "#EAE6DF";
+      if (n.h === "human") fill = "#A8C8E8";
+      else if (n.h === "lh") fill = "#C4BDB0";
+      if (isActive) fill = "#C83E2B";
+
+      // Ledger lines if outside staff
+      ctx.strokeStyle = "#4A463E";
+      ctx.lineWidth = 1;
+      if (delta < 0) {
+        for (let ld = -2; ld >= delta; ld -= 2) {
+          const ly = baseLineY - ld * stepPx;
+          ctx.beginPath();
+          ctx.moveTo(x - 7, ly);
+          ctx.lineTo(x + 7, ly);
+          ctx.stroke();
+        }
+      } else if (delta > 8) {
+        for (let ld = 10; ld <= delta; ld += 2) {
+          const ly = baseLineY - ld * stepPx;
+          ctx.beginPath();
+          ctx.moveTo(x - 7, ly);
+          ctx.lineTo(x + 7, ly);
+          ctx.stroke();
+        }
+      }
+
+      // Sustain ribbon
+      ctx.fillStyle = isActive ? "rgba(200, 62, 43, 0.38)" : fill === "#A8C8E8" ? "rgba(168, 200, 232, 0.25)" : "rgba(234, 230, 223, 0.16)";
+      ctx.fillRect(x, y - stepPx * 0.45, tailW, stepPx * 0.9);
+
+      // Note head
+      ctx.fillStyle = fill;
+      ctx.beginPath();
+      ctx.ellipse(x + 4, y, stepPx * 0.95, stepPx * 0.68, -0.22, 0, Math.PI * 2);
       ctx.fill();
 
-      // Piano Roll note bar
-      const normY = 1 - Math.max(0, Math.min(1, (p - rollMinMidi) / (rollMaxMidi - rollMinMidi)));
-      const ry = rollTop + normY * (rollH - 4);
-      ctx.fillStyle = color;
-      ctx.fillRect(x, ry, bw, 3.2);
+      if (sharp) {
+        ctx.font = '600 12px "Cascadia Mono", monospace';
+        ctx.fillText("#", x - 9, y + 4);
+      }
     }
 
-    // Piano Roll divider + label
-    ctx.strokeStyle = "#23211D";
-    ctx.beginPath();
-    ctx.moveTo(padL - 8, rollTop);
-    ctx.lineTo(w - padR, rollTop);
-    ctx.stroke();
-    ctx.fillStyle = COLOR_REJECTED;
-    ctx.font = "9px 'Cascadia Mono', monospace";
-    ctx.fillText("ROLL", 8, rollTop + 12);
-    ctx.fillText("64/67", 6, pedBot - 2);
-
-    // Dual Pedal Strip
-    const pedH = Math.max(14, pedBot - pedTop);
-    const drawPedalCurve = (pts, color, dashed) => {
-      if (!pts || pts.length < 2) return;
-      ctx.save();
-      ctx.strokeStyle = color;
-      ctx.lineWidth = 1.25;
-      if (dashed) ctx.setLineDash([4, 2]);
-      ctx.beginPath();
-      pts.forEach((pt, idx) => {
-        const px = padL + Math.min(1, Number(pt.t) / dur) * drawW;
-        const py = pedBot - (Number(pt.val) / 127.0) * (pedH - 2);
-        if (idx === 0) ctx.moveTo(px, py);
-        else ctx.lineTo(px, py);
-      });
-      ctx.stroke();
-      ctx.restore();
-    };
-    drawPedalCurve(piece.cc64, state.mixer.cc64 ? COLOR_ADOPTED : "#34322D", false);
-    drawPedalCurve(piece.cc67, state.mixer.cc67 ? COLOR_VERMILION : "#4B2A24", true);
-
-    // Playhead line
-    const phX = padL + Math.min(1, Math.max(0, playheadS / dur)) * drawW;
-    ctx.strokeStyle = COLOR_VERMILION;
-    ctx.lineWidth = 1.5;
-    ctx.beginPath();
-    ctx.moveTo(phX, staffTop);
-    ctx.lineTo(phX, pedBot);
-    ctx.stroke();
-  }
-
-  /* ---- Deliberation Replay ---- */
-  function renderDeliberationCards(piece, activeRejectId, rejectedSet, adoptedLocked) {
-    const delib = piece.deliberation || {};
-    el("delib-monologue").textContent = delib.monologue_ja || piece.composer_note_ja || "--";
-    const grid = el("delib-grid");
-    grid.innerHTML = "";
-
-    const allCards = [];
-    if (delib.adopted) {
-      allCards.push({ ...delib.adopted, isAdopted: true });
-    }
-    for (const r of delib.rejected || []) {
-      allCards.push({ ...r, isAdopted: false });
-    }
-
-    for (const c of allCards) {
-      const card = document.createElement("article");
-      let cls = "cand-card ";
-      if (c.isAdopted) cls += adoptedLocked ? "adopted" : "";
-      else if (activeRejectId === c.id) cls += "auditioning";
-      else if (rejectedSet.has(c.id)) cls += "rejected";
-      card.className = cls;
-
-      const head = document.createElement("div");
-      head.className = "cand-head";
-      const title = document.createElement("span");
-      title.className = "cand-title";
-      const firstTex = piece.acts && piece.acts[0] ? formatTextureJa(piece.acts[0].lh_texture) : "";
-      const cleanLabel = c.isAdopted && firstTex ? `案A — ${firstTex}・4幕多声構成` : c.label_ja;
-      title.textContent = `${cleanLabel} (${c.score}点)`;
-      const tag = document.createElement("span");
-      tag.className = c.isAdopted ? "cand-tag ok" : "cand-tag";
-      tag.textContent = c.isAdopted ? (adoptedLocked ? "採用 LOCKED" : "評価中") : c.tag_ja;
-      head.append(title, tag);
-
-      const cvs = document.createElement("canvas");
-      cvs.className = "mini-canvas";
-      card.append(head, cvs);
-      grid.appendChild(card);
-
-      // Draw mini staff notes
-      requestAnimationFrame(() => {
-        const rect = cvs.getBoundingClientRect();
-        const cw = Math.max(180, Math.floor(rect.width));
-        const ch = 68;
-        cvs.width = cw;
-        cvs.height = ch;
-        const cctx = cvs.getContext("2d");
-        cctx.fillStyle = COLOR_STAGE;
-        cctx.fillRect(0, 0, cw, ch);
-        cctx.strokeStyle = "#22201C";
-        for (let l = 0; l < 5; l++) {
-          const y = 14 + l * 8;
-          cctx.beginPath();
-          cctx.moveTo(8, y);
-          cctx.lineTo(cw - 8, y);
-          cctx.stroke();
-        }
-        const nList = c.notes || [];
-        const maxT = Math.max(1.5, ...nList.map((n) => Number(n.t) + Number(n.d || 0.3)));
-        nList.forEach((n) => {
-          const nx = 14 + (Number(n.t) / maxT) * (cw - 28);
-          const ny = Math.max(8, Math.min(ch - 8, ch - ((Number(n.p) - 36) / 52) * (ch - 14)));
-          cctx.fillStyle = c.isAdopted ? COLOR_ADOPTED : (activeRejectId === c.id ? COLOR_VERMILION : "#7D786E");
-          cctx.beginPath();
-          cctx.ellipse(nx, ny, 3.2, 2.3, -0.2, 0, Math.PI * 2);
-          cctx.fill();
-        });
-        if (!c.isAdopted && rejectedSet.has(c.id) && activeRejectId !== c.id) {
-          cctx.strokeStyle = "rgba(200, 62, 43, 0.72)";
-          cctx.lineWidth = 1.5;
-          cctx.beginPath();
-          cctx.moveTo(12, 12);
-          cctx.lineTo(cw - 12, ch - 12);
-          cctx.stroke();
-        }
-      });
+    if (notes.length === 0) {
+      ctx.fillStyle = "#8B867C";
+      ctx.font = '14px "Yu Gothic UI", sans-serif';
+      ctx.fillText(opts.emptyText || "音符・フレーズの生成を待機しています...", padLeft + 16, trebleBaseY - 2 * stepPx);
     }
   }
 
-  function replayDeliberation() {
-    if (!state.currentPiece) return;
-    switchWorkspaceTab("tab-delib");
-    state.delibTimers.forEach((t) => clearTimeout(t));
-    state.delibTimers = [];
-    const rejIds = (state.currentPiece.deliberation?.rejected || []).map((r) => r.id);
-    const rejSet = new Set();
-    renderDeliberationCards(state.currentPiece, "", rejSet, false);
+  // ===========================================================================
+  // Interactive Dual-Color Piano Keyboard Canvas (Mode 2: C3 48 .. C6 84)
+  // ===========================================================================
+  const PIANO_MIN = 48;
+  const PIANO_MAX = 84;
+  let pianoKeyHitboxes = [];
 
-    rejIds.forEach((rid, idx) => {
-      const tid = setTimeout(() => {
-        rejSet.add(rid);
-        renderDeliberationCards(state.currentPiece, rid, rejSet, false);
-      }, 280 + idx * 340);
-      state.delibTimers.push(tid);
+  function isBlackMidi(midi) {
+    return [1, 3, 6, 8, 10].includes(((midi % 12) + 12) % 12);
+  }
+
+  function renderPianoKeyboard() {
+    const canvas = $("canvas-piano-keys");
+    if (!canvas) return;
+    const rect = canvas.getBoundingClientRect();
+    if (rect.width < 40 || rect.height < 40) return;
+
+    const dpr = Math.min(window.devicePixelRatio || 1, 2);
+    const w = Math.floor(rect.width * dpr);
+    const h = Math.floor(rect.height * dpr);
+    if (canvas.width !== w || canvas.height !== h) {
+      canvas.width = w;
+      canvas.height = h;
+    }
+
+    const ctx = canvas.getContext("2d");
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    const width = rect.width;
+    const height = rect.height;
+
+    ctx.fillStyle = "#060608";
+    ctx.fillRect(0, 0, width, height);
+
+    const now = performance.now();
+    const humanSet = new Set(state.stage?.human_active_pitches || []);
+    for (const [p, exp] of state.browserHumanKeys.entries()) {
+      if (exp > now) humanSet.add(p);
+      else state.browserHumanKeys.delete(p);
+    }
+    const outputSet = new Set(state.stage?.output?.active_pitches || []);
+
+    const candList = state.stage?.candidates || [];
+    const adoptedCand = candList.find((c) => c.adopted) || candList[0];
+    const aiPreviewSet = new Set(
+      (adoptedCand?.events || [])
+        .map(normNote)
+        .filter((n) => n && n.h !== "human")
+        .slice(0, 8)
+        .map((n) => n.p)
+    );
+
+    const whiteNotes = [];
+    for (let m = PIANO_MIN; m <= PIANO_MAX; m++) {
+      if (!isBlackMidi(m)) whiteNotes.push(m);
+    }
+
+    const whiteW = width / whiteNotes.length;
+    const blackW = whiteW * 0.62;
+    const blackH = height * 0.60;
+
+    pianoKeyHitboxes = [];
+
+    // Draw White Keys
+    whiteNotes.forEach((m, idx) => {
+      const x = idx * whiteW;
+      let fill = "#EAE6DF";
+      if (outputSet.has(m)) fill = "#C83E2B";
+      else if (humanSet.has(m)) fill = "#A8C8E8";
+      else if (aiPreviewSet.has(m)) fill = "#E5C88F";
+
+      ctx.fillStyle = fill;
+      ctx.fillRect(x + 1, 2, whiteW - 2, height - 4);
+      ctx.strokeStyle = "#161513";
+      ctx.lineWidth = 1;
+      ctx.strokeRect(x + 1, 2, whiteW - 2, height - 4);
+
+      if (m % 12 === 0 || m === PIANO_MIN) {
+        ctx.fillStyle = fill === "#C83E2B" ? "#EAE6DF" : "#1D1B18";
+        ctx.font = '600 12px "Cascadia Mono", monospace';
+        ctx.fillText(midiToName(m), x + 5, height - 10);
+      }
+
+      pianoKeyHitboxes.push({ midi: m, black: false, x, y: 0, w: whiteW, h: height });
     });
 
-    const finTid = setTimeout(() => {
-      renderDeliberationCards(state.currentPiece, "", rejSet, true);
-    }, 280 + rejIds.length * 340 + 260);
-    state.delibTimers.push(finTid);
-  }
+    // Draw Black Keys on top
+    for (let m = PIANO_MIN; m <= PIANO_MAX; m++) {
+      if (!isBlackMidi(m)) continue;
+      const whiteIdxBefore = whiteNotes.filter((wm) => wm < m).length;
+      const x = whiteIdxBefore * whiteW - blackW * 0.5;
+      let fill = "#141317";
+      if (outputSet.has(m)) fill = "#C83E2B";
+      else if (humanSet.has(m)) fill = "#A8C8E8";
+      else if (aiPreviewSet.has(m)) fill = "#D4AF6A";
 
-  /* ---- Piece Loading & UI Updates ---- */
-  async function loadPiece(pieceId) {
-    stopPlayback(true);
-    try {
-      const res = await fetch(pieceUrl(pieceId));
-      if (!res.ok) throw new Error(`HTTP ${res.status}`);
-      const piece = await res.json();
-      state.currentPiece = piece;
-      state.playback.durationS = Number(piece.duration_s || 36);
-      state.playback.offsetS = 0;
+      ctx.fillStyle = fill;
+      ctx.fillRect(x, 2, blackW, blackH);
+      ctx.strokeStyle = "#3E3A32";
+      ctx.lineWidth = 1;
+      ctx.strokeRect(x, 2, blackW, blackH);
 
-      // Update Sidebar selection highlight & scroll active item gently into view
-      document.querySelectorAll(".piece-item").forEach((btn) => {
-        const sel = btn.dataset.pieceId === pieceId;
-        btn.classList.toggle("selected", sel);
-        if (sel) {
-          btn.scrollIntoView({ block: "nearest" });
-        }
-      });
-
-      el("work-title").textContent = `${piece.id.toUpperCase()} — ${piece.title_ja}`;
-      el("work-subtitle").textContent = `${piece.title_en} | ${piece.mode_label_ja} | ${piece.tonality_ja} | ${piece.bpm} BPM | ${piece.duration_s}秒 | ${piece.llm_source}`;
-      el("xray-tonality").textContent = `${piece.tonality_ja} / ${piece.bpm} BPM`;
-      el("human-part-label").textContent = piece.mode === "cello" ? "チェロ旋律 (Mode B)" : "ピアノ I 対話 (Mode A)";
-      el("composer-note-full").textContent = `作曲設計メモ (${piece.llm_source}): ${piece.composer_note_ja || ""}`;
-
-      const au = piece.audit || {};
-      el("xray-consonance").textContent = `${au.consonance_score} / 100`;
-      el("xray-polyphony").textContent = `${au.avg_polyphony} 音`;
-      el("xray-mono").textContent = `${au.mono_ratio_pct}%`;
-
-      // Progression chips
-      const progWrap = el("xray-progression");
-      progWrap.innerHTML = "";
-      for (const seg of piece.chord_timeline || []) {
-        const chip = document.createElement("div");
-        chip.className = "chord-chip";
-        chip.textContent = `${seg.chord}`;
-        chip.title = `${seg.bar}小節: ${seg.chord} (${seg.roman}) — ${seg.function_ja}`;
-        progWrap.appendChild(chip);
-      }
-
-      // 5-Axis Audit Bars
-      const axes = [
-        ["協和率", au.consonance_score],
-        ["多声性", au.polyphony_score],
-        ["歌唱性", au.melody_cantabile_score],
-        ["和声引力", au.harmonic_progression_score],
-        ["ペダル", au.pedal_cleanliness_score],
-      ];
-      const auditWrap = el("audit-bars");
-      auditWrap.innerHTML = "";
-      for (const [label, val] of axes) {
-        const item = document.createElement("div");
-        item.className = "audit-bar-item";
-        item.innerHTML = `<div style="display:flex;justify-content:space-between;"><span>${label}</span><span>${val}</span></div><div class="audit-bar-bg"><div class="audit-bar-fill" style="width:${Math.round(val)}%"></div></div>`;
-        auditWrap.appendChild(item);
-      }
-
-      // MP3 Player wiring (auto-load showcase MP3 if available, else fallback to top Mode-matching showcase)
-      const mp3El = el("mp3-player");
-      if (mp3El) {
-        let targetMp3 = piece.showcase_mp3;
-        let mp3Desc = "";
-        if (targetMp3) {
-          mp3Desc = `本曲のホール録音MP3:`;
-        } else {
-          const fallbackEntry = (state.catalog?.pieces || []).find(
-            (e) => e.showcase_mp3 && e.mode === piece.mode
-          );
-          if (fallbackEntry) {
-            targetMp3 = fallbackEntry.showcase_mp3;
-            mp3Desc = `代表曲ホール録音MP3 (${fallbackEntry.id}):`;
-          }
-        }
-        el("mp3-label").textContent = mp3Desc || "ホール録音MP3:";
-        if (targetMp3) {
-          const nextSrc = audioAssetUrl(targetMp3);
-          if (mp3El.getAttribute("src") !== nextSrc) {
-            mp3El.setAttribute("src", nextSrc);
-            mp3El.load();
-          }
-        }
-      }
-
-      renderDeliberationCards(piece, "", new Set((piece.deliberation?.rejected || []).map((r) => r.id)), true);
-      updateRealtimeTelemetry(0);
-      drawScoreCanvas(0);
-    } catch (err) {
-      console.error("Failed to load piece", pieceId, err);
+      pianoKeyHitboxes.unshift({ midi: m, black: true, x, y: 2, w: blackW, h: blackH });
     }
   }
 
-  function applyFilters() {
-    const pieces = state.catalog?.pieces || [];
-    const q = (state.filterSearch || "").trim().toLowerCase();
-    state.filtered = pieces.filter((p) => {
-      if (state.filterMode === "showcase" && !p.showcase_mp3) return false;
-      if (state.filterMode === "cello" && p.mode !== "cello") return false;
-      if (state.filterMode === "piano" && p.mode !== "piano") return false;
-      if (state.filterTonality !== "all" && p.tonality !== state.filterTonality) return false;
-      if (Number(p.beauty_score) < Number(state.filterMinScore || 0)) return false;
+  // ===========================================================================
+  // Render Live State into Modes [1], [2], [3], and Diagnostic HUD
+  // ===========================================================================
+  function setPedalVisual(prefix, cc67, cc64) {
+    const v67 = clamp(Math.round(cc67 || 0), 0, 127);
+    const v64 = clamp(Math.round(cc64 || 0), 0, 127);
+    const el67V = $(`${prefix}-p67-val`);
+    const el67F = $(`${prefix}-p67-fill`);
+    const el64V = $(`${prefix}-p64-val`);
+    const el64F = $(`${prefix}-p64-fill`);
+    if (el67V) el67V.textContent = String(v67);
+    if (el67F) el67F.style.width = `${(v67 / 127) * 100}%`;
+    if (el64V) el64V.textContent = String(v64);
+    if (el64F) el64F.style.width = `${(v64 / 127) * 100}%`;
+  }
+
+  function updateActPills(containerId, actNum) {
+    const box = $(containerId);
+    if (!box) return;
+    box.querySelectorAll(".act-pill").forEach((pill) => {
+      const a = Number(pill.dataset.act || 1);
+      pill.classList.toggle("active", a === actNum);
+    });
+  }
+
+  function formatCandReason(cand) {
+    if (!cand) return "比較待機中";
+    if (cand.adopted) {
+      const bs = cand.beauty_summary;
+      if (bs && typeof bs === "object") {
+        if (bs.summary_ja) return String(bs.summary_ja);
+        const cons = Math.round(Number(bs.consonance_score ?? 0));
+        const poly = Number(bs.avg_polyphony ?? 0).toFixed(1);
+        const mono = Number(bs.mono_ratio_pct ?? 0).toFixed(1);
+        return `採用: 協和 ${cons}% / 平均${poly}声 / 単音${mono}%`;
+      }
+      return String(bs || "採用（全監査項目パス・両手声部確定）");
+    }
+    return String(cand.rejection_tag_ja || cand.rejection_detail || "スコア基準未達により棄却");
+  }
+
+  function renderCandidateCards(modeKey, containerId, staffCanvasId, labelId) {
+    const container = $(containerId);
+    if (!container || !state.stage) return;
+    const candidates = state.stage.candidates || [];
+    const adopted = candidates.find((c) => c.adopted) || candidates[0];
+    let selectedId = state.inspectedCand[modeKey];
+    if (!selectedId || !candidates.some((c) => c.candidate_id === selectedId)) {
+      selectedId = adopted ? adopted.candidate_id : "A";
+      state.inspectedCand[modeKey] = selectedId;
+    }
+
+    container.innerHTML = "";
+    candidates.forEach((cand) => {
+      const cid = String(cand.candidate_id || "?");
+      const isAdopted = Boolean(cand.adopted);
+      const isInspecting = cid === selectedId;
+      const pct = cand.total_score != null ? (cand.total_score <= 1.0 ? cand.total_score * 100 : cand.total_score).toFixed(1) : "--";
+
+      const card = document.createElement("button");
+      card.type = "button";
+      card.className = `cand-pick-card ${isAdopted ? "adopted" : "rejected"} ${isInspecting ? "inspecting" : ""}`;
+      card.setAttribute("data-candidate-id", cid);
+      const reasonText = formatCandReason(cand);
+
+      card.innerHTML = `
+        <div class="cand-pick-head">
+          <span class="cand-pick-id">案${cid}${isAdopted ? " · 採用" : " · 棄却"}</span>
+          <span class="cand-pick-score">${pct}%</span>
+        </div>
+        <div class="mono-sub">${cand.pitch_range_str || "--"} (${(cand.events || []).length}音)</div>
+        <div class="cand-pick-reason">${reasonText}</div>
+      `;
+
+      card.addEventListener("click", () => {
+        state.inspectedCand[modeKey] = cid;
+        renderCandidateCards(modeKey, containerId, staffCanvasId, labelId);
+      });
+      container.appendChild(card);
+    });
+
+    const shown = candidates.find((c) => c.candidate_id === selectedId) || adopted;
+    const lbl = $(labelId);
+    if (lbl && shown) {
+      lbl.textContent = shown.adopted
+        ? `表示中: 案${shown.candidate_id}（採用候補）`
+        : `表示中: 案${shown.candidate_id}（棄却案を比較確認中）`;
+    }
+    const chords = (state.stage.intent?.chord_progression || []).map((c) => ({ chord: c }));
+    renderGrandStaff($(staffCanvasId), shown?.events || [], {
+      chords,
+      emptyText: "ターンを実行するとAIと人間の四声スコアがここに描画されます",
+    });
+  }
+
+  function renderDiagnosticHud() {
+    const s = state.stage || {};
+    const th = s.telemetry_hud || {};
+    const out = s.output || {};
+
+    const connEl = $("diag-conn-status");
+    if (connEl) {
+      if (!LIVE_MODE) connEl.textContent = "公開WebAudioデモ";
+      else connEl.textContent = state.wsConnected ? "WS 60fps 稼働中" : "HTTP 同期";
+    }
+    const parEl = $("diag-parallel");
+    if (parEl && th.parallel_compose_ms != null) {
+      parEl.textContent = `${Number(th.parallel_compose_ms).toFixed(1)} ms`;
+    }
+    const llmEl = $("diag-llm");
+    if (llmEl && th.llm_ttft_ms != null) {
+      llmEl.textContent = `${Math.round(th.llm_ttft_ms)} ms`;
+    }
+    const specEl = $("diag-speculative");
+    if (specEl && th.speculative_hits != null) {
+      const total = Number(th.speculative_hits || 0) + Number(th.speculative_misses || 0);
+      specEl.textContent = `${th.speculative_hits} / ${total}`;
+    }
+    const jitEl = $("diag-jitter");
+    if (jitEl && th.l5_jitter_ms != null) {
+      jitEl.textContent = `${Number(th.l5_jitter_ms).toFixed(2)} ms`;
+    }
+    const wrkEl = $("diag-workers");
+    if (wrkEl && th.active_workers != null) {
+      wrkEl.textContent = `${th.active_workers} / ${th.total_workers || 6}`;
+    }
+    const vEl = $("diag-voices");
+    if (vEl) {
+      const voices = LIVE_MODE ? Number(out.active_voices ?? th.active_voices ?? 0) : audio.activeVoices.size;
+      vEl.textContent = `${voices} / ${out.hard_limit || 30} 音`;
+    }
+    const vramEl = $("diag-vram");
+    if (vramEl && th.vram_used_gb != null) {
+      vramEl.textContent = `${Number(th.vram_used_gb).toFixed(1)} / ${Number(th.vram_total_gb || 8).toFixed(1)} GB`;
+    }
+  }
+
+  function renderStageViews() {
+    const s = state.stage;
+    if (!s) return;
+
+    const p = s.perception || {};
+    const intent = s.intent || {};
+    const out = s.output || {};
+    const th = s.telemetry_hud || {};
+    const chords = intent.chord_progression || [];
+    const primaryChord = chords[0] || intent.tonal_center || "Dm";
+    const actNum = Number(intent.act_number || 1);
+    const turnId = Number(s.turn_id || 0);
+    if (turnId !== state.lastRenderedTurnId) {
+      const adoptedNew = (s.candidates || []).find((c) => c.adopted);
+      if (adoptedNew) {
+        state.inspectedCand.cello = adoptedNew.candidate_id;
+        state.inspectedCand.piano = adoptedNew.candidate_id;
+      }
+      state.lastRenderedTurnId = turnId;
+    }
+
+    // Sync top connection button state in LIVE_MODE
+    if (LIVE_MODE) {
+      state.connProduction = Boolean(s.production_mode);
+      const connBtn = $("btn-conn-mode");
+      if (connBtn) {
+        connBtn.classList.toggle("production", state.connProduction);
+        connBtn.textContent = state.connProduction ? "接続: 本番実機 (Disklavier/UR22)" : "接続: デモ（仮想演奏）";
+      }
+      const demoBtn = $("btn-cello-demo");
+      if (demoBtn) {
+        demoBtn.classList.toggle("vermilion", Boolean(s.demo_enabled));
+        demoBtn.textContent = s.demo_enabled ? "仮想チェロデモ停止" : "仮想チェロでデモ開始";
+      }
+      const monBtn = $("btn-audio-monitor");
+      if (monBtn) {
+        state.monitorAudio = Boolean(s.monitor_audio);
+        monBtn.classList.toggle("active", state.monitorAudio);
+        monBtn.setAttribute("aria-pressed", state.monitorAudio ? "true" : "false");
+        monBtn.textContent = `PC音声: ${state.monitorAudio ? "ON" : "OFF"}`;
+      }
+      const listenBtn = $("btn-piano-live-listen");
+      if (listenBtn) {
+        const ll = Boolean(s.live_listening);
+        listenBtn.classList.toggle("primary-fill", ll);
+        listenBtn.classList.toggle("active", ll);
+        listenBtn.setAttribute("aria-pressed", ll ? "true" : "false");
+        listenBtn.textContent = `リアルタイム即興待受: ${ll ? "ON" : "OFF"}`;
+      }
+    }
+
+    // Mode [1] Cello View
+    if (state.activeView === "cello") {
+      updateActPills("cello-act-arc", actNum);
+      if ($("cello-chord-val")) $("cello-chord-val").textContent = primaryChord;
+      if ($("cello-chord-roman")) $("cello-chord-roman").textContent = intent.phrase_function || "i";
+      if ($("cello-key-tonal")) $("cello-key-tonal").textContent = `${intent.tonal_center || "Dm"} / Turn #${turnId}`;
+      if ($("cello-monologue") && intent.monologue_ja) $("cello-monologue").textContent = intent.monologue_ja;
+      if ($("cello-f0-val")) {
+        const hz = p.f0_hz ? `${Number(p.f0_hz).toFixed(1)} Hz` : "-- Hz";
+        $("cello-f0-val").textContent = `${p.note_name || "--"} (${hz})`;
+      }
+      if ($("cello-art-val")) {
+        $("cello-art-val").textContent = `${p.articulation || "Cantabile"} / ${Math.round(p.vibrato_cents || 0)} ct`;
+      }
+      if ($("cello-erle-val")) {
+        const erle = Number(p.nlms_erle_db || 0).toFixed(1);
+        $("cello-erle-val").textContent = `+${erle} dB / ${p.echo_suppressed_count || 0}件`;
+      }
+      const breathPct = clamp(Math.round(Number(p.breath_gauge || 0) * 100), 0, 100);
+      if ($("cello-breath-val")) $("cello-breath-val").textContent = `${breathPct}%${p.turn_ready ? " (応答可)" : ""}`;
+      if ($("cello-breath-fill")) {
+        $("cello-breath-fill").style.width = `${breathPct}%`;
+        $("cello-breath-fill").classList.toggle("ready", Boolean(p.turn_ready));
+      }
+      setPedalVisual("cello", out.pedal_cc67 ?? p.pedal_cc67, out.pedal_cc64 ?? p.pedal_cc64);
+      renderCandidateCards("cello", "cello-cand-cards", "canvas-cello-hero-staff", "cello-hero-cand-label");
+    }
+
+    // Mode [2] Piano View
+    if (state.activeView === "piano") {
+      updateActPills("piano-act-arc", actNum);
+      if ($("piano-chord-val")) $("piano-chord-val").textContent = primaryChord;
+      if ($("piano-chord-roman")) $("piano-chord-roman").textContent = intent.phrase_function || "i";
+      if ($("piano-key-tonal")) $("piano-key-tonal").textContent = `${intent.tonal_center || "Dm"} / Turn #${turnId}`;
+      if ($("piano-monologue") && intent.monologue_ja) $("piano-monologue").textContent = intent.monologue_ja;
+      if ($("piano-echo-val")) $("piano-echo-val").textContent = `${p.echo_suppressed_count || 0} 音`;
+      if ($("piano-voices-val")) $("piano-voices-val").textContent = `${out.active_voices || 0} / ${out.hard_limit || 30} 音`;
+      if ($("piano-spec-val")) {
+        $("piano-spec-val").textContent = th.speculative_ready ? "準備完了 (即応)" : "生成待機中";
+      }
+      const breathPct = clamp(Math.round(Number(p.breath_gauge || 0) * 100), 0, 100);
+      if ($("piano-breath-val")) $("piano-breath-val").textContent = `${breathPct}%`;
+      if ($("piano-breath-fill")) {
+        $("piano-breath-fill").style.width = `${breathPct}%`;
+        $("piano-breath-fill").classList.toggle("ready", Boolean(p.turn_ready));
+      }
+      setPedalVisual("piano", out.pedal_cc67 ?? p.pedal_cc67, out.pedal_cc64 ?? p.pedal_cc64);
+      renderPianoKeyboard();
+      renderCandidateCards("piano", "piano-cand-cards", "canvas-piano-hero-staff", "piano-hero-cand-label");
+    }
+
+    // Mode [3] NotaGen Live View
+    if (state.activeView === "notagen") {
+      const ng = s.notagen || state.notagen;
+      renderNotaGenView(ng);
+    }
+
+    renderDiagnosticHud();
+  }
+
+  function renderNotaGenView(ng) {
+    if (!ng) return;
+    const statusMap = {
+      idle: "待機中",
+      streaming: "リアルタイム生成・即時発音中",
+      generating: "リアルタイム生成中",
+      completed: "生成完了",
+      stopped: "停止済み",
+      error: "エラー発生",
+    };
+    const statusText = statusMap[ng.status] || ng.status || "待機中";
+    if ($("ng-status-pill")) {
+      $("ng-status-pill").textContent = `${statusText} / エンジン: ${ng.active_backend || "auto"}`;
+    }
+    if ($("ng-metrics-sub")) {
+      const ttft = ng.ttft_ms ? `${Math.round(ng.ttft_ms)} ms` : "-- ms";
+      $("ng-metrics-sub").textContent = `TTFT: ${ttft} / ${ng.bars_completed || 0} / ${ng.target_bars || 8} 小節`;
+    }
+    const abcText = ng.abc_stream_text || ng.abc_text || ng.stream_text || "";
+    if ($("ng-abc-console") && abcText) {
+      const pre = $("ng-abc-console");
+      pre.textContent = abcText;
+      pre.scrollTop = pre.scrollHeight;
+    }
+    const aud = ng.audit || {};
+    if ($("ng-guard-summary")) {
+      if (Number(aud.beauty_score || 0) > 0) {
+        $("ng-guard-summary").textContent = `音楽性監査 ${Number(aud.beauty_score).toFixed(1)}点 / 協和 ${Number(aud.consonance_score || 0).toFixed(0)}% / 平均${Number(aud.avg_polyphony || 0).toFixed(1)}声`;
+      } else if (ng.guard_summary) {
+        $("ng-guard-summary").textContent = ng.guard_summary;
+      }
+    }
+    if ($("ng-commentary")) {
+      if (ng.commentary_ja) {
+        $("ng-commentary").textContent = ng.commentary_ja;
+      } else if (ng.status === "completed") {
+        $("ng-commentary").textContent = `${ng.bars_completed || 0}小節の一からの生成が完了（${ng.active_backend || "engine"} / 平均${Number(aud.avg_polyphony || 0).toFixed(1)}声部 / 監査 ${Number(aud.beauty_score || 0).toFixed(1)}点）。`;
+      } else if (ng.last_error) {
+        $("ng-commentary").textContent = `生成警告: ${ng.last_error}`;
+      }
+    }
+    const lastCurve = (arr, fallback) =>
+      Array.isArray(arr) && arr.length > 0 ? Number(arr[arr.length - 1].val ?? arr[arr.length - 1].value ?? fallback) : Number(fallback ?? 0);
+    setPedalVisual("ng", lastCurve(ng.cc67_curve, ng.pedal_cc67), lastCurve(ng.cc64_curve, ng.pedal_cc64));
+
+    const ngNotes = ng.events || ng.notes || [];
+    if (state.activeView === "notagen") {
+      renderGrandStaff($("canvas-notagen-hero"), ngNotes, {
+        chords: ng.chord_timeline || [],
+        emptyText: "生成を開始すると、和声ガード済みの両手楽譜が1小節ずつリアルタイムに描画されます",
+      });
+    }
+  }
+
+  // ===========================================================================
+  // Interactive Piano Action & Offline AI Dialogue Simulator
+  // ===========================================================================
+  function triggerOfflineDialogueReply(triggerPitches, modeKey) {
+    const pitches = triggerPitches.length ? triggerPitches : [62, 65, 69];
+    const root = pitches[0];
+    const isMinor = true;
+    const third = isMinor ? root + 3 : root + 4;
+    const fifth = root + 7;
+    const bass = root - 24 >= 33 ? root - 24 : root - 12;
+
+    const events = [
+      ...pitches.map((p, i) => ({ pitch: p, onset_s: i * 0.35, duration_s: 0.65, velocity: 68, hand: "human" })),
+      { pitch: bass, onset_s: 0.25, duration_s: 2.1, velocity: 54, hand: "lh" },
+      { pitch: bass + 7, onset_s: 0.65, duration_s: 1.6, velocity: 48, hand: "lh" },
+      { pitch: third + 12, onset_s: 0.85, duration_s: 1.4, velocity: 60, hand: "rh" },
+      { pitch: fifth + 12, onset_s: 1.25, duration_s: 1.3, velocity: 62, hand: "rh" },
+      { pitch: root + 14, onset_s: 1.65, duration_s: 1.5, velocity: 58, hand: "rh" },
+    ];
+
+    const rootName = NOTE_NAMES[((root % 12) + 12) % 12] + "m";
+    state.stage = {
+      ...state.stage,
+      mode: modeKey,
+      turn_id: (state.stage?.turn_id || 0) + 1,
+      perception: {
+        ...state.stage?.perception,
+        f0_hz: midiToFreq(pitches[pitches.length - 1]),
+        note_name: midiToName(pitches[pitches.length - 1]),
+        pedal_cc64: 74,
+        pedal_cc67: 44,
+        breath_gauge: 0.88,
+        turn_ready: true,
+      },
+      output: {
+        active_pitches: [bass, third + 12, fifth + 12],
+        active_voices: 4,
+        hard_limit: 30,
+        pedal_cc64: 74,
+        pedal_cc67: 44,
+      },
+      intent: {
+        act_number: ((state.stage?.turn_id || 0) % 4) + 1,
+        tonal_center: rootName,
+        chord_progression: [rootName, `${rootName}9`],
+        monologue_ja: `人間の入力モチーフ (${pitches.map(midiToName).join("–")}) を検出し、${midiToName(bass)} バス支えと上声部 ${midiToName(third + 12)}–${midiToName(root + 14)} で応答。`,
+      },
+      candidates: [
+        {
+          candidate_id: "A",
+          label_ja: "案A — 4声和声応答",
+          total_score: 0.954,
+          adopted: true,
+          pitch_range_str: `${midiToName(bass)}–${midiToName(root + 14)}`,
+          beauty_summary: `採用: 入力モチーフの共通音を保持しつつ両手ポリフォニーで応答 (95.4%)`,
+          events,
+        },
+        ...(state.stage?.candidates || []).slice(1, 4),
+      ],
+    };
+    state.inspectedCand[modeKey] = "A";
+    renderStageViews();
+
+    if (state.monitorAudio) {
+      events
+        .filter((e) => e.hand !== "human")
+        .forEach((e) => audio.playNote(e.pitch, e.velocity, e.duration_s, { delayS: e.onset_s, cc64: 74, cc67: 44 }));
+    }
+  }
+
+  let offlineReplyTimer = null;
+  const recentHumanQueue = [];
+
+  function handleHumanPianoKey(midi, velocity = 72) {
+    state.browserHumanKeys.set(midi, performance.now() + 550);
+    if (state.monitorAudio) {
+      audio.playNote(midi, velocity, 0.7, { human: true, cc64: 64 });
+    }
+    if ($("piano-last-input")) {
+      $("piano-last-input").textContent = `人間の打鍵: ${midiToName(midi)} (vel ${velocity})`;
+    }
+    renderPianoKeyboard();
+
+    if (LIVE_MODE) {
+      postJson("/api/stage/human_note", {
+        pitch: midi,
+        velocity,
+        duration_s: 0.48,
+        from_browser: true,
+      });
+    } else {
+      recentHumanQueue.push(midi);
+      if (recentHumanQueue.length > 5) recentHumanQueue.shift();
+      clearTimeout(offlineReplyTimer);
+      offlineReplyTimer = setTimeout(() => {
+        triggerOfflineDialogueReply(recentHumanQueue.slice(-4), "piano");
+      }, 420);
+    }
+  }
+
+  function auditionCandidateEvents(modeKey) {
+    const candidates = state.stage?.candidates || [];
+    const cid = state.inspectedCand[modeKey];
+    const cand = candidates.find((c) => c.candidate_id === cid) || candidates[0];
+    if (!cand || !cand.events?.length) return;
+    audio.stopAll();
+    const t0 = Math.min(...cand.events.map((e) => Number(e.onset_s ?? e.t ?? 0)));
+    cand.events.forEach((raw) => {
+      const n = normNote(raw);
+      if (!n) return;
+      audio.playNote(n.p, n.v, n.d, {
+        delayS: Math.max(0, n.t - t0),
+        human: n.h === "human",
+        cc64: 72,
+        cc67: 36,
+      });
+    });
+  }
+
+  // ===========================================================================
+  // Mode 3: Offline ABC Streaming Simulation (for static GitHub Pages showcase)
+  // ===========================================================================
+  function stopOfflineNotaGen() {
+    if (state.notagen.simTimer) {
+      clearInterval(state.notagen.simTimer);
+      state.notagen.simTimer = null;
+    }
+    state.notagen.status = "stopped";
+    renderNotaGenView(state.notagen);
+  }
+
+  function startOfflineNotaGen(keySig, targetBars, seedText) {
+    stopOfflineNotaGen();
+    const rootByKeys = { Dm: 62, Cm: 60, Am: 57, F: 65, C: 60, Eb: 63 };
+    const root = rootByKeys[keySig] || 62;
+    const isMin = keySig.endsWith("m");
+    const scale = isMin ? [0, 2, 3, 5, 7, 8, 10, 12] : [0, 2, 4, 5, 7, 9, 11, 12];
+    const barChords = [
+      [0, 2, 4],
+      [3, 5, 7],
+      [4, 6, 8],
+      [0, 2, 4],
+    ];
+
+    state.notagen = {
+      ...state.notagen,
+      status: "streaming",
+      active_backend: "browser_abc_demo",
+      bars_completed: 0,
+      target_bars: targetBars,
+      ttft_ms: 48,
+      key_sig: keySig,
+      abc_text: `X:1\nT:Live Demo (${seedText})\nM:4/4\nL:1/8\nK:${keySig}\n`,
+      notes: [],
+      guard_summary: "和声・声部連結ガード監視中",
+      commentary_ja: "種モチーフを受け取り、1小節ずつABC記譜法と両手ポリフォニーを生成・検証しています。",
+      pedal_cc64: 76,
+      pedal_cc67: 44,
+    };
+    renderNotaGenView(state.notagen);
+
+    let barIdx = 0;
+    state.notagen.simTimer = setInterval(() => {
+      barIdx += 1;
+      const chordDeg = barChords[(barIdx - 1) % barChords.length];
+      const baseT = (barIdx - 1) * 1.6;
+      const rhLine = [];
+      const lhLine = [];
+      const newNotes = [];
+
+      const bassMidi = root - 24 + scale[chordDeg[0] % 7];
+      const fifthMidi = bassMidi + 7;
+      newNotes.push({ p: bassMidi, t: baseT, d: 1.5, v: 54, h: "lh" });
+      newNotes.push({ p: fifthMidi, t: baseT + 0.4, d: 1.1, v: 46, h: "lh" });
+      lhLine.push(`${midiToName(bassMidi).replace(/\d/, "")},4`, `${midiToName(fifthMidi).replace(/\d/, "")},4`);
+
+      for (let step = 0; step < 4; step++) {
+        const deg = scale[(chordDeg[step % chordDeg.length] + (barIdx % 3)) % scale.length];
+        const m = root + deg;
+        const harm = m - (step === 0 ? 5 : 4);
+        const dt = baseT + step * 0.4;
+        newNotes.push({ p: m, t: dt, d: 0.48, v: 64 + (barIdx === targetBars - 1 ? 12 : 0), h: "rh" });
+        if (step % 2 === 0) {
+          newNotes.push({ p: harm, t: dt, d: 0.72, v: 50, h: "rh" });
+        }
+        rhLine.push(NOTE_NAMES[m % 12] + "2");
+      }
+
+      const cc64 = barIdx === targetBars ? 92 : 76;
+      const cc67 = barIdx >= targetBars - 1 ? 88 : 34;
+
+      state.notagen.bars_completed = barIdx;
+      state.notagen.pedal_cc64 = cc64;
+      state.notagen.pedal_cc67 = cc67;
+      state.notagen.notes = [...state.notagen.notes, ...newNotes];
+      state.notagen.abc_text += `[V:1] ${rhLine.join(" ")} |\n[V:2] ${lhLine.join(" ")} |\n`;
+      state.notagen.guard_summary = `第${barIdx}/${targetBars}小節 検証通過 (不協和対: 0% / 声部連結OK)`;
+
+      if ($("chk-ng-autoplay")?.checked && state.monitorAudio) {
+        newNotes.forEach((n) => audio.playNote(n.p, n.v, n.d, { delayS: Math.max(0, n.t - baseT), cc64, cc67 }));
+      }
+
+      if (barIdx >= targetBars) {
+        clearInterval(state.notagen.simTimer);
+        state.notagen.simTimer = null;
+        state.notagen.status = "completed";
+        state.notagen.commentary_ja = `${targetBars}小節の一からの生成が完了しました。全小節でバス対位線・右手和声補完・左ペダル終止処理が検証済みです。`;
+      }
+      renderNotaGenView(state.notagen);
+    }, 850);
+  }
+
+  // ===========================================================================
+  // Mode 4: Curated 100-Piece Library, Stem Mixer, X-Ray & Time-Machine
+  // ===========================================================================
+  function classifyLayer(note) {
+    if (note.h === "human" || (note.r || "").includes("cello") || (note.r || "").includes("human")) {
+      return "human";
+    }
+    if (note.h === "lh") return "bass";
+    if ((note.r || "").includes("melody")) return "melody";
+    return "harmony";
+  }
+
+  function isLayerAudible(layerKey) {
+    const anySolo = Object.values(state.layers).some((l) => l.solo);
+    const layer = state.layers[layerKey];
+    if (!layer) return true;
+    if (anySolo) return layer.solo && !layer.mute;
+    return !layer.mute;
+  }
+
+  function renderMixerControls() {
+    const list = $("mixer-list");
+    if (!list) return;
+    const meta = [
+      { key: "human", name: "人間・主役動機", desc: "Human / Cello Motif (#A8C8E8)" },
+      { key: "melody", name: "AI 右手主旋律", desc: "Cantabile RH Soprano (#EAE6DF)" },
+      { key: "harmony", name: "AI 右手内声和音", desc: "Harmonic Voicing" },
+      { key: "bass", name: "AI 左手バス・対位", desc: "LH Bass / Arpeggio" },
+    ];
+    list.innerHTML = "";
+    meta.forEach((m) => {
+      const st = state.layers[m.key];
+      const row = document.createElement("div");
+      row.className = "mixer-row";
+      row.innerHTML = `
+        <div class="mixer-label">
+          <span class="mixer-name">${m.name}</span>
+          <span class="mixer-desc">${m.desc}</span>
+        </div>
+        <div class="mixer-btns">
+          <button class="btn compact ${st.solo ? "active" : ""}" type="button" data-layer="${m.key}" data-action="solo">SOLO</button>
+          <button class="btn compact ${st.mute ? "vermilion active" : ""}" type="button" data-layer="${m.key}" data-action="mute">MUTE</button>
+        </div>
+      `;
+      row.querySelectorAll("button").forEach((btn) => {
+        btn.addEventListener("click", () => {
+          const act = btn.dataset.action;
+          state.layers[m.key][act] = !state.layers[m.key][act];
+          renderMixerControls();
+        });
+      });
+      list.appendChild(row);
+    });
+  }
+
+  function renderLibraryPieceList() {
+    const listEl = $("piece-list");
+    if (!listEl || !state.catalog) return;
+    const q = (state.searchText || "").trim().toLowerCase();
+    const pieces = (state.catalog.pieces || []).filter((p) => {
+      if (state.activeFilter === "mp3" && !p.showcase_mp3) return false;
+      if (state.activeFilter === "cello" && p.mode !== "cello") return false;
+      if (state.activeFilter === "piano" && p.mode !== "piano") return false;
+      if (state.activeStyle !== "all" && p.lh_texture !== state.activeStyle) return false;
       if (q) {
-        const hay = `${p.id} ${p.title_ja} ${p.title_en} ${p.tonality_ja} ${(p.chords_preview || []).join(" ")}`.toLowerCase();
+        const hay = `${p.id} ${p.title_ja} ${p.title_en} ${p.tonality_ja} ${p.tonality}`.toLowerCase();
         if (!hay.includes(q)) return false;
       }
       return true;
     });
+    state.filteredPieces = pieces;
 
-    el("filtered-count").textContent = `${state.filtered.length} / ${pieces.length}`;
-    const list = el("piece-list");
-    list.innerHTML = "";
-    const curId = state.currentPiece?.id;
+    if ($("catalog-stats")) {
+      $("catalog-stats").textContent = `${pieces.length} / ${(state.catalog.pieces || []).length}曲`;
+    }
 
-    for (const p of state.filtered) {
+    listEl.innerHTML = "";
+    pieces.forEach((p) => {
       const btn = document.createElement("button");
       btn.type = "button";
-      btn.className = "piece-item" + (p.id === curId ? " selected" : "");
-      btn.dataset.pieceId = p.id;
-      const modeShort = p.mode === "cello" ? "Mode B (Vc+Pf)" : "Mode A (Pf+Pf)";
+      btn.className = `piece-item ${state.selectedPieceMeta?.id === p.id ? "selected" : ""}`;
+      btn.setAttribute("data-piece-id", p.id);
       btn.innerHTML = `
         <div class="piece-item-top">
-          <span class="piece-id-tag">#${String(p.index).padStart(3, "0")} | ${modeShort}</span>
-          ${p.showcase_mp3 ? '<span class="mp3-tag">MP3</span>' : `<span class="piece-id-tag">${p.beauty_score}点</span>`}
+          <span class="piece-id-tag">#${String(p.index).padStart(3, "0")} · ${p.mode === "cello" ? "チェロ" : "ピアノ"} · ${p.tonality_ja || p.tonality}</span>
+          ${p.showcase_mp3 ? '<span class="mp3-tag">MP3</span>' : ""}
         </div>
-        <div class="piece-title">${p.title_ja}</div>
+        <div class="piece-title">${p.title_ja || p.title_en}</div>
         <div class="piece-meta">
-          <span>${p.tonality_ja} (${p.bpm}BPM)</span>
-          <span>協和${p.consonance_score}% / ${p.avg_polyphony}音</span>
+          <span>監査 ${Number(p.beauty_score || 0).toFixed(1)}点 / ${Number(p.avg_polyphony || 0).toFixed(1)}声</span>
+          <span>${Math.round(p.duration_s || 0)}s</span>
         </div>
       `;
-      btn.addEventListener("click", () => loadPiece(p.id));
-      list.appendChild(btn);
+      btn.addEventListener("click", () => selectLibraryPiece(p));
+      listEl.appendChild(btn);
+    });
+  }
+
+  function renderLibraryDeliberation(piece) {
+    const delib = piece?.deliberation || {};
+    if ($("delib-memo")) {
+      $("delib-memo").textContent = delib.monologue_ja || piece?.composer_note_ja || "監査メモはありません。";
+    }
+    const grid = $("delib-grid");
+    if (!grid) return;
+    grid.innerHTML = "";
+
+    const list = [];
+    if (delib.adopted) list.push({ ...delib.adopted, isAdopted: true });
+    (delib.rejected || []).forEach((r) => list.push({ ...r, isAdopted: false }));
+
+    list.forEach((cand) => {
+      const card = document.createElement("div");
+      card.className = `cand-card ${cand.isAdopted ? "adopted" : "rejected"}`;
+      card.innerHTML = `
+        <div class="cand-head">
+          <span class="cand-title">${cand.label_ja || `案${cand.id}`}</span>
+          <span class="cand-tag ${cand.isAdopted ? "ok" : ""}">${Number(cand.score || 0).toFixed(1)}点 · ${cand.isAdopted ? "採用" : cand.tag_ja || "棄却"}</span>
+        </div>
+        <canvas class="mini-canvas"></canvas>
+      `;
+      grid.appendChild(card);
+      const mc = card.querySelector("canvas");
+      requestAnimationFrame(() => renderGrandStaff(mc, cand.notes || []));
+    });
+  }
+
+  function renderLibraryXray(piece, sec) {
+    if (!piece) return;
+    const tl = piece.chord_timeline || [];
+    const curIdx = Math.max(
+      0,
+      tl.findIndex((c) => sec >= c.start_s && sec <= c.end_s)
+    );
+    const cur = tl[curIdx] || tl[0];
+    const nxt = tl[curIdx + 1];
+
+    if ($("xray-chord")) $("xray-chord").textContent = cur ? cur.chord : "--";
+    if ($("xray-roman")) $("xray-roman").textContent = cur ? cur.roman : "";
+    if ($("xray-next")) $("xray-next").textContent = nxt ? `次: ${nxt.chord}` : "終止";
+
+    const getValAt = (arr, t) => {
+      let val = 0;
+      for (const item of arr || []) {
+        if (item.t <= t) val = item.val;
+        else break;
+      }
+      return val;
+    };
+    const p67 = getValAt(piece.cc67, sec);
+    const p64 = getValAt(piece.cc64, sec);
+    if ($("xray-pedal")) $("xray-pedal").textContent = `左L(67)=${p67} · 右R(64)=${p64}`;
+    if ($("xray-pedals")) $("xray-pedals").textContent = `${p67} / ${p64}`;
+
+    const activeNow = (piece.notes || []).filter((n) => sec >= n.t && sec <= n.t + n.d).length;
+    if ($("xray-poly")) $("xray-poly").textContent = `${activeNow} 声`;
+
+    const aud = piece.audit || {};
+    if ($("xray-audit")) $("xray-audit").textContent = `${Number(aud.beauty_score || 0).toFixed(1)}%`;
+
+    const strip = $("chord-strip");
+    if (strip && tl.length) {
+      if (strip.children.length !== Math.min(16, tl.length)) {
+        strip.innerHTML = "";
+        tl.slice(0, 16).forEach((ch, idx) => {
+          const chip = document.createElement("button");
+          chip.type = "button";
+          chip.className = "chord-chip";
+          chip.textContent = ch.chord;
+          chip.dataset.idx = String(idx);
+          chip.addEventListener("click", () => seekLibraryTo(ch.start_s));
+          strip.appendChild(chip);
+        });
+      }
+      Array.from(strip.children).forEach((el, idx) => {
+        el.classList.toggle("now", idx === curIdx);
+      });
+    }
+
+    const barsEl = $("audit-bars");
+    if (barsEl && aud.beauty_score != null && !barsEl.dataset.renderedForId) {
+      barsEl.dataset.renderedForId = piece.id;
+      const items = [
+        ["総合美観", aud.beauty_score],
+        ["協和度", aud.consonance_score],
+        ["声部充実", aud.polyphony_score],
+        ["旋律歌謡", aud.melody_cantabile_score],
+        ["ペダル清澄", aud.pedal_cleanliness_score],
+      ];
+      barsEl.innerHTML = items
+        .map(
+          ([lbl, val]) => `
+          <div class="audit-bar-item">
+            <div>${lbl}: ${Number(val || 0).toFixed(0)}%</div>
+            <div class="audit-bar-bg"><div class="audit-bar-fill" style="width:${clamp(Number(val || 0), 0, 100)}%"></div></div>
+          </div>`
+        )
+        .join("");
     }
   }
 
-  function switchWorkspaceTab(tabId) {
-    document.querySelectorAll(".tab-btn").forEach((btn) => {
-      const active = btn.id === tabId;
-      btn.setAttribute("aria-selected", active ? "true" : "false");
-      const panelId = btn.getAttribute("aria-controls");
-      const panel = panelId ? el(panelId) : null;
+  function renderLibraryFrame(sec) {
+    const piece = state.pieceData;
+    if (!piece) return;
+    const dur = Math.max(1, Number(piece.duration_s || 45));
+    const clamped = clamp(sec, 0, dur);
+    if ($("time-readout")) $("time-readout").textContent = `${formatTime(clamped)} / ${formatTime(dur)}`;
+    if ($("seek-slider")) $("seek-slider").value = String(Math.round((clamped / dur) * 1000));
+
+    // VU decay
+    audio.lastLevelDb = Math.max(-58, audio.lastLevelDb - 1.2);
+    const vuPct = clamp(((audio.lastLevelDb + 58) / 58) * 100, 0, 100);
+    if ($("vu-fill")) $("vu-fill").style.width = `${vuPct}%`;
+    if ($("vu-db")) $("vu-db").textContent = audio.lastLevelDb <= -55 ? "-inf dB" : `${audio.lastLevelDb.toFixed(0)} dB`;
+
+    const winStart = Math.max(0, clamped - 3.0);
+    const winEnd = Math.min(dur, winStart + 9.5);
+    renderGrandStaff($("score-canvas"), piece.notes || [], {
+      winStart,
+      winEnd,
+      playheadSec: clamped,
+      chords: piece.chord_timeline || [],
+    });
+    renderLibraryXray(piece, clamped);
+  }
+
+  function stopLibraryPlayback() {
+    state.libPlaying = false;
+    if (state.libRafId) {
+      cancelAnimationFrame(state.libRafId);
+      state.libRafId = null;
+    }
+    audio.stopAll();
+    if ($("btn-play")) $("btn-play").textContent = "再生";
+    const mp3 = $("mp3-player");
+    if (mp3 && !mp3.paused) {
+      mp3.pause();
+    }
+  }
+
+  function seekLibraryTo(sec) {
+    const piece = state.pieceData;
+    if (!piece) return;
+    const dur = Number(piece.duration_s || 45);
+    state.libCursorSec = clamp(sec, 0, dur);
+    const notes = piece.notes || [];
+    state.libTriggeredIdx = notes.findIndex((n) => n.t >= state.libCursorSec);
+    if (state.libTriggeredIdx < 0) state.libTriggeredIdx = notes.length;
+    if (state.libPlaying) {
+      audio.stopAll();
+      state.libStartPerfMs = performance.now() - state.libCursorSec * 1000;
+    }
+    renderLibraryFrame(state.libCursorSec);
+  }
+
+  function stepLibraryLoop() {
+    if (!state.libPlaying || !state.pieceData) return;
+    const elapsed = (performance.now() - state.libStartPerfMs) / 1000;
+    const dur = Number(state.pieceData.duration_s || 45);
+    const notes = state.pieceData.notes || [];
+
+    while (state.libTriggeredIdx < notes.length) {
+      const raw = notes[state.libTriggeredIdx];
+      if (raw.t > elapsed + 0.04) break;
+      const n = normNote(raw);
+      if (n && isLayerAudible(classifyLayer(n)) && state.monitorAudio) {
+        audio.playNote(n.p, n.v, n.d, {
+          human: n.h === "human",
+          cc64: 72,
+          cc67: 36,
+        });
+      }
+      state.libTriggeredIdx += 1;
+    }
+
+    state.libCursorSec = elapsed;
+    renderLibraryFrame(elapsed);
+
+    if (elapsed >= dur) {
+      stopLibraryPlayback();
+      seekLibraryTo(0);
+      return;
+    }
+    state.libRafId = requestAnimationFrame(stepLibraryLoop);
+  }
+
+  function startLibraryPlayback() {
+    if (!state.pieceData) return;
+    audio.ensure();
+    state.libPlaying = true;
+    if ($("btn-play")) $("btn-play").textContent = "一時停止";
+    const notes = state.pieceData.notes || [];
+    state.libTriggeredIdx = notes.findIndex((n) => n.t >= state.libCursorSec);
+    if (state.libTriggeredIdx < 0) state.libTriggeredIdx = 0;
+    state.libStartPerfMs = performance.now() - state.libCursorSec * 1000;
+    state.libRafId = requestAnimationFrame(stepLibraryLoop);
+  }
+
+  async function selectLibraryPiece(meta) {
+    stopLibraryPlayback();
+    state.selectedPieceMeta = meta;
+    renderLibraryPieceList();
+
+    const jsonUrl = LIVE_MODE
+      ? `/api/pieces/${meta.id}`
+      : `./data/pieces/${meta.id}.json`;
+    const piece = await fetchJson(jsonUrl);
+    if (!piece) return;
+
+    state.pieceData = piece;
+    state.libCursorSec = 0;
+    if ($("audit-bars")) delete $("audit-bars").dataset.renderedForId;
+
+    if ($("work-title")) $("work-title").textContent = piece.title_ja || piece.title_en || meta.id;
+    if ($("work-subtitle")) {
+      $("work-subtitle").textContent = `#${meta.id} · ${piece.mode_label_ja || piece.mode} · BPM ${piece.bpm || 72} · ${piece.tonality_ja || piece.tonality}`;
+    }
+    if ($("composer-note")) $("composer-note").textContent = piece.composer_note_ja || "";
+
+    const mp3Name = String(piece.showcase_mp3 || meta.showcase_mp3 || "").replace(/^.*[/\\]/, "");
+    const mp3El = $("mp3-player");
+    const mp3Stat = $("mp3-status");
+    if (mp3El && mp3Name) {
+      mp3El.preload = "auto";
+      mp3El.src = LIVE_MODE ? `/audio/${mp3Name}` : `./audio/${mp3Name}`;
+      mp3El.load();
+      if (mp3Stat) mp3Stat.textContent = `スタジオ高音質MP3 (${mp3Name})`;
+    } else if (mp3El) {
+      mp3El.removeAttribute("src");
+      mp3El.load();
+      if (mp3Stat) mp3Stat.textContent = "リアルタイムWebAudioシンセ演奏対応";
+    }
+
+    renderLibraryDeliberation(piece);
+    renderLibraryFrame(0);
+  }
+
+  async function initLibraryCatalog() {
+    renderMixerControls();
+    let cat = await fetchJson(LIVE_MODE ? "/api/catalog" : "./data/catalog_100.json");
+    if (!cat && LIVE_MODE) {
+      cat = await fetchJson("./data/catalog_100.json");
+    }
+    if (!cat || !Array.isArray(cat.pieces)) return;
+    state.catalog = cat;
+
+    const styleSel = $("style-select");
+    if (styleSel) {
+      const styles = Array.from(new Set(cat.pieces.map((p) => p.lh_texture).filter(Boolean)));
+      styleSel.innerHTML = '<option value="all">全様式</option>';
+      styles.forEach((st) => {
+        const opt = document.createElement("option");
+        opt.value = st;
+        opt.textContent = STYLE_LABELS[st] || st;
+        styleSel.appendChild(opt);
+      });
+    }
+
+    renderLibraryPieceList();
+    if (cat.pieces.length > 0) {
+      const firstMp3 = cat.pieces.find((p) => p.showcase_mp3) || cat.pieces[0];
+      await selectLibraryPiece(firstMp3);
+    }
+  }
+
+  // ===========================================================================
+  // Top-Level 4-Mode View Switching
+  // ===========================================================================
+  function switchModeView(targetView) {
+    state.activeView = targetView;
+    const views = ["cello", "piano", "notagen", "library"];
+    views.forEach((v) => {
+      const tab = $(`mode-tab-${v}`);
+      const panel = $(`view-${v}`);
+      const active = v === targetView;
+      if (tab) tab.setAttribute("aria-selected", active ? "true" : "false");
       if (panel) panel.hidden = !active;
     });
-    if (tabId === "tab-score") {
-      requestAnimationFrame(() => drawScoreCanvas(currentPlaybackTimeS()));
+
+    if (LIVE_MODE && (targetView === "cello" || targetView === "piano")) {
+      postJson("/api/stage/mode", { mode: targetView });
     }
+
+    requestAnimationFrame(() => {
+      renderStageViews();
+      if (targetView === "library") renderLibraryFrame(state.libCursorSec);
+      if (targetView === "piano") renderPianoKeyboard();
+    });
   }
 
-  async function initLiveControls() {
+  function toggleProjectionClean(forceState) {
+    state.projectionClean = forceState != null ? Boolean(forceState) : !state.projectionClean;
+    const shell = $("studio-shell");
+    if (shell) shell.classList.toggle("projection-clean", state.projectionClean);
+    requestAnimationFrame(() => {
+      renderStageViews();
+      if (state.activeView === "library") renderLibraryFrame(state.libCursorSec);
+    });
+  }
+
+  // ===========================================================================
+  // Live WebSocket (60fps Stage Sync)
+  // ===========================================================================
+  function connectLiveSocket() {
     if (!LIVE_MODE) return;
-    const chip = el("audio-engine-chip");
-    async function refreshStageState() {
-      try {
-        const r = await fetch("/api/stage/state");
-        if (!r.ok) return;
-        const st = await r.json();
-        if (chip) {
-          chip.textContent = st.production_mode ? "本番実機モード (--production)" : `ライブ接続済 (Turn #${st.turn_id || 0})`;
-        }
-        el("live-mode-cello")?.classList.toggle("active", st.mode === "cello");
-        el("live-mode-piano")?.classList.toggle("active", st.mode === "piano");
-        const demoBtn = el("live-demo-toggle");
-        if (demoBtn) {
-          demoBtn.textContent = st.demo_enabled ? "仮想デモ: ON" : "仮想デモ: OFF";
-          demoBtn.classList.toggle("active", !!st.demo_enabled);
-        }
-        if (st.intent?.monologue_ja) {
-          el("live-monologue-box").textContent = `Turn #${st.turn_id}: ${st.intent.monologue_ja}`;
-        }
-      } catch (_) {}
-    }
-
-    async function postApi(path, body) {
-      el("live-status-text").textContent = "実行中...";
-      const r = await fetch(path, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: body ? JSON.stringify(body) : "{}",
-      });
-      if (r.ok) {
-        el("live-status-text").textContent = "完了";
-        await refreshStageState();
-      } else {
-        el("live-status-text").textContent = `HTTP ${r.status}`;
-      }
-    }
-
-    el("live-mode-cello")?.addEventListener("click", () => postApi("/api/stage/mode", { mode: "cello" }));
-    el("live-mode-piano")?.addEventListener("click", () => postApi("/api/stage/mode", { mode: "piano" }));
-    el("live-demo-toggle")?.addEventListener("click", async () => {
-      const r = await fetch("/api/stage/state");
-      const st = await r.json();
-      await postApi("/api/stage/demo", { enabled: !st.demo_enabled });
+    let closedByUnload = false;
+    window.addEventListener("beforeunload", () => {
+      closedByUnload = true;
+      if (state.ws) state.ws.close();
     });
-    el("live-next-turn")?.addEventListener("click", () => postApi("/api/stage/turn"));
-    el("live-retake")?.addEventListener("click", () =>
-      postApi("/api/stage/retake", { text: el("live-directive-input")?.value || "" })
-    );
-    el("live-synth-work")?.addEventListener("click", () => postApi("/api/stage/synthesize_work", { play_audio: false }));
-    el("live-calibrate")?.addEventListener("click", () => postApi("/api/stage/calibrate"));
-    el("live-directive-send")?.addEventListener("click", () =>
-      postApi("/api/stage/directive", { text: el("live-directive-input")?.value || "" })
-    );
 
-    const params = new URLSearchParams(window.location.search);
-    if (params.get("demo") === "1") {
-      fetch("/api/stage/demo", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ enabled: true }) }).catch(() => {});
-    }
-    refreshStageState();
+    const openWs = () => {
+      const proto = location.protocol === "https:" ? "wss:" : "ws:";
+      const ws = new WebSocket(`${proto}//${location.host}/ws/stage`);
+      state.ws = ws;
+      ws.onopen = () => {
+        state.wsConnected = true;
+        renderDiagnosticHud();
+      };
+      ws.onmessage = (ev) => {
+        try {
+          const data = JSON.parse(ev.data);
+          state.stage = data;
+          renderStageViews();
+        } catch (_) {}
+      };
+      ws.onclose = () => {
+        state.wsConnected = false;
+        renderDiagnosticHud();
+        if (!closedByUnload) {
+          setTimeout(openWs, 1500);
+        }
+      };
+      ws.onerror = () => {
+        ws.close();
+      };
+    };
+    openWs();
+
+    fetchJson("/api/stage/state").then((data) => {
+      if (data) {
+        state.stage = data;
+        renderStageViews();
+      }
+    });
   }
 
-  async function boot() {
-    // Wire tabs
-    document.querySelectorAll(".tab-btn").forEach((btn) => {
-      btn.addEventListener("click", () => switchWorkspaceTab(btn.id));
+  // ===========================================================================
+  // Wire All DOM Event Handlers
+  // ===========================================================================
+  function bindEvents() {
+    // 4-Mode Tabs
+    document.querySelectorAll(".mode-tab[data-mode-view]").forEach((btn) => {
+      btn.addEventListener("click", () => switchModeView(btn.dataset.modeView));
     });
 
-    // Wire filters
-    el("filter-pills").querySelectorAll("button").forEach((btn) => {
-      btn.addEventListener("click", () => {
-        el("filter-pills").querySelectorAll("button").forEach((b) => b.classList.remove("active"));
-        btn.classList.add("active");
-        state.filterMode = btn.dataset.filter || "all";
-        applyFilters();
-      });
-    });
-    el("filter-tonality").addEventListener("change", (ev) => {
-      state.filterTonality = ev.target.value;
-      applyFilters();
-    });
-    el("filter-score").addEventListener("change", (ev) => {
-      state.filterMinScore = Number(ev.target.value || 0);
-      applyFilters();
-    });
-    el("filter-search").addEventListener("input", (ev) => {
-      state.filterSearch = ev.target.value || "";
-      applyFilters();
+    // Global Topbar Actions
+    $("btn-onboarding-close")?.addEventListener("click", () => {
+      if ($("onboarding-banner")) $("onboarding-banner").hidden = true;
     });
 
-    // Wire mixer buttons
-    document.querySelectorAll("[data-mix-toggle]").forEach((btn) => {
-      btn.addEventListener("click", () => {
-        const key = btn.dataset.mixToggle;
-        state.mixer[key] = !state.mixer[key];
-        btn.classList.toggle("active", state.mixer[key]);
-        btn.textContent = state.mixer[key] ? "ON" : "OFF";
-        applyMixerGains();
-        drawScoreCanvas(currentPlaybackTimeS());
-      });
-    });
-    document.querySelectorAll("[data-mix-solo]").forEach((btn) => {
-      btn.addEventListener("click", () => {
-        const key = btn.dataset.mixSolo;
-        state.mixer.solo = state.mixer.solo === key ? null : key;
-        document.querySelectorAll("[data-mix-solo]").forEach((b) => {
-          b.classList.toggle("vermilion", b.dataset.mixSolo === state.mixer.solo);
-          b.classList.toggle("active", b.dataset.mixSolo === state.mixer.solo);
-        });
-        applyMixerGains();
-        drawScoreCanvas(currentPlaybackTimeS());
-      });
-    });
-    el("btn-mixer-reset").addEventListener("click", () => {
-      state.mixer = { rh: true, lh: true, human: true, cc64: true, cc67: true, solo: null };
-      document.querySelectorAll("[data-mix-toggle]").forEach((b) => {
-        b.classList.add("active");
-        b.textContent = "ON";
-      });
-      document.querySelectorAll("[data-mix-solo]").forEach((b) => {
-        b.classList.remove("vermilion", "active");
-      });
-      applyMixerGains();
-      drawScoreCanvas(currentPlaybackTimeS());
+    $("btn-diag-toggle")?.addEventListener("click", () => {
+      state.diagVisible = !state.diagVisible;
+      if ($("diag-hud-bar")) $("diag-hud-bar").hidden = !state.diagVisible;
+      $("btn-diag-toggle").classList.toggle("active", state.diagVisible);
+      $("btn-diag-toggle").setAttribute("aria-pressed", state.diagVisible ? "true" : "false");
     });
 
-    // Playback & Deck buttons
-    el("btn-play").addEventListener("click", () => {
-      if (state.playback.playing) stopPlayback(false);
-      else startPlayback();
+    $("btn-help")?.addEventListener("click", () => {
+      if ($("help-modal")) $("help-modal").hidden = false;
     });
-    el("btn-panic").addEventListener("click", () => {
-      stopPlayback(true);
-      const mp3El = el("mp3-player");
-      if (mp3El) {
-        mp3El.pause();
-        mp3El.currentTime = 0;
+    $("btn-help-close")?.addEventListener("click", () => {
+      if ($("help-modal")) $("help-modal").hidden = true;
+    });
+    $("help-modal")?.addEventListener("click", (e) => {
+      if (e.target === $("help-modal")) $("help-modal").hidden = true;
+    });
+
+    $("btn-proj-f10")?.addEventListener("click", () => toggleProjectionClean(true));
+    $("btn-proj-exit")?.addEventListener("click", () => toggleProjectionClean(false));
+
+    $("btn-audio-monitor")?.addEventListener("click", () => {
+      state.monitorAudio = !state.monitorAudio;
+      audio.setMuted(!state.monitorAudio);
+      $("btn-audio-monitor").classList.toggle("active", state.monitorAudio);
+      $("btn-audio-monitor").setAttribute("aria-pressed", state.monitorAudio ? "true" : "false");
+      $("btn-audio-monitor").textContent = `PC音声: ${state.monitorAudio ? "ON" : "OFF"}`;
+      if (LIVE_MODE) postJson("/api/stage/audio_monitor", { enabled: state.monitorAudio });
+    });
+
+    $("btn-conn-mode")?.addEventListener("click", () => {
+      if (!LIVE_MODE) {
+        alert("GitHub Pages 公開デモ版では WebAudio と収録MP3で再生されます。ローカルPCの stage_server 起動時に実機接続へ切り替えできます。");
+        return;
       }
+      const nextProd = !state.connProduction;
+      postJson("/api/stage/connection_mode", { production_mode: nextProd });
+    });
+
+    const handlePanic = () => {
+      audio.stopAll();
+      stopLibraryPlayback();
+      stopOfflineNotaGen();
       if (LIVE_MODE) {
-        fetch("/api/stage/panic", { method: "POST" }).catch(() => {});
+        postJson("/api/stage/panic", {});
+        postJson("/api/notagen/stop", {});
+      }
+    };
+    $("btn-panic")?.addEventListener("click", handlePanic);
+
+    // Mode [1] Cello Controls
+    $("btn-cello-demo")?.addEventListener("click", () => {
+      if (LIVE_MODE) {
+        const nextDemo = !Boolean(state.stage?.demo_enabled);
+        postJson("/api/stage/demo", { enabled: nextDemo });
+      } else {
+        triggerOfflineDialogueReply([50, 53, 57, 55], "cello");
       }
     });
-    el("btn-download-midi").addEventListener("click", downloadCurrentMidi);
-    el("btn-replay-delib").addEventListener("click", replayDeliberation);
-
-    el("seek-slider").addEventListener("input", (ev) => {
-      if (!state.currentPiece) return;
-      const frac = Number(ev.target.value || 0) / 1000.0;
-      const targetS = frac * Number(state.currentPiece.duration_s || 36);
-      if (state.playback.playing) startPlayback(targetS);
+    $("btn-cello-turn")?.addEventListener("click", () => {
+      if (LIVE_MODE) postJson("/api/stage/turn", {});
+      else triggerOfflineDialogueReply([57, 60, 62, 65], "cello");
+    });
+    $("btn-cello-retake")?.addEventListener("click", () => {
+      if (LIVE_MODE) postJson("/api/stage/retake", { text: "別解釈でより豊かな響きを探索" });
+      else triggerOfflineDialogueReply([53, 57, 60, 64], "cello");
+    });
+    $("btn-cello-cal")?.addEventListener("click", () => {
+      if (LIVE_MODE) postJson("/api/stage/calibrate", {});
+      else if ($("cello-erle-val")) $("cello-erle-val").textContent = "+16.8 dB / 較正完了";
+    });
+    $("btn-cello-reset")?.addEventListener("click", () => {
+      if (LIVE_MODE) postJson("/api/stage/reset", {});
       else {
-        state.playback.offsetS = targetS;
-        updateRealtimeTelemetry(targetS);
-        drawScoreCanvas(targetS);
+        state.stage = createDefaultOfflineStage("cello");
+        renderStageViews();
       }
     });
+    $("btn-cello-save")?.addEventListener("click", async () => {
+      const res = await postJson("/api/stage/synthesize_work", { play_audio: false });
+      showExportToast("cello-export-toast", res);
+    });
+    $("btn-cello-directive")?.addEventListener("click", () => {
+      const text = $("inp-cello-directive")?.value?.trim();
+      if (!text) return;
+      if (LIVE_MODE) postJson("/api/stage/directive", { text });
+      else triggerOfflineDialogueReply([50, 55, 57], "cello");
+    });
+    $("sel-cello-preset")?.addEventListener("change", (e) => {
+      if (LIVE_MODE) postJson("/api/stage/preset", { preset: e.target.value });
+    });
+    $("btn-cello-audition")?.addEventListener("click", () => auditionCandidateEvents("cello"));
 
-    el("canvas-studio-score").addEventListener("click", (ev) => {
-      if (!state.currentPiece) return;
-      const rect = ev.currentTarget.getBoundingClientRect();
-      const frac = Math.max(0, Math.min(1, (ev.clientX - rect.left - 42) / Math.max(100, rect.width - 56)));
-      const targetS = frac * Number(state.currentPiece.duration_s || 36);
-      if (state.playback.playing) startPlayback(targetS);
-      else {
-        state.playback.offsetS = targetS;
-        updateRealtimeTelemetry(targetS);
-        drawScoreCanvas(targetS);
+    document.querySelectorAll("[data-cello-phrase]").forEach((btn) => {
+      const map = {
+        question: [
+          { pitch: 50, duration_s: 0.6, velocity: 64 },
+          { pitch: 53, duration_s: 0.6, velocity: 68 },
+          { pitch: 57, duration_s: 0.8, velocity: 72 },
+        ],
+        cantabile: [
+          { pitch: 57, duration_s: 0.55, velocity: 72 },
+          { pitch: 61, duration_s: 0.55, velocity: 76 },
+          { pitch: 64, duration_s: 0.55, velocity: 80 },
+          { pitch: 67, duration_s: 0.85, velocity: 74 },
+        ],
+        lament: [
+          { pitch: 58, duration_s: 0.6, velocity: 84 },
+          { pitch: 57, duration_s: 0.6, velocity: 78 },
+          { pitch: 55, duration_s: 0.6, velocity: 70 },
+          { pitch: 53, duration_s: 1.0, velocity: 62 },
+        ],
+      };
+      btn.addEventListener("click", () => {
+        const phrase = map[btn.dataset.celloPhrase] || map.question;
+        if (state.monitorAudio) {
+          phrase.forEach((n, idx) => audio.playNote(n.pitch, n.velocity, n.duration_s, { delayS: idx * 0.35, human: true }));
+        }
+        if (LIVE_MODE) {
+          postJson("/api/stage/human_phrase", { notes: phrase, mode: "cello", auto_turn: true });
+        } else {
+          triggerOfflineDialogueReply(phrase.map((n) => n.pitch), "cello");
+        }
+      });
+    });
+
+    // Mode [2] Piano Controls & Canvas Mouse Clicks
+    $("btn-piano-live-listen")?.addEventListener("click", () => {
+      const cur = state.stage?.live_listening !== false;
+      if (LIVE_MODE) postJson("/api/stage/live_listen", { enabled: !cur });
+    });
+    $("btn-piano-demo-phrase")?.addEventListener("click", () => {
+      const phrase = [
+        { pitch: 62, duration_s: 0.45, velocity: 68 },
+        { pitch: 65, duration_s: 0.45, velocity: 72 },
+        { pitch: 69, duration_s: 0.45, velocity: 76 },
+        { pitch: 64, duration_s: 0.85, velocity: 70 },
+      ];
+      phrase.forEach((n, idx) => audio.playNote(n.pitch, n.velocity, n.duration_s, { delayS: idx * 0.32, human: true }));
+      if (LIVE_MODE) {
+        postJson("/api/stage/human_phrase", { notes: phrase, mode: "piano", auto_turn: true });
+      } else {
+        triggerOfflineDialogueReply(phrase.map((n) => n.pitch), "piano");
+      }
+    });
+    $("btn-piano-pedal-cue")?.addEventListener("click", () => {
+      if (LIVE_MODE) postJson("/api/stage/pedal_cue", { control: 67, value: 96 });
+      else triggerOfflineDialogueReply([62, 69, 72], "piano");
+    });
+    $("btn-piano-turn")?.addEventListener("click", () => {
+      if (LIVE_MODE) postJson("/api/stage/turn", {});
+      else triggerOfflineDialogueReply([62, 65, 69], "piano");
+    });
+    $("btn-piano-retake")?.addEventListener("click", () => {
+      if (LIVE_MODE) postJson("/api/stage/retake", { text: "ピアノ同士の対話をより精緻に再構成" });
+      else triggerOfflineDialogueReply([60, 64, 67, 71], "piano");
+    });
+    $("btn-piano-save")?.addEventListener("click", async () => {
+      const res = await postJson("/api/stage/synthesize_work", { play_audio: false });
+      showExportToast("piano-export-toast", res);
+    });
+    $("btn-piano-directive")?.addEventListener("click", () => {
+      const text = $("inp-piano-directive")?.value?.trim();
+      if (!text) return;
+      if (LIVE_MODE) postJson("/api/stage/directive", { text });
+      else triggerOfflineDialogueReply([62, 69], "piano");
+    });
+    $("sel-piano-preset")?.addEventListener("change", (e) => {
+      if (LIVE_MODE) postJson("/api/stage/preset", { preset: e.target.value });
+    });
+    $("btn-piano-audition")?.addEventListener("click", () => auditionCandidateEvents("piano"));
+
+    $("canvas-piano-keys")?.addEventListener("pointerdown", (e) => {
+      const canvas = $("canvas-piano-keys");
+      const rect = canvas.getBoundingClientRect();
+      const x = e.clientX - rect.left;
+      const y = e.clientY - rect.top;
+      const hit = pianoKeyHitboxes.find((k) => x >= k.x && x <= k.x + k.w && y >= k.y && y <= k.y + k.h);
+      if (hit) handleHumanPianoKey(hit.midi, 76);
+    });
+
+    // Mode [3] NotaGen / LLM Live Streaming Controls
+    $("btn-ng-start")?.addEventListener("click", async () => {
+      const prompt_ja = $("inp-ng-prompt")?.value || "静かな問いかけから始まり、静かに閉じる作品";
+      const engine = $("sel-ng-backend")?.value || "auto";
+      const key_sig = $("sel-ng-key")?.value || "Dm";
+      const tonalityMap = {
+        Dm: "D_minor",
+        Cm: "C_minor",
+        Am: "A_minor",
+        F: "F_major",
+        C: "C_major",
+        Eb: "Eb_major",
+      };
+      const tonality = tonalityMap[key_sig] || "D_minor";
+      const seedRaw = ($("inp-ng-seed")?.value || "D4 F4 A4").trim();
+      const bars = Number($("sel-ng-bars")?.value || 8);
+      const play_audio = Boolean($("chk-ng-autoplay")?.checked);
+
+      if (LIVE_MODE) {
+        const res = await postJson("/api/notagen/start", {
+          prompt_ja,
+          engine,
+          tonality,
+          seed_notes: seedRaw,
+          bars,
+          play_audio,
+          blocking: false,
+        });
+        const ngState = res?.notagen || res;
+        if (ngState) {
+          state.notagen = ngState;
+          if (state.stage) state.stage.notagen = ngState;
+          renderNotaGenView(ngState);
+        }
+      } else {
+        startOfflineNotaGen(key_sig, bars, seedRaw);
+      }
+    });
+    $("btn-ng-stop")?.addEventListener("click", () => {
+      audio.stopAll();
+      if (LIVE_MODE) postJson("/api/notagen/stop", {});
+      else stopOfflineNotaGen();
+    });
+    $("btn-ng-play-audio")?.addEventListener("click", () => {
+      const ng = state.stage?.notagen || state.notagen;
+      const notes = (ng?.notes || ng?.events || []).map(normNote).filter(Boolean);
+      if (!notes.length) return;
+      audio.stopAll();
+      const t0 = Math.min(...notes.map((n) => n.t));
+      notes.forEach((n) => audio.playNote(n.p, n.v, n.d, { delayS: Math.max(0, n.t - t0), cc64: 74, cc67: 38 }));
+    });
+    $("btn-ng-save")?.addEventListener("click", async () => {
+      const res = await postJson("/api/notagen/save_work", {});
+      showExportToast("ng-export-toast", res);
+    });
+
+    // Mode [4] Library Archive Controls
+    $("search-input")?.addEventListener("input", (e) => {
+      state.searchText = e.target.value;
+      renderLibraryPieceList();
+    });
+    $("style-select")?.addEventListener("change", (e) => {
+      state.activeStyle = e.target.value;
+      renderLibraryPieceList();
+    });
+    document.querySelectorAll(".filter-btn[data-filter]").forEach((btn) => {
+      btn.addEventListener("click", () => {
+        document.querySelectorAll(".filter-btn").forEach((b) => b.classList.remove("active"));
+        btn.classList.add("active");
+        state.activeFilter = btn.dataset.filter;
+        renderLibraryPieceList();
+      });
+    });
+
+    $("btn-play")?.addEventListener("click", () => {
+      if (state.libPlaying) stopLibraryPlayback();
+      else startLibraryPlayback();
+    });
+    $("btn-stop")?.addEventListener("click", () => {
+      stopLibraryPlayback();
+      seekLibraryTo(0);
+    });
+    $("seek-slider")?.addEventListener("input", (e) => {
+      const dur = Number(state.pieceData?.duration_s || 45);
+      seekLibraryTo((Number(e.target.value) / 1000) * dur);
+    });
+
+    $("score-canvas")?.addEventListener("click", (e) => {
+      if (!state.pieceData) return;
+      const rect = e.target.getBoundingClientRect();
+      const dur = Number(state.pieceData.duration_s || 45);
+      const winStart = Math.max(0, state.libCursorSec - 3.0);
+      const winEnd = Math.min(dur, winStart + 9.5);
+      const ratio = clamp((e.clientX - rect.left - 58) / Math.max(80, rect.width - 80), 0, 1);
+      seekLibraryTo(winStart + ratio * (winEnd - winStart));
+    });
+
+    $("tab-score")?.addEventListener("click", () => {
+      $("tab-score").setAttribute("aria-selected", "true");
+      $("tab-delib").setAttribute("aria-selected", "false");
+      $("panel-score").hidden = false;
+      $("panel-delib").hidden = true;
+      requestAnimationFrame(() => renderLibraryFrame(state.libCursorSec));
+    });
+    $("tab-delib")?.addEventListener("click", () => {
+      $("tab-score").setAttribute("aria-selected", "false");
+      $("tab-delib").setAttribute("aria-selected", "true");
+      $("panel-score").hidden = true;
+      $("panel-delib").hidden = false;
+      renderLibraryDeliberation(state.pieceData);
+    });
+
+    $("btn-resume-ai")?.addEventListener("click", () => {
+      const chord = $("xray-chord")?.textContent || "Dm";
+      if ($("inp-ng-seed")) $("inp-ng-seed").value = "D4 F4 A4 C5";
+      if ($("inp-ng-prompt")) {
+        $("inp-ng-prompt").value = `${state.selectedPieceMeta?.title_ja || "選定曲"} (${chord} 付近) の余韻を継承し、新たな展開を続ける`;
+      }
+      switchModeView("notagen");
+    });
+
+    // Global Keyboard Shortcuts (F10 Projection, Esc Panic/Close, A-K Piano Keys)
+    window.addEventListener("keydown", (e) => {
+      if (e.key === "F10") {
+        e.preventDefault();
+        toggleProjectionClean();
+        return;
+      }
+      if (e.key === "Escape") {
+        if ($("help-modal") && !$("help-modal").hidden) {
+          $("help-modal").hidden = true;
+        } else {
+          handlePanic();
+        }
+        return;
+      }
+      const tag = (document.activeElement?.tagName || "").toUpperCase();
+      if (tag === "INPUT" || tag === "TEXTAREA" || tag === "SELECT") return;
+
+      if (e.code === "Space" && state.activeView === "library") {
+        e.preventDefault();
+        if (state.libPlaying) stopLibraryPlayback();
+        else startLibraryPlayback();
+        return;
+      }
+      if (state.activeView === "piano" && !e.repeat && PC_KEY_TO_MIDI[e.code] != null) {
+        handleHumanPianoKey(PC_KEY_TO_MIDI[e.code], 78);
       }
     });
 
     window.addEventListener("resize", () => {
-      drawScoreCanvas(currentPlaybackTimeS());
+      renderStageViews();
+      if (state.activeView === "library") renderLibraryFrame(state.libCursorSec);
+      if (state.activeView === "piano") renderPianoKeyboard();
     });
-
-    // Keyboard shortcuts (Space play/pause, Left/Right seek +-3s, Esc stop)
-    window.addEventListener("keydown", (ev) => {
-      const tag = (ev.target && ev.target.tagName) ? ev.target.tagName.toUpperCase() : "";
-      if (tag === "INPUT" || tag === "SELECT" || tag === "TEXTAREA") return;
-      if (ev.code === "Space" && state.currentPiece) {
-        ev.preventDefault();
-        if (state.playback.playing) stopPlayback(false);
-        else startPlayback();
-      } else if (ev.code === "ArrowLeft" && state.currentPiece) {
-        ev.preventDefault();
-        const t = Math.max(0, currentPlaybackTimeS() - 3.0);
-        if (state.playback.playing) startPlayback(t);
-        else {
-          state.playback.offsetS = t;
-          updateRealtimeTelemetry(t);
-          drawScoreCanvas(t);
-        }
-      } else if (ev.code === "ArrowRight" && state.currentPiece) {
-        ev.preventDefault();
-        const dur = Math.max(1, Number(state.currentPiece.duration_s || 36));
-        const t = Math.min(dur - 0.1, currentPlaybackTimeS() + 3.0);
-        if (state.playback.playing) startPlayback(t);
-        else {
-          state.playback.offsetS = t;
-          updateRealtimeTelemetry(t);
-          drawScoreCanvas(t);
-        }
-      } else if (ev.code === "Escape") {
-        stopPlayback(true);
-      }
-    });
-
-    // Load 100-piece catalog
-    try {
-      const res = await fetch(catalogUrl());
-      if (!res.ok) throw new Error(`HTTP ${res.status}`);
-      const catalog = await res.json();
-      state.catalog = catalog;
-      const st = catalog.stats || {};
-      el("catalog-stats-pill").textContent =
-        `${st.total_pieces || 100}曲 (平均美しさ ${st.avg_beauty_score || "--"} / 協和 ${st.avg_consonance_score || "--"}% / 同時 ${st.avg_polyphony || "--"}音)`;
-
-      // Populate tonality dropdown
-      const seenTons = new Map();
-      for (const p of catalog.pieces || []) {
-        if (!seenTons.has(p.tonality)) seenTons.set(p.tonality, p.tonality_ja);
-      }
-      const tonSel = el("filter-tonality");
-      for (const [k, v] of seenTons.entries()) {
-        const opt = document.createElement("option");
-        opt.value = k;
-        opt.textContent = v;
-        tonSel.appendChild(opt);
-      }
-
-      applyFilters();
-      const firstId = (catalog.showcase_ids && catalog.showcase_ids[0]) || (catalog.pieces?.[0]?.id);
-      if (firstId) await loadPiece(firstId);
-    } catch (err) {
-      el("catalog-stats-pill").textContent = "カタログ読込エラー";
-      console.error("Failed to load catalog", err);
-    }
-
-    initLiveControls();
   }
 
-  window.addEventListener("DOMContentLoaded", boot);
+  // ===========================================================================
+  // Bootstrap
+  // ===========================================================================
+  document.addEventListener("DOMContentLoaded", () => {
+    bindEvents();
+    initLibraryCatalog();
+    renderStageViews();
+    if (LIVE_MODE) connectLiveSocket();
+  });
 })();

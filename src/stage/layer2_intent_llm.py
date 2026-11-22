@@ -489,8 +489,39 @@ class MusicalIntentEngine:
         self.economizer = economizer or TokenEconomizer()
         self.last_source: str = "rule_fallback"
         self.last_latency_ms: float = 0.0
+        self.last_ttft_ms: float = 0.0
         self.last_validator_rewrites: int = 0
         self.last_token_stats: Dict[str, Any] = dict(self.economizer.last_stats)
+
+    def _chat_with_ttft(
+        self,
+        client: Any,
+        messages: List[Dict[str, str]],
+        fmt_schema: Dict[str, Any],
+        options: Dict[str, Any],
+    ) -> str:
+        t0 = time.perf_counter()
+        ttft_ms: Optional[float] = None
+        chunks: List[str] = []
+        for ch in client.chat(
+            model=self.model_name,
+            messages=messages,
+            format=fmt_schema,
+            options=options,
+            keep_alive=-1,
+            think=False,
+            stream=True,
+        ):
+            if ttft_ms is None:
+                ttft_ms = round((time.perf_counter() - t0) * 1000.0, 2)
+            txt = ch["message"]["content"] if isinstance(ch, dict) else ch.message.content
+            if txt:
+                chunks.append(txt)
+        if ttft_ms is not None:
+            self.last_ttft_ms = ttft_ms
+        else:
+            self.last_ttft_ms = round((time.perf_counter() - t0) * 1000.0, 2)
+        return "".join(chunks)
 
     @staticmethod
     def _macro_dict(macro_plan: Optional[Any]) -> Dict[str, Any]:
@@ -665,18 +696,15 @@ class MusicalIntentEngine:
             import ollama
 
             client = ollama.Client(host=self.ollama_host, timeout=self.timeout_s)
-            resp = client.chat(
-                model=self.model_name,
+            raw_content = self._chat_with_ttft(
+                client,
                 messages=[
                     {"role": "system", "content": self.POLICY_PROMPT},
                     {"role": "user", "content": econ.compact_prompt},
                 ],
-                format=LLMPolicyDesignSchema.model_json_schema(),
+                fmt_schema=LLMPolicyDesignSchema.model_json_schema(),
                 options={"temperature": 0.25, "num_ctx": 1536, "num_predict": 240},
-                keep_alive=-1,
-                think=False,
             )
-            raw_content = resp["message"]["content"] if isinstance(resp, dict) else resp.message.content
             designed = LLMPolicyDesignSchema.model_validate_json(raw_content)
 
             hints = directive_hints or {}
@@ -801,18 +829,15 @@ class MusicalIntentEngine:
                     else user_prompt
                     + f"\n修正要求({','.join(last_errs[:3])}): 必ず46〜72文字で「チェロ/ピアノ{h_names}の[奏法]を検出。」「案[ID]は[欠点]ため捨て、」「案{adopted_id}の両手{adopted_reg}を[ペダル/ウナ・コルダ]で置く。」を書け。"
                 )
-                resp = client.chat(
-                    model=self.model_name,
+                raw_content = self._chat_with_ttft(
+                    client,
                     messages=[
                         {"role": "system", "content": self.DELIBERATION_PROMPT},
                         {"role": "user", "content": prompt_msg},
                     ],
-                    format=FactualMonologueSchema.model_json_schema(),
+                    fmt_schema=FactualMonologueSchema.model_json_schema(),
                     options={"temperature": 0.12, "num_ctx": 1536, "num_predict": 110},
-                    keep_alive=-1,
-                    think=False,
                 )
-                raw_content = resp["message"]["content"] if isinstance(resp, dict) else resp.message.content
                 data = json.loads(raw_content)
                 cand_text = str(data.get("monologue_ja", "")).strip()
                 cleaned = EMOJI_PATTERN.sub("", cand_text).replace("！", "。").replace("!", "。")

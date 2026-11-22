@@ -26,22 +26,37 @@ jobs:
         uses: actions/setup-python@v5
         with:
           python-version: "3.12"
+          cache: "pip"
+          cache-dependency-path: "requirements-ci.txt"
 
-      - name: Install FFmpeg & lightweight verification dependencies
+      - name: Install FFmpeg & lightweight CI dependencies
         run: |
           sudo apt-get update && sudo apt-get install -y ffmpeg
           python -m pip install --upgrade pip
-          python -m pip install fastapi uvicorn websockets pydantic mido numpy scipy pyyaml httpx pytest soundfile
+          python -m pip install -r requirements-ci.txt
 
-      - name: Run unit & safety test suites
+      - name: Run CI-safe unit, safety, stage, & security test suites
+        env:
+          CI: "1"
+          PYTHONUTF8: "1"
         run: |
-          PYTHONPATH=. pytest -v tests/test_safety_guard.py tests/test_phase1_security.py
+          PYTHONPATH=. pytest -v \
+            tests/test_safety_guard.py \
+            tests/test_phase1_security.py \
+            tests/test_stage_system.py \
+            tests/test_studio_overhaul.py \
+            $( [ -f tests/test_parallel_and_notagen.py ] && echo tests/test_parallel_and_notagen.py || true )
 
       - name: Verify 100-piece musicality catalog and 10 showcase MP3/MIDI assets
+        env:
+          CI: "1"
+          PYTHONUTF8: "1"
         run: |
           PYTHONPATH=. python scripts/verify_catalog_and_demo.py
 
-      - name: Verify static web-demo asset structure (relative paths, no broken links)
+      - name: Verify static web-demo asset structure (relative paths, UTF-8, size limits, no broken links)
+        env:
+          PYTHONUTF8: "1"
         run: |
           python -c "
           import json, pathlib
@@ -50,6 +65,9 @@ jobs:
               assert (root / req).exists(), f'Missing {req}'
           html = (root / 'index.html').read_text(encoding='utf-8')
           assert './app.js' in html and './style.css' in html and './favicon.ico' in html
+          assert '/studio-static/' not in html, 'Static web-demo must use relative ./ paths'
+          (root / 'app.js').read_text(encoding='utf-8')
+          (root / 'style.css').read_text(encoding='utf-8')
           cat = json.loads((root / 'data' / 'catalog_100.json').read_text(encoding='utf-8'))
           assert len(cat['pieces']) == 100
           for e in cat['pieces']:
@@ -58,6 +76,8 @@ jobs:
                   assert (root / e['showcase_mp3']).exists()
               if e.get('showcase_mid'):
                   assert (root / e['showcase_mid']).exists()
+          oversized = [str(p) for p in root.rglob('*') if p.is_file() and p.stat().st_size > 25 * 1024 * 1024]
+          assert not oversized, f'Oversized files in web-demo: {oversized}'
           print('Static web-demo bundle integrity verified (100 pieces + 10 MP3/MID assets).')
           "
 

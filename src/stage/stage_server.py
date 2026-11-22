@@ -15,9 +15,11 @@ from __future__ import annotations
 import argparse
 import asyncio
 from contextlib import asynccontextmanager
+import json
 import os
 from pathlib import Path
 import random
+import socket
 import subprocess
 import sys
 import threading
@@ -51,7 +53,16 @@ from src.stage.layer3_candidate_composer import (
 )
 from src.stage.layer5_disklavier_output import DisklavierStageOutputLayer
 from src.stage.local_audio_synth import LocalAudioSynthesizer
+from src.stage.notagen_live_engine import NotaGenLiveEngine
+from src.stage.parallel_pipeline import (
+    AudioRenderWorker,
+    AsyncLLMIntentWorker,
+    PerceptionWorker,
+    SpeculativePreGenWorker,
+    WorkerTelemetrySnapshot,
+)
 from src.stage.token_economizer import TokenEconomizer
+from src.stage.vram_manager import RTX3070VRAMManager
 
 try:
     import mido
@@ -199,6 +210,43 @@ class SynthesizeWorkReq(BaseModel):
     play_audio: bool = False
 
 
+class HumanNoteReq(BaseModel):
+    pitch: int
+    velocity: int = 76
+    duration_s: float = 0.35
+    from_browser: bool = True
+
+
+class HumanPhraseReq(BaseModel):
+    notes: List[Dict[str, Any]]
+    mode: Optional[str] = None
+    auto_turn: bool = True
+
+
+class PedalCueReq(BaseModel):
+    control: int = 67
+    value: int = 96
+
+
+class LiveListenReq(BaseModel):
+    enabled: bool
+
+
+class ConnectionModeReq(BaseModel):
+    production_mode: bool
+
+
+class NotaGenStartReq(BaseModel):
+    seed_notes: Any = None
+    prompt_ja: str = ""
+    tonality: str = "D_minor"
+    bpm: float = 76.0
+    bars: int = 8
+    engine: str = "auto"
+    play_audio: bool = True
+    blocking: bool = False
+
+
 class StageOrchestrator:
     """
     Runs the full L1 -> L2 Policy -> L3 4-Candidate Scoring -> L2 Deliberation Trace
@@ -242,6 +290,7 @@ class StageOrchestrator:
             "timestamp": 0.0,
         }
         self._lock = threading.RLock()
+        self._strikes_lock = threading.Lock()
 
         # L1 Perception
         self.echo_ledger = EchoSuppressionLedger(min_lag_s=0.0, max_lag_s=0.280)
@@ -322,12 +371,55 @@ class StageOrchestrator:
         self.latest_candidates: List[CandidatePhrase] = []
         self.recent_strikes: List[Dict[str, Any]] = []
         self.recent_human_demo_notes: List[Dict[str, Any]] = []
+        self.human_active_pitches: List[int] = []
+        self.live_listening: bool = False
+        self.worker_metrics = WorkerTelemetrySnapshot()
 
         # Motif Memory Graph (starts at 0 nodes at curtain rise)
         self.motif_nodes: List[Dict[str, Any]] = []
         self.motif_edges: List[Dict[str, Any]] = []
         self._last_human_node_id: Optional[str] = None
         self._last_ai_node_id: Optional[str] = None
+
+        # RTX 3070 8GB Dynamic VRAM Manager & NotaGen/LLM From-Scratch Live Engine
+        self.vram_manager = RTX3070VRAMManager(ollama_model=selected_model)
+        self.notagen_engine = NotaGenLiveEngine(
+            vram_manager=self.vram_manager,
+            ollama_model=selected_model,
+            output_layer=self.output_layer,
+            audio_synth=self.audio_synth,
+            obsidian_brain=self.obsidian_brain,
+            phrase_model=self.phrase_model,
+            use_ollama=ollama_ready,
+        )
+
+        # 6-Worker Parallel Architecture (W2 Perception, W3 Async LLM, W5 Speculative, W6 Audio)
+        self.async_llm_worker = AsyncLLMIntentWorker()
+        self.speculative_worker = SpeculativePreGenWorker(
+            architect=self.architect,
+            composer=self.composer,
+            intent_engine=self.intent_engine,
+            corpus_loader=self.corpus_loader,
+        )
+        self.audio_render_worker = AudioRenderWorker(
+            audio_synth=self.audio_synth,
+            on_rendered=self._on_async_audio_rendered,
+        )
+        self.perception_worker = PerceptionWorker(
+            echo_ledger=self.echo_ledger,
+            turn_detector=self.turn_detector,
+            nlms=self.nlms,
+            cello_perception=self.cello_perception,
+            on_state_update=self._on_perception_worker_state,
+            on_speculate_hint=self._on_speculate_hint,
+            on_turn_trigger=self._on_worker_turn_trigger,
+        )
+        self.perception_worker.set_mode(self.mode)
+
+        # Optional live audio capture stream (Steinberg UR22mkII for Mode B production)
+        self._audio_in_stream: Any = None
+        if open_hardware and self.production_mode:
+            self._try_open_audio_input(cfg.get("audio", {}))
 
         # Background Demo / Turn Loop & Lock-free GPU VRAM Monitor
         self._running: bool = True
@@ -346,9 +438,64 @@ class StageOrchestrator:
         )
         self._vram_thread.start()
 
+    def _try_open_audio_input(self, audio_cfg: Dict[str, Any]) -> None:
+        try:
+            import sounddevice as sd
+
+            dev_idx = audio_cfg.get("ur22_device_index")
+            if dev_idx is None:
+                return
+
+            def _audio_cb(indata: np.ndarray, frames: int, time_info: Any, status: Any) -> None:
+                if indata is None or len(indata) == 0:
+                    return
+                mic_ch = indata[:, 0].copy()
+                ref_ch = indata[:, 1].copy() if indata.shape[1] >= 2 else None
+                self.perception_worker.push_audio_block(mic_ch, ref_ch)
+
+            self._audio_in_stream = sd.InputStream(
+                device=int(dev_idx),
+                channels=2,
+                samplerate=44100,
+                blocksize=1024,
+                callback=_audio_cb,
+            )
+            self._audio_in_stream.start()
+        except Exception:
+            self._audio_in_stream = None
+
+    def _on_perception_worker_state(
+        self,
+        snap: PerceptionSnapshot,
+        phrase_buf: List[Dict[str, Any]],
+        active_pitches: List[int],
+    ) -> None:
+        with self._lock:
+            self.latest_perception = snap
+            self.human_phrase_buffer = phrase_buf
+            self.human_active_pitches = active_pitches
+            self.worker_metrics.perception_latency_ms = self.perception_worker.last_latency_ms
+
+    def _on_speculate_hint(self, snap: PerceptionSnapshot, notes: List[Dict[str, Any]]) -> None:
+        with self._lock:
+            hints = dict(self.pending_directive_hints)
+        self.speculative_worker.schedule_pregen(snap, notes, hints)
+
+    def _on_worker_turn_trigger(self) -> None:
+        try:
+            self.execute_composition_turn(use_virtual_human=False, staggered_playback=False, sync_audio=False)
+        except Exception:
+            pass
+
+    def _on_async_audio_rendered(self, stats: Dict[str, Any]) -> None:
+        with self._lock:
+            self.latest_audio_stats = stats
+            self.worker_metrics.audio_render_ms = self.audio_render_worker.last_render_ms
+
     def _vram_poll_loop(self) -> None:
         while self._running:
-            self._gpu_vram_gb = _probe_gpu_vram_gb_nonblocking()
+            probe = self.vram_manager.probe_vram(force=True)
+            self._gpu_vram_gb = probe.get("used_gb") if probe.get("cuda_available") else _probe_gpu_vram_gb_nonblocking()
             for _ in range(150):
                 if not self._running:
                     break
@@ -368,31 +515,32 @@ class StageOrchestrator:
     def _on_hardware_midi_in(self, msg: Any) -> None:
         now = time.perf_counter()
         if msg.type == "note_on" and msg.velocity > 0:
-            accepted = self.echo_ledger.filter_incoming_note(msg.note, msg.velocity, recv_ts=now)
-            if accepted is None:
-                return
-            with self._lock:
-                self.human_phrase_buffer.append(accepted)
-                self.turn_detector.push_note(msg.note, now)
-                self.latest_perception = PerceptionSnapshot(
-                    mode="piano",
-                    timestamp=now,
-                    midi_pitch=msg.note,
-                    note_name=midi_to_note_name(msg.note),
-                    articulation="legato" if self.turn_detector.pedal_cc64 >= 35 else "staccato",
-                    echo_suppressed_count=self.echo_ledger.suppressed_count,
-                    human_notes_count=self.echo_ledger.human_accepted_count,
-                    pedal_cc64=self.turn_detector.pedal_cc64,
-                    pedal_cc67=self.turn_detector.pedal_cc67,
-                    recent_human_notes=list(self.human_phrase_buffer[-12:]),
-                )
+            self.perception_worker.push_midi_event(
+                {
+                    "type": "note_on",
+                    "pitch": int(msg.note),
+                    "velocity": int(msg.velocity),
+                    "ts": now,
+                    "from_browser": False,
+                }
+            )
+        elif msg.type == "note_off" or (msg.type == "note_on" and msg.velocity == 0):
+            self.perception_worker.push_midi_event(
+                {"type": "note_off", "pitch": int(msg.note), "ts": now}
+            )
         elif msg.type == "control_change":
-            with self._lock:
-                self.turn_detector.push_cc(msg.control, msg.value, now)
+            self.perception_worker.push_midi_event(
+                {
+                    "type": "control_change",
+                    "control": int(msg.control),
+                    "value": int(msg.value),
+                    "ts": now,
+                }
+            )
 
     def _on_l5_midi_event(self, payload: Dict[str, Any]) -> None:
         if payload.get("type") == "note_on":
-            with self._lock:
+            with self._strikes_lock:
                 self.recent_strikes.append(
                     {
                         "pitch": int(payload["pitch"]),
@@ -409,7 +557,84 @@ class StageOrchestrator:
         with self._lock:
             self.mode = m
             self.latest_perception.mode = m
+            self.perception_worker.set_mode(m)
         return {"ok": True, "mode": self.mode}
+
+    def set_live_listening(self, enabled: bool) -> Dict[str, Any]:
+        with self._lock:
+            self.live_listening = bool(enabled)
+            self.perception_worker.set_live_listening(self.live_listening)
+        return {"ok": True, "live_listening": self.live_listening}
+
+    def set_connection_mode(self, production_mode: bool) -> Dict[str, Any]:
+        with self._lock:
+            self.production_mode = bool(production_mode)
+            if self.production_mode:
+                self.demo_enabled = False
+                self.monitor_audio = False
+                self.audio_synth.set_enabled(False)
+            else:
+                self.monitor_audio = True
+                self.audio_synth.set_enabled(True)
+            self.latest_audio_stats = self.audio_synth.get_status()
+        return {
+            "ok": True,
+            "production_mode": self.production_mode,
+            "demo_enabled": self.demo_enabled,
+            "monitor_audio": self.monitor_audio,
+        }
+
+    def push_browser_human_note(
+        self, pitch: int, velocity: int = 76, duration_s: float = 0.35, from_browser: bool = True
+    ) -> Dict[str, Any]:
+        now = time.perf_counter()
+        p = max(21, min(108, int(pitch)))
+        v = max(20, min(108, int(velocity)))
+        self.perception_worker.push_midi_event(
+            {
+                "type": "note_on",
+                "pitch": p,
+                "velocity": v,
+                "duration_s": float(duration_s),
+                "ts": now,
+                "from_browser": bool(from_browser),
+            }
+        )
+        return {"ok": True, "pitch": p, "note_name": midi_to_note_name(p)}
+
+    def push_human_phrase_and_reply(
+        self, notes: List[Dict[str, Any]], mode: Optional[str] = None, auto_turn: bool = True
+    ) -> Dict[str, Any]:
+        if mode:
+            self.set_mode(mode)
+        now = time.perf_counter()
+        clean_notes = []
+        for idx, n in enumerate(notes[:16]):
+            p = max(21, min(108, int(n.get("pitch", n.get("note", 62)))))
+            v = max(20, min(108, int(n.get("velocity", 74))))
+            d = max(0.10, min(2.0, float(n.get("duration_s", 0.30))))
+            t_ev = now + idx * 0.14
+            clean_notes.append({"pitch": p, "velocity": v, "duration_s": d, "onset_s": round(idx * 0.24, 3)})
+            self.perception_worker.push_midi_event(
+                {"type": "note_on", "pitch": p, "velocity": v, "duration_s": d, "ts": t_ev, "from_browser": True}
+            )
+        time.sleep(0.025)
+        if auto_turn:
+            return self.execute_composition_turn(
+                use_virtual_human=False, staggered_playback=False, sync_audio=False
+            )
+        return self.get_hud_state()
+
+    def push_pedal_cue(self, control: int = 67, value: int = 96) -> Dict[str, Any]:
+        now = time.perf_counter()
+        self.perception_worker.push_midi_event(
+            {"type": "control_change", "control": int(control), "value": int(value), "ts": now}
+        )
+        if int(control) == 67 and int(value) >= 64 and len(self.human_phrase_buffer) >= 1:
+            return self.execute_composition_turn(
+                use_virtual_human=False, staggered_playback=False, sync_audio=False
+            )
+        return self.get_hud_state()
 
     def set_demo_enabled(self, enabled: bool) -> Dict[str, Any]:
         with self._lock:
@@ -509,6 +734,7 @@ class StageOrchestrator:
             self.architect.reset()
             self.latest_macro_state = self.architect.get_macro_state_snapshot()
             self.latest_synthesized_work = None
+        self.speculative_worker.clear()
         self.audio_synth.stop_audio()
         self.output_layer.panic()
         return {"ok": True, "motif_nodes": 0}
@@ -689,7 +915,9 @@ class StageOrchestrator:
         use_virtual_human: bool = True,
         staggered_playback: bool = False,
         explicit_retake: bool = False,
+        sync_audio: bool = True,
     ) -> Dict[str, Any]:
+        t_turn_start = time.perf_counter()
         with self._lock:
             hints = dict(self.pending_directive_hints)
             is_retake_req = bool(
@@ -708,12 +936,12 @@ class StageOrchestrator:
             else:
                 self._demo_step_idx += 1
                 step_idx = self._demo_step_idx
-                if use_virtual_human or not self.human_phrase_buffer:
+                buffered = self.perception_worker.consume_human_phrase(limit=8) if not use_virtual_human else []
+                if use_virtual_human or not buffered:
                     snap, human_notes = self._simulate_virtual_human_turn(step_idx)
                     self.recent_human_demo_notes = [dict(n) for n in human_notes]
                 else:
-                    human_notes = list(self.human_phrase_buffer[-8:])
-                    self.human_phrase_buffer.clear()
+                    human_notes = buffered
                     self.recent_human_demo_notes = [dict(n) for n in human_notes]
                     snap = self.latest_perception
                     snap.breath_gauge = 1.0
@@ -730,38 +958,68 @@ class StageOrchestrator:
             explicit_retake=is_retake_req,
         )
 
-        # Step 1: L2 decides autonomous musical policy via TokenEconomizer + Ollama/Rules
-        corpus_refs = self.corpus_loader.retrieve_voicing_references(
-            tension=0.5, momentum=0.5, top_k=3
-        )
-        policy_intent = self.intent_engine.decide_policy(
-            snap,
-            human_notes,
-            hints,
-            corpus_refs=corpus_refs,
-            macro_plan=macro_plan,
-        )
+        # Worker 5: Check Speculative Pre-Generation Cache before heavy recomputation
+        spec_draft = None
+        if not is_retake_req and not use_virtual_human:
+            spec_draft = self.speculative_worker.try_consume(snap.mode, human_notes, hints)
 
-        # Step 2: L3 generates 4 two-hand polyphonic candidates + RTX 3070 Transformer Blueprint + Masterwork Audit
-        turn_res = self.composer.compose_turn(
-            human_notes,
-            policy_intent,
-            human_mode=snap.mode,
-            macro_plan=macro_plan,
-        )
-        adopted = turn_res.adopted_candidate
-        rejected = [c for c in turn_res.candidates if not c.adopted]
+        if spec_draft is not None:
+            policy_intent = spec_draft.policy_intent
+            turn_res = spec_draft.turn_result
+            final_intent = spec_draft.final_intent
+            adopted = turn_res.adopted_candidate
+            rejected = [c for c in turn_res.candidates if not c.adopted]
+            self.worker_metrics.speculative_hits = self.speculative_worker.hits
+            self.worker_metrics.speculative_saved_ms = self.speculative_worker.last_saved_ms
+        else:
+            self.worker_metrics.speculative_misses = self.speculative_worker.misses
+            # Ensure VRAM headroom for Ollama if NotaGen was previously resident
+            if self.intent_engine.use_ollama:
+                self.vram_manager.acquire_for("ollama", required_gb=3.4)
 
-        # Step 3: L2 grounds the performer deliberation memo strictly in L1 & L3 real data
-        final_intent = self.intent_engine.finalize_deliberation_monologue(
-            snap,
-            human_notes,
-            policy_intent,
-            turn_res,
-            hints,
-            corpus_refs=turn_res.corpus_refs_used,
-            macro_plan=macro_plan,
-        )
+            # Worker 3: Async Ollama policy design concurrently with corpus retrieval
+            policy_fut = self.async_llm_worker.submit_llm(
+                self.intent_engine.decide_policy,
+                snap,
+                human_notes,
+                hints,
+                self.corpus_loader.retrieve_voicing_references(tension=0.5, momentum=0.5, top_k=3),
+                True,
+                macro_plan,
+            )
+            policy_intent = policy_fut.result()
+
+            # Worker 4: 4-Candidate Parallel Composer + Masterwork Audit Pool
+            turn_res = self.composer.compose_turn(
+                human_notes,
+                policy_intent,
+                human_mode=snap.mode,
+                macro_plan=macro_plan,
+                parallel=True,
+            )
+            adopted = turn_res.adopted_candidate
+            rejected = [c for c in turn_res.candidates if not c.adopted]
+
+            # Worker 3: Async grounded performer deliberation memo strictly from L1 & L3 results
+            memo_fut = self.async_llm_worker.submit_llm(
+                self.intent_engine.finalize_deliberation_monologue,
+                snap,
+                human_notes,
+                policy_intent,
+                turn_res,
+                hints,
+                turn_res.corpus_refs_used,
+                macro_plan,
+            )
+            final_intent = memo_fut.result()
+
+        with self._lock:
+            self.worker_metrics.parallel_compose_ms = getattr(turn_res, "parallel_compose_ms", 0.0)
+            self.worker_metrics.sum_worker_ms = getattr(turn_res, "sum_worker_ms", 0.0)
+            self.worker_metrics.parallel_speedup_ratio = getattr(turn_res, "parallel_speedup_ratio", 1.0)
+            self.worker_metrics.llm_ttft_ms = getattr(self.intent_engine, "last_ttft_ms", 0.0)
+            self.worker_metrics.llm_latency_ms = self.intent_engine.last_latency_ms
+
         timeline = self._build_deliberation_timeline(
             turn_res.candidates, fast_mode=self.production_mode
         )
@@ -818,16 +1076,31 @@ class StageOrchestrator:
                 elif item["stage"] == "step1_sketch":
                     time.sleep(0.05 if self.production_mode else 0.14)
 
-        # Step 4: Synthesize Python direct audio (dual-pedal physics) & schedule L5 output
-        audio_stats = self.audio_synth.play_turn_audio(
-            human_notes=human_notes,
-            human_mode=snap.mode,
-            human_articulation=snap.articulation,
-            rejected_candidates=rejected,
-            adopted_events=adopted.events,
-            play_device=(self.monitor_audio and self.play_audio_device),
-        )
-        self.output_layer.schedule_phrase(adopted.events, base_sound_ts=time.perf_counter() + 0.10)
+        # Worker 1: Schedule L5 Disklavier Output IMMEDIATELY before audio reverb synthesis
+        self.output_layer.schedule_phrase(adopted.events, base_sound_ts=time.perf_counter() + 0.08)
+
+        # Worker 6: Render Concert Hall Audio (synchronous when requested by test harness, async in live loop)
+        if sync_audio:
+            audio_stats = self.audio_synth.play_turn_audio(
+                human_notes=human_notes,
+                human_mode=snap.mode,
+                human_articulation=snap.articulation,
+                rejected_candidates=rejected,
+                adopted_events=adopted.events,
+                play_device=(self.monitor_audio and self.play_audio_device),
+            )
+        else:
+            self.audio_render_worker.submit(
+                {
+                    "human_notes": list(human_notes),
+                    "human_mode": snap.mode,
+                    "human_articulation": snap.articulation,
+                    "rejected_candidates": list(rejected),
+                    "adopted_events": list(adopted.events),
+                    "play_device": (self.monitor_audio and self.play_audio_device),
+                }
+            )
+            audio_stats = self.audio_synth.get_status()
 
         # Update latest perception pedal state to reflect active dual-pedal drive for HUD gauges
         if adopted.pedal_cc64_curve:
@@ -837,8 +1110,10 @@ class StageOrchestrator:
             c67_vals = [int(pt["val"]) for pt in adopted.pedal_cc67_curve]
             snap.pedal_cc67 = max(c67_vals) if max(c67_vals) > 0 else 0
 
-        # Step 5: Archive turn deliberation & voicing trace to Obsidian Vault
-        if self.obsidian_brain is not None:
+        # Step 5: Archive turn deliberation & voicing trace to Obsidian Vault (async in live mode)
+        def _archive_obsidian() -> None:
+            if self.obsidian_brain is None:
+                return
             try:
                 c64_list = [int(pt["val"]) for pt in adopted.pedal_cc64_curve] or [0]
                 c67_list = [int(pt["val"]) for pt in adopted.pedal_cc67_curve] or [0]
@@ -872,7 +1147,13 @@ class StageOrchestrator:
             except Exception:
                 pass
 
+        if sync_audio:
+            _archive_obsidian()
+        else:
+            self.async_llm_worker.submit_obsidian(_archive_obsidian)
+
         with self._lock:
+            self.worker_metrics.last_turn_wall_ms = round((time.perf_counter() - t_turn_start) * 1000.0, 2)
             self.deliberation_stage = "step3_adopt_perform"
             self.deliberation_active_reject_id = ""
             self.phase = "performing"
@@ -1041,28 +1322,29 @@ class StageOrchestrator:
             if self.demo_enabled and not self.production_mode and (now - last_turn_t) >= 4.2:
                 last_turn_t = now
                 try:
-                    self.execute_composition_turn(use_virtual_human=True, staggered_playback=True)
+                    self.execute_composition_turn(
+                        use_virtual_human=True, staggered_playback=True, sync_audio=False
+                    )
                 except Exception:
                     pass
-            elif not self.demo_enabled and self.mode == "piano":
-                with self._lock:
-                    gauge, ready, reason = self.turn_detector.evaluate(now)
-                    self.latest_perception.breath_gauge = gauge
-                    self.latest_perception.turn_ready = ready
-                    self.latest_perception.turn_reason = reason
-                    has_notes = len(self.human_phrase_buffer) >= 2
-                if ready and has_notes:
-                    last_turn_t = now
-                    try:
-                        self.execute_composition_turn(use_virtual_human=False, staggered_playback=False)
-                    except Exception:
-                        pass
             time.sleep(0.05)
 
     def get_hud_state(self) -> Dict[str, Any]:
-        with self._lock:
-            out_tel = self.output_layer.get_telemetry()
+        out_tel = self.output_layer.get_telemetry()
+        with self.output_layer._lock:
             active_pitches = sorted(int(k) for k in self.output_layer.active_notes.keys())
+        vram_info = self.vram_manager.probe_vram(force=False)
+        notagen_status = self.notagen_engine.get_status()
+        with self._strikes_lock:
+            recent_strikes = list(self.recent_strikes[-16:])
+        spec_hits = self.speculative_worker.hits
+        spec_misses = self.speculative_worker.misses
+        spec_ready = self.speculative_worker.has_ready_draft()
+        spec_saved_ms = self.speculative_worker.last_saved_ms
+        audio_render_ms = self.audio_render_worker.last_render_ms
+        audio_q_depth = self.audio_render_worker.queue_depth()
+
+        with self._lock:
             p = self.latest_perception
             intent_dict = self.latest_intent.model_dump()
             candidates_list = [
@@ -1103,12 +1385,15 @@ class StageOrchestrator:
                     else "モニター消音中 (WebAudio待機)"
                 )
             )
+            wm = self.worker_metrics
             return {
                 "timestamp": round(time.perf_counter(), 4),
                 "mode": self.mode,
                 "production_mode": self.production_mode,
                 "demo_enabled": self.demo_enabled,
                 "monitor_audio": self.monitor_audio,
+                "live_listening": self.live_listening,
+                "human_active_pitches": list(self.human_active_pitches),
                 "active_preset": self.active_preset,
                 "phase": self.phase,
                 "deliberation_stage": self.deliberation_stage,
@@ -1122,6 +1407,31 @@ class StageOrchestrator:
                 "phrase_model_device": self.phrase_model.device if self.phrase_model.loaded else "fallback",
                 "gpu_vram_gb": self._gpu_vram_gb,
                 "calibration": dict(self.calibration_status),
+                "telemetry_hud": {
+                    "perception_latency_ms": self.perception_worker.last_latency_ms,
+                    "parallel_compose_ms": wm.parallel_compose_ms,
+                    "sum_worker_ms": wm.sum_worker_ms,
+                    "parallel_speedup_ratio": wm.parallel_speedup_ratio,
+                    "llm_ttft_ms": wm.llm_ttft_ms,
+                    "llm_latency_ms": wm.llm_latency_ms,
+                    "vram_used_gb": vram_info.get("used_gb", self._gpu_vram_gb or 0.0),
+                    "vram_total_gb": vram_info.get("total_gb", 8.0),
+                    "vram_owner": self.vram_manager.current_owner,
+                    "active_workers": 6,
+                    "total_workers": 6,
+                    "active_voices": out_tel.active_voices,
+                    "hard_limit": out_tel.hard_limit,
+                    "l5_jitter_ms": out_tel.last_dispatch_jitter_ms,
+                    "l5_max_jitter_ms": out_tel.max_dispatch_jitter_ms,
+                    "speculative_hits": spec_hits,
+                    "speculative_misses": spec_misses,
+                    "speculative_ready": spec_ready,
+                    "speculative_saved_ms": spec_saved_ms,
+                    "audio_render_ms": audio_render_ms,
+                    "audio_queue_depth": audio_q_depth,
+                    "last_turn_wall_ms": wm.last_turn_wall_ms,
+                },
+                "notagen": notagen_status,
                 "audio_status": {
                     **self.latest_audio_stats,
                     "monitor_audio": self.monitor_audio,
@@ -1180,7 +1490,7 @@ class StageOrchestrator:
                     "energy_limit_10s": out_tel.energy_limit_10s,
                     "total_notes_sent": out_tel.total_notes_sent,
                     "connected_port": out_tel.connected_port or "Virtual Disklavier",
-                    "recent_strikes": list(self.recent_strikes[-16:]),
+                    "recent_strikes": recent_strikes,
                 },
                 "motif_graph": {
                     "nodes": list(self.motif_nodes),
@@ -1192,6 +1502,22 @@ class StageOrchestrator:
         self._running = False
         if self._thread.is_alive():
             self._thread.join(timeout=0.5)
+        if self._audio_in_stream is not None:
+            try:
+                self._audio_in_stream.stop()
+                self._audio_in_stream.close()
+            except Exception:
+                pass
+            self._audio_in_stream = None
+        try:
+            self.notagen_engine.stop_generation()
+        except Exception:
+            pass
+        self.perception_worker.close()
+        self.speculative_worker.close()
+        self.audio_render_worker.close()
+        self.async_llm_worker.close()
+        self.composer.close()
         if self.inport is not None:
             try:
                 self.inport.close()
@@ -1240,7 +1566,7 @@ class StageWSBroadcaster:
                         dead.append(ws)
                 for ws in dead:
                     self.clients.discard(ws)
-            await asyncio.sleep(1.0 / 33.0)
+            await asyncio.sleep(1.0 / 60.0)
 
 
 def build_stage_router(orch: StageOrchestrator, broadcaster: StageWSBroadcaster) -> APIRouter:
@@ -1388,8 +1714,69 @@ def build_stage_router(orch: StageOrchestrator, broadcaster: StageWSBroadcaster)
 
     @router.post("/api/stage/panic")
     async def api_stage_panic() -> JSONResponse:
+        orch.notagen_engine.stop_generation()
         orch.audio_synth.stop_audio()
         res = orch.output_layer.panic()
+        return JSONResponse(res)
+
+    @router.post("/api/stage/human_note")
+    async def api_stage_human_note(req: HumanNoteReq) -> JSONResponse:
+        res = orch.push_browser_human_note(
+            pitch=req.pitch,
+            velocity=req.velocity,
+            duration_s=req.duration_s,
+            from_browser=req.from_browser,
+        )
+        return JSONResponse({**res, "state": orch.get_hud_state()})
+
+    @router.post("/api/stage/human_phrase")
+    async def api_stage_human_phrase(req: HumanPhraseReq) -> JSONResponse:
+        state = await asyncio.to_thread(
+            orch.push_human_phrase_and_reply, req.notes, req.mode, req.auto_turn
+        )
+        return JSONResponse({"ok": True, "state": state})
+
+    @router.post("/api/stage/pedal_cue")
+    async def api_stage_pedal_cue(req: PedalCueReq) -> JSONResponse:
+        state = await asyncio.to_thread(orch.push_pedal_cue, req.control, req.value)
+        return JSONResponse({"ok": True, "state": state})
+
+    @router.post("/api/stage/live_listen")
+    async def api_stage_live_listen(req: LiveListenReq) -> JSONResponse:
+        return JSONResponse(orch.set_live_listening(req.enabled))
+
+    @router.post("/api/stage/connection_mode")
+    async def api_stage_connection_mode(req: ConnectionModeReq) -> JSONResponse:
+        return JSONResponse(orch.set_connection_mode(req.production_mode))
+
+    @router.get("/api/notagen/status")
+    async def api_notagen_status() -> JSONResponse:
+        return JSONResponse(orch.notagen_engine.get_status())
+
+    @router.post("/api/notagen/start")
+    async def api_notagen_start(req: Optional[NotaGenStartReq] = None) -> JSONResponse:
+        r = req or NotaGenStartReq()
+        st = await asyncio.to_thread(
+            orch.notagen_engine.start_generation,
+            seed_notes=r.seed_notes,
+            prompt_ja=r.prompt_ja,
+            tonality=r.tonality,
+            bpm=r.bpm,
+            bars=r.bars,
+            engine=r.engine,
+            play_audio=r.play_audio,
+            blocking=r.blocking,
+        )
+        return JSONResponse({"ok": True, "notagen": st})
+
+    @router.post("/api/notagen/stop")
+    async def api_notagen_stop() -> JSONResponse:
+        st = await asyncio.to_thread(orch.notagen_engine.stop_generation)
+        return JSONResponse({"ok": True, "notagen": st})
+
+    @router.post("/api/notagen/save_work")
+    async def api_notagen_save_work() -> JSONResponse:
+        res = await asyncio.to_thread(orch.notagen_engine.save_completed_work)
         return JSONResponse(res)
 
     @router.websocket("/ws")
@@ -1404,11 +1791,41 @@ def build_stage_router(orch: StageOrchestrator, broadcaster: StageWSBroadcaster)
                 msg = await ws.receive_text()
                 if msg == "turn":
                     await asyncio.to_thread(
-                        orch.execute_composition_turn, use_virtual_human=True, staggered_playback=False
+                        orch.execute_composition_turn,
+                        use_virtual_human=True,
+                        staggered_playback=False,
+                        sync_audio=False,
                     )
                 elif msg == "panic":
+                    orch.notagen_engine.stop_generation()
                     orch.audio_synth.stop_audio()
                     orch.output_layer.panic()
+                elif msg.startswith("{"):
+                    try:
+                        cmd = json.loads(msg)
+                        action = str(cmd.get("action") or "")
+                        if action == "human_note":
+                            orch.push_browser_human_note(
+                                pitch=int(cmd.get("pitch", 60)),
+                                velocity=int(cmd.get("velocity", 76)),
+                                duration_s=float(cmd.get("duration_s", 0.35)),
+                                from_browser=True,
+                            )
+                        elif action == "human_phrase":
+                            await asyncio.to_thread(
+                                orch.push_human_phrase_and_reply,
+                                list(cmd.get("notes") or []),
+                                cmd.get("mode"),
+                                bool(cmd.get("auto_turn", True)),
+                            )
+                        elif action == "pedal_cue":
+                            await asyncio.to_thread(
+                                orch.push_pedal_cue,
+                                int(cmd.get("control", 67)),
+                                int(cmd.get("value", 96)),
+                            )
+                    except Exception:
+                        pass
         except (WebSocketDisconnect, ConnectionResetError, OSError, asyncio.CancelledError):
             pass
         except Exception:
@@ -1473,10 +1890,27 @@ def __getattr__(name: str) -> Any:
     raise AttributeError(name)
 
 
+def _resolve_bind_port(host: str, preferred_port: int, strict: bool = False) -> int:
+    """Finds an available port starting at `preferred_port` so busy-port collisions never crash launch."""
+    for candidate in range(int(preferred_port), int(preferred_port) + (1 if strict else 21)):
+        with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as sock:
+            try:
+                sock.bind((host, candidate))
+                if candidate != preferred_port:
+                    print(
+                        f"[PORT] Port {preferred_port} already in use; switching cleanly to {host}:{candidate}"
+                    )
+                return candidate
+            except OSError:
+                continue
+    return int(preferred_port)
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(description="Disklavier-Auto Stage Server")
     parser.add_argument("--host", default="127.0.0.1")
     parser.add_argument("--port", type=int, default=8000)
+    parser.add_argument("--strict-port", action="store_true", help="Fail instead of auto-selecting free port")
     parser.add_argument("--demo", action="store_true", help="Virtual Showcase Demo + Direct Audio ON")
     parser.add_argument("--monitor-audio", action="store_true", help="Enable Python Direct Audio Synthesizer")
     parser.add_argument("--production", action="store_true", help="Production Stage Mode (Hardware Only, Virtual Synth OFF)")
@@ -1490,6 +1924,15 @@ def main() -> int:
         os.environ["DISKLAVIER_STAGE_DEMO"] = "1"
         os.environ["DISKLAVIER_MONITOR_AUDIO"] = "1"
 
+    bind_port = _resolve_bind_port(args.host, args.port, strict=args.strict_port)
+    try:
+        url_file = REPO_ROOT / "data" / "telemetry" / "active_stage_url.txt"
+        url_file.parent.mkdir(parents=True, exist_ok=True)
+        path_suffix = "/stage" if args.production else "/?demo=1"
+        url_file.write_text(f"http://localhost:{bind_port}{path_suffix}", encoding="utf-8")
+    except Exception:
+        pass
+
     import uvicorn
 
     app = create_stage_app(
@@ -1497,7 +1940,7 @@ def main() -> int:
         monitor_audio=(args.monitor_audio or args.demo) and not args.production,
         production_mode=args.production,
     )
-    uvicorn.run(app, host=args.host, port=args.port, workers=1, log_level="info")
+    uvicorn.run(app, host=args.host, port=bind_port, workers=1, log_level="info")
     return 0
 
 
