@@ -1,7 +1,7 @@
 """
-Playwright Real-Browser End-to-End & Ergonomic Visual Layout Auditor (`scripts/playwright_audit.py`).
+Playwright Real-Browser End-to-End, Design Rule, & Responsive Layout Auditor (`scripts/playwright_audit.py`).
 
-Tests ALL THREE surfaces at BOTH 1920x1080 and 1366x768:
+Tests ALL THREE surfaces across Desktop (1920x1080, 1366x768) AND Smartphone (390x844):
 1. Static GitHub Pages bundle (`web-demo/index.html` over clean HTTP)
 2. Live FastAPI `/studio` across ALL 4 modes:
    - [1] Cello Dialogue (`#view-cello`)
@@ -10,11 +10,14 @@ Tests ALL THREE surfaces at BOTH 1920x1080 and 1366x768:
    - [4] Curated 100-Piece Library (`#view-library` filters, MP3, WebAudio, mixer, Deliberation cards)
 3. Live `/stage` Projection HUD + `F10` Clean Projection Toggle
 
-Enforces:
-- 0 `console.error`, 0 uncaught `pageerror`, 0 HTTP >= 400 responses
-- Horizontal overflow <= 2px, 0 clipped controls, 0 overlapping controls
-- Minimum visible text computed font-size >= 12.0px
-- Primary non-compact buttons and mode tabs height >= 40px
+Enforces the 5 Mandatory Design Rules + Functional Integrity:
+- Rule 1: Zero 4-sided card borders & zero `box-shadow` (bottom hairline underline + spacing only)
+- Rule 2: Single flat gray background (`#1C1D20` / `#141517`), zero CSS gradients / pastels
+- Rule 3: Subtle SVG geometric background shapes fixed by `:nth-child` (`opacity <= 0.08`)
+- Rule 4: Zero auto card swapping or DOM destruction (5-second stability & `CLS < 0.01`)
+- Rule 5: Minimum visible text computed font-size `>= 13.0px`
+- Desktop overflow `<= 2px`, Mobile (`390x844`) overflow `=== 0px`, 0 clipped/overlapping controls
+- Mobile fixed bottom bar `>= 56px` height & all 4 nav buttons `>= 48x48px`
 - Physical Left/Right pedal spatial ordering: `UNA CORDA` strictly left of `DAMPER`
 """
 
@@ -148,7 +151,7 @@ def _check_layout_geometry(page: Page, label: str) -> Dict[str, Any]:
                 }
             }
 
-            // Font size audit on visible text nodes
+            // Font size audit on visible text nodes (Rule 5: strictly >= 13.0px)
             let minVisibleFontPx = 999;
             const smallFontEls = [];
             const allTextContainers = Array.from(document.querySelectorAll('body *'));
@@ -161,9 +164,69 @@ def _check_layout_geometry(page: Page, label: str) -> Dict[str, Any]:
                 if (!hasDirectText) continue;
                 const fs = parseFloat(window.getComputedStyle(el).fontSize || '15');
                 if (fs < minVisibleFontPx) minVisibleFontPx = fs;
-                if (fs < 12.0) {
+                if (fs < 13.0) {
                     smallFontEls.push({ tag: el.tagName, id: el.id || el.className, fs, text: el.textContent.trim().slice(0, 24) });
                 }
+            }
+
+            // Rule 1 & Rule 2 & Rule 3 audits
+            const cardSelectors = '.card, .panel, .zone-a, .metric-tile, .tile, .pedal-box, .pedal-card, .cand-pick-card, .cand-card, .piece-item, .mixer-row, .topbar, .workspace-strip, .score-card, .feat-card';
+            const cardBorderShadowViolations = [];
+            const gradientViolations = [];
+            let svgShapeCardsCount = 0;
+
+            for (const el of document.querySelectorAll(cardSelectors)) {
+                if (!isActuallyVisible(el)) continue;
+                const st = window.getComputedStyle(el);
+                if (st.boxShadow && st.boxShadow !== 'none') {
+                    cardBorderShadowViolations.push({ el: el.className || el.id, issue: 'boxShadow=' + st.boxShadow });
+                }
+                const bt = parseFloat(st.borderTopWidth || '0');
+                const bl = parseFloat(st.borderLeftWidth || '0');
+                const br = parseFloat(st.borderRightWidth || '0');
+                if (bt > 0.1 || bl > 0.1 || br > 0.1) {
+                    cardBorderShadowViolations.push({ el: el.className || el.id, issue: `4-sided border T=${bt} L=${bl} R=${br}` });
+                }
+                if (st.backgroundImage && /gradient\\(/i.test(st.backgroundImage)) {
+                    gradientViolations.push({ el: el.className || el.id, bg: st.backgroundImage.slice(0, 60) });
+                }
+                const bef = window.getComputedStyle(el, '::before');
+                if (bef && bef.backgroundImage && bef.backgroundImage.includes('data:image/svg+xml')) {
+                    const op = parseFloat(bef.opacity || '0');
+                    if (op > 0 && op <= 0.08) {
+                        svgShapeCardsCount += 1;
+                    }
+                }
+            }
+
+            // Rule 2: Scan all elements & stylesheets for any CSS gradients and check flat gray body
+            const bodyBg = window.getComputedStyle(document.body).backgroundColor;
+            const validGrayBgs = ['rgb(28, 29, 32)', 'rgb(20, 21, 23)'];
+            const bodyBgOk = validGrayBgs.includes(bodyBg);
+            for (const ss of Array.from(document.styleSheets)) {
+                try {
+                    for (const rule of Array.from(ss.cssRules || [])) {
+                        if (rule.cssText && /gradient\\(/i.test(rule.cssText)) {
+                            gradientViolations.push({ stylesheet: ss.href || 'inline', snippet: rule.cssText.slice(0, 60) });
+                        }
+                    }
+                } catch (_) {}
+            }
+
+            // Mobile bottom navigation geometry check (when vw <= 768)
+            const mobileNav = document.querySelector('.mobile-bottom-nav');
+            let mobileNavReport = null;
+            if (vw <= 768 && mobileNav) {
+                const mRect = mobileNav.getBoundingClientRect();
+                const mBtns = Array.from(mobileNav.querySelectorAll('.mobile-nav-btn')).map((b) => {
+                    const r = b.getBoundingClientRect();
+                    return { mode: b.dataset.modeView || b.dataset.mode || '', width: Math.round(r.width), height: Math.round(r.height) };
+                });
+                mobileNavReport = {
+                    visible: isActuallyVisible(mobileNav),
+                    height: Math.round(mRect.height),
+                    buttons: mBtns,
+                };
             }
 
             // Spatial Left/Right Pedal order audit
@@ -194,12 +257,69 @@ def _check_layout_geometry(page: Page, label: str) -> Dict[str, Any]:
                 minVisibleFontPx: minVisibleFontPx === 999 ? 15 : minVisibleFontPx,
                 smallFontEls,
                 smallPrimaryBtns,
+                cardBorderShadowViolations,
+                gradientViolations,
+                bodyBg,
+                bodyBgOk,
+                svgShapeCardsCount,
+                mobileNavReport,
                 pedalOrderOk,
                 pedalPairs,
             };
         }""",
         label,
     )
+
+
+def _check_card_stability(page: Page, label: str, container_selector: str, wait_s: float = 5.0) -> Dict[str, Any]:
+    """Rule 4: Verify 0 automatic card reordering / DOM recreation and CLS < 0.01 over 5s."""
+    page.evaluate(
+        """(sel) => {
+            window.__clsTotal = 0;
+            try {
+                window.__clsObs = new PerformanceObserver((list) => {
+                    for (const entry of list.getEntries()) {
+                        if (!entry.hadRecentInput) {
+                            window.__clsTotal += entry.value || 0;
+                        }
+                    }
+                });
+                window.__clsObs.observe({ type: 'layout-shift', buffered: true });
+            } catch (_) {}
+            const wrap = document.querySelector(sel);
+            window.__cardInitRefs = wrap ? Array.from(wrap.children) : [];
+            window.__cardInitKeys = window.__cardInitRefs.map((c, idx) => c.dataset.cid || c.dataset.slot || String(idx));
+        }""",
+        container_selector,
+    )
+    time.sleep(wait_s)
+    res = page.evaluate(
+        """(sel) => {
+            if (window.__clsObs) {
+                try { window.__clsObs.disconnect(); } catch (_) {}
+            }
+            const wrap = document.querySelector(sel);
+            const curRefs = wrap ? Array.from(wrap.children) : [];
+            const curKeys = curRefs.map((c, idx) => c.dataset.cid || c.dataset.slot || String(idx));
+            let swaps = 0;
+            let recreated = 0;
+            const n = Math.min(window.__cardInitRefs.length, curRefs.length);
+            for (let i = 0; i < n; i++) {
+                if (window.__cardInitKeys[i] !== curKeys[i]) swaps += 1;
+                if (window.__cardInitRefs[i] !== curRefs[i]) recreated += 1;
+            }
+            return {
+                label: sel,
+                count: curRefs.length,
+                swaps,
+                recreated,
+                cls: Number((window.__clsTotal || 0).toFixed(5)),
+            };
+        }""",
+        container_selector,
+    )
+    res["surface"] = label
+    return res
 
 
 def _attach_error_listeners(page: Page, errors: Dict[str, List[str]]) -> None:
@@ -216,16 +336,33 @@ def _attach_error_listeners(page: Page, errors: Dict[str, List[str]]) -> None:
 
 def _record_geometry_violations(geometry_reports: List[Dict[str, Any]], violations: List[str]) -> None:
     for g in geometry_reports:
-        if g["overflowPx"] > 2:
-            violations.append(f"{g['label']}: horizontal overflow {g['overflowPx']}px")
+        is_mobile = int(g.get("vw", 1920)) <= 768
+        max_ov = 0 if is_mobile else 2
+        if g["overflowPx"] > max_ov:
+            violations.append(f"{g['label']}: horizontal overflow {g['overflowPx']}px (limit {max_ov}px)")
         if g["clipped"]:
             violations.append(f"{g['label']}: clipped controls {g['clipped'][:3]}")
         if g["overlaps"]:
             violations.append(f"{g['label']}: overlapping controls {g['overlaps'][:3]}")
-        if g["minVisibleFontPx"] < 12.0 or g["smallFontEls"]:
-            violations.append(f"{g['label']}: font < 12px ({g['smallFontEls'][:3]})")
+        if g["minVisibleFontPx"] < 13.0 or g["smallFontEls"]:
+            violations.append(f"{g['label']}: font < 13px ({g['smallFontEls'][:3]})")
         if g["smallPrimaryBtns"]:
             violations.append(f"{g['label']}: small primary buttons < 40px ({g['smallPrimaryBtns'][:3]})")
+        if g.get("cardBorderShadowViolations"):
+            violations.append(f"{g['label']}: Rule 1 card border/shadow violation ({g['cardBorderShadowViolations'][:3]})")
+        if not g.get("bodyBgOk", True):
+            violations.append(f"{g['label']}: Rule 2 non-gray body background {g.get('bodyBg')}")
+        if g.get("gradientViolations"):
+            violations.append(f"{g['label']}: Rule 2 gradient violation ({g['gradientViolations'][:3]})")
+        if g.get("svgShapeCardsCount", 0) < 1:
+            violations.append(f"{g['label']}: Rule 3 expected >= 1 SVG geometric shape card")
+        mnav = g.get("mobileNavReport")
+        if is_mobile and mnav is not None:
+            if not mnav.get("visible") or int(mnav.get("height", 0)) < 56:
+                violations.append(f"{g['label']}: mobile bottom nav invalid ({mnav})")
+            bad_mbtns = [b for b in mnav.get("buttons", []) if b["width"] < 48 or b["height"] < 48]
+            if len(mnav.get("buttons", [])) < 4 or bad_mbtns:
+                violations.append(f"{g['label']}: mobile nav buttons < 48x48 ({mnav})")
         if not g["pedalOrderOk"]:
             violations.append(f"{g['label']}: UNA CORDA not left of DAMPER ({g['pedalPairs']})")
 
@@ -369,11 +506,16 @@ def run_audit(round_num: int = 1, update_docs_images: bool = False, quick: bool 
             page.wait_for_function("document.querySelectorAll('#cello-cand-cards .cand-pick-card').length === 4", timeout=12000)
             time.sleep(0.25)
 
-            # Mode 1: Cello Dialogue
+            # Mode 1: Cello Dialogue + 5s Card Stability Check (Rule 4)
             geometry_reports.append(_check_layout_geometry(page, "studio_mode1_cello_1920x1080"))
+            stability_report = _check_card_stability(page, "studio_mode1_cello", "#cello-cand-cards", wait_s=5.0)
+            functional_checks["card_stability"] = stability_report
+            if stability_report["swaps"] > 0 or stability_report["recreated"] > 0 or stability_report["cls"] >= 0.01:
+                violations.append(f"Rule 4 card stability violation: {stability_report}")
             p_m1 = out_dir / "studio_mode1_cello.png"
             page.screenshot(path=str(p_m1))
             screenshots["studio_mode1_cello"] = str(p_m1)
+            screenshots["desktop_mode1_cello"] = str(p_m1)
 
             # Mode 2: Piano Dialogue + interactive piano key canvas click
             page.click("#mode-tab-piano")
@@ -388,11 +530,12 @@ def run_audit(round_num: int = 1, update_docs_images: bool = False, quick: bool 
             p_m2 = out_dir / "studio_mode2_piano.png"
             page.screenshot(path=str(p_m2))
             screenshots["studio_mode2_piano"] = str(p_m2)
+            screenshots["desktop_mode2_piano"] = str(p_m2)
 
-            # Mode 3: NotaGen / LLM Live Streaming (4-bar fallback stream)
+            # Mode 3: NotaGen / LLM Live Streaming (4-bar notagen_small quantized test)
             page.click("#mode-tab-notagen")
             time.sleep(0.2)
-            page.select_option("#sel-ng-backend", "transformer_abc_fallback")
+            page.select_option("#sel-ng-backend", "notagen_small")
             page.select_option("#sel-ng-bars", "4")
             page.uncheck("#chk-ng-autoplay")
             page.click("#btn-ng-start")
@@ -406,6 +549,7 @@ def run_audit(round_num: int = 1, update_docs_images: bool = False, quick: bool 
             p_m3 = out_dir / "studio_mode3_notagen.png"
             page.screenshot(path=str(p_m3))
             screenshots["studio_mode3_notagen"] = str(p_m3)
+            screenshots["desktop_mode3_notagen"] = str(p_m3)
 
             # Mode 4: Library Archive
             page.click("#mode-tab-library")
@@ -415,6 +559,7 @@ def run_audit(round_num: int = 1, update_docs_images: bool = False, quick: bool 
             p_m4 = out_dir / "studio_mode4_library.png"
             page.screenshot(path=str(p_m4))
             screenshots["studio_mode4_library"] = str(p_m4)
+            screenshots["desktop_mode4_library"] = str(p_m4)
 
             # Check Studio Modes 1, 2, 3, 4 at 1366x768 laptop resolution
             page.set_viewport_size({"width": 1366, "height": 768})
@@ -443,6 +588,7 @@ def run_audit(round_num: int = 1, update_docs_images: bool = False, quick: bool 
             page.keyboard.press("F10")
             time.sleep(0.2)
             f10_hidden = page.evaluate("window.getComputedStyle(document.getElementById('control-bar')).display === 'none'")
+            geometry_reports.append(_check_layout_geometry(page, "stage_hud_f10_projection_1920x1080"))
             p_f10 = out_dir / "stage_projection_f10.png"
             page.screenshot(path=str(p_f10))
             screenshots["stage_projection_f10"] = str(p_f10)
@@ -460,6 +606,46 @@ def run_audit(round_num: int = 1, update_docs_images: bool = False, quick: bool 
 
             page.goto("about:blank")
             context.close()
+
+            # ===== D. Smartphone Dedicated UI Audit (390x844, Touch, 0px Overflow) =====
+            mob_ctx = browser.new_context(
+                viewport={"width": 390, "height": 844},
+                is_mobile=True,
+                has_touch=True,
+                accept_downloads=True,
+            )
+            mob_page = mob_ctx.new_page()
+            _attach_error_listeners(mob_page, errors)
+
+            # D1. Static Web Demo on Mobile (390x844)
+            mob_page.goto(f"{static_url}/index.html", wait_until="networkidle")
+            mob_page.wait_for_function("document.querySelectorAll('#piece-list .piece-item').length === 100", timeout=12000)
+            time.sleep(0.25)
+            geometry_reports.append(_check_layout_geometry(mob_page, "mobile_web_demo_390x844"))
+            p_mwd = out_dir / "mobile_web_demo_390x844.png"
+            mob_page.screenshot(path=str(p_mwd))
+            screenshots["mobile_web_demo_390x844"] = str(p_mwd)
+
+            # D2. Live /studio All 4 Modes on Mobile (390x844)
+            mob_page.goto(f"{stage_url}/studio", wait_until="domcontentloaded")
+            mob_page.wait_for_function("document.querySelectorAll('#cello-cand-cards .cand-pick-card').length === 4", timeout=12000)
+            time.sleep(0.3)
+
+            for m_key, sc_key in (
+                ("cello", "mobile_mode1_cello"),
+                ("piano", "mobile_mode2_piano"),
+                ("notagen", "mobile_mode3_notagen"),
+                ("library", "mobile_mode4_library"),
+            ):
+                mob_page.click(f".mobile-nav-btn[data-mode-view='{m_key}']")
+                time.sleep(0.28)
+                geometry_reports.append(_check_layout_geometry(mob_page, f"{sc_key}_390x844"))
+                p_mob = out_dir / f"{sc_key}.png"
+                mob_page.screenshot(path=str(p_mob))
+                screenshots[sc_key] = str(p_mob)
+
+            mob_page.goto("about:blank")
+            mob_ctx.close()
             browser.close()
     finally:
         stage_srv.should_exit = True
@@ -494,9 +680,18 @@ def run_audit(round_num: int = 1, update_docs_images: bool = False, quick: bool 
             "studio_mode2_piano",
             "studio_mode3_notagen",
             "studio_mode4_library",
+            "desktop_mode1_cello",
+            "desktop_mode2_piano",
+            "desktop_mode3_notagen",
+            "desktop_mode4_library",
             "stage_hud_mode_b_cello",
             "stage_projection_f10",
             "web_demo_1920x1080",
+            "mobile_mode1_cello",
+            "mobile_mode2_piano",
+            "mobile_mode3_notagen",
+            "mobile_mode4_library",
+            "mobile_web_demo_390x844",
         ):
             src_p = screenshots.get(key)
             if src_p and Path(src_p).exists():

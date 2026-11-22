@@ -52,6 +52,10 @@ from src.stage.harmonic_beauty_realizer import (
 from src.stage.layer1_perception import midi_to_note_name
 from src.stage.layer2_intent_llm import MusicalIntentSchema
 from src.stage.musicality_critic import MusicalityAuditReport, MusicalityCritic
+from src.stage.notagen_engine import (
+    AnticipatoryContinuationEngine,
+    MIDIGPTAccompanimentEngine,
+)
 
 try:
     import torch
@@ -162,12 +166,12 @@ class CompositionTurnResult:
 
 class ZeroConfigCorpusLoader:
     """
-    Indexes classical MIDI corpora via `symusic` into universal acoustic & voicing vectors
-    (LH/RH spacing, contrary motion, tension, momentum, pedal curve) without style-imitation labels.
-    Falls back cleanly to `BUILTIN_CHAMBER_SEED_DICTIONARY` when directories are empty.
+    Indexes classical MIDI corpora in parallel via `symusic` into 64GB RAM and CUDA
+    universal voicing vectors (LH/RH spacing, contrary motion, tension, momentum,
+    pedal curve) for sub-2ms cosine retrieval without style-imitation labels.
     """
 
-    def __init__(self, search_dirs: Optional[List[Path]] = None, max_files: int = 36) -> None:
+    def __init__(self, search_dirs: Optional[List[Path]] = None, max_files: int = 256) -> None:
         self.search_dirs = (
             search_dirs
             if search_dirs is not None
@@ -182,13 +186,103 @@ class ZeroConfigCorpusLoader:
         self.max_files = max_files
         self.patterns: List[Dict[str, Any]] = []
         self.feature_matrix: np.ndarray = np.zeros((0, 4), dtype=np.float32)
+        self._cpu_norms: np.ndarray = np.ones((0,), dtype=np.float32)
+        self._cuda_feature_matrix: Any = None
         self.source_mode: str = "builtin_seed_dictionary"
         self.loaded_file_count: int = 0
+        self.index_time_ms: float = 0.0
+        self.last_query_ms: float = 0.0
         self.load()
 
+    @staticmethod
+    def _parse_single_midi_pattern(mf: Path) -> Optional[Dict[str, Any]]:
+        try:
+            all_notes: List[Tuple[int, int, int, int]] = []
+            if _HAS_SYMUSIC:
+                sc = Score(str(mf))
+                tpq = max(1, int(sc.ticks_per_quarter))
+                for tr in sc.tracks:
+                    for n in tr.notes:
+                        all_notes.append((int(n.time), int(n.pitch), int(n.duration), int(n.velocity)))
+            else:
+                import mido
+
+                mid = mido.MidiFile(str(mf))
+                tpq = max(1, int(mid.ticks_per_beat))
+                for tr in mid.tracks:
+                    abs_t = 0
+                    active_on: Dict[int, Tuple[int, int]] = {}
+                    for msg in tr:
+                        abs_t += int(getattr(msg, "time", 0))
+                        if msg.type == "note_on" and int(msg.velocity) > 0:
+                            active_on[int(msg.note)] = (abs_t, int(msg.velocity))
+                        elif msg.type == "note_off" or (msg.type == "note_on" and int(msg.velocity) == 0):
+                            prev = active_on.pop(int(msg.note), None)
+                            if prev is not None:
+                                all_notes.append((prev[0], int(msg.note), max(tpq // 4, abs_t - prev[0]), prev[1]))
+            all_notes.sort(key=lambda x: x[0])
+            if len(all_notes) < 8:
+                return None
+
+            slice_notes = all_notes[:24]
+            lh_notes = [n for n in slice_notes if n[1] < 60]
+            rh_notes = [n for n in slice_notes if n[1] >= 60]
+            if not lh_notes:
+                lh_notes = slice_notes[:4]
+            if not rh_notes:
+                rh_notes = slice_notes[-6:]
+
+            lh_base = lh_notes[0][1]
+            rh_base = rh_notes[0][1]
+            lh_ivs = [int(n[1] - lh_base) for n in lh_notes[:6]]
+            rh_ivs = [int(n[1] - rh_base) for n in rh_notes[:8]]
+            spread = int(
+                round(
+                    float(np.median([n[1] for n in rh_notes]))
+                    - float(np.median([n[1] for n in lh_notes]))
+                )
+            )
+            spread = max(12, min(42, spread))
+
+            beats = [max(0.20, min(1.8, round(n[2] / tpq, 2))) for n in rh_notes[:6]]
+            vels = [max(24, min(102, n[3])) for n in rh_notes[:6]]
+            avg_dur = float(np.mean(beats)) if beats else 0.5
+            momentum = round(min(1.0, 0.35 / max(0.15, avg_dur)), 2)
+
+            k_cmp = min(len(lh_notes), len(rh_notes))
+            contrary = 0
+            for i in range(1, k_cmp):
+                dl = lh_notes[i][1] - lh_notes[i - 1][1]
+                dr = rh_notes[i][1] - rh_notes[i - 1][1]
+                if dl * dr < 0:
+                    contrary += 1
+            contrary_ratio = round(contrary / max(1, k_cmp - 1), 2)
+
+            rh_leaps = [abs(rh_ivs[i] - rh_ivs[i - 1]) for i in range(1, len(rh_ivs))]
+            diss = sum(1 for iv in rh_leaps if iv % 12 in (1, 2, 6, 11))
+            tension = round(min(1.0, 0.25 + 0.14 * diss), 2)
+
+            return {
+                "id": f"corpus_{mf.stem[:24]}",
+                "title": f"Structural Voicing Grammar ({mf.parent.name}/{mf.stem[:20]})",
+                "lh_intervals": lh_ivs[:4],
+                "rh_intervals": rh_ivs[:6],
+                "intervals": rh_ivs[:6],
+                "rhythm_beats": beats,
+                "velocities": vels,
+                "voicing_spread": spread,
+                "contrary_ratio": contrary_ratio,
+                "tension_level": tension,
+                "momentum": momentum,
+                "pedal_curve_summary": "delayed_half_repedal",
+            }
+        except Exception:
+            return None
+
     def load(self) -> List[Dict[str, Any]]:
+        t0 = time.perf_counter()
         midi_files: List[Path] = []
-        per_dir_cap = max(6, self.max_files // max(1, len(self.search_dirs)))
+        per_dir_cap = max(12, self.max_files // max(1, len(self.search_dirs)))
         for d in self.search_dirs:
             if not (d.exists() and d.is_dir()):
                 continue
@@ -208,96 +302,17 @@ class ZeroConfigCorpusLoader:
             if len(midi_files) >= self.max_files:
                 break
 
+        target_files = midi_files[: self.max_files]
         extracted: List[Dict[str, Any]] = []
-        for mf in midi_files[: self.max_files]:
-            try:
-                all_notes: List[Tuple[int, int, int, int]] = []
-                if _HAS_SYMUSIC:
-                    sc = Score(str(mf))
-                    tpq = max(1, int(sc.ticks_per_quarter))
-                    for tr in sc.tracks:
-                        for n in tr.notes:
-                            all_notes.append((int(n.time), int(n.pitch), int(n.duration), int(n.velocity)))
-                else:
-                    import mido
-
-                    mid = mido.MidiFile(str(mf))
-                    tpq = max(1, int(mid.ticks_per_beat))
-                    for tr in mid.tracks:
-                        abs_t = 0
-                        active_on: Dict[int, Tuple[int, int]] = {}
-                        for msg in tr:
-                            abs_t += int(getattr(msg, "time", 0))
-                            if msg.type == "note_on" and int(msg.velocity) > 0:
-                                active_on[int(msg.note)] = (abs_t, int(msg.velocity))
-                            elif msg.type == "note_off" or (msg.type == "note_on" and int(msg.velocity) == 0):
-                                prev = active_on.pop(int(msg.note), None)
-                                if prev is not None:
-                                    all_notes.append((prev[0], int(msg.note), max(tpq // 4, abs_t - prev[0]), prev[1]))
-                all_notes.sort(key=lambda x: x[0])
-                if len(all_notes) < 8:
-                    continue
-
-                slice_notes = all_notes[:24]
-                lh_notes = [n for n in slice_notes if n[1] < 60]
-                rh_notes = [n for n in slice_notes if n[1] >= 60]
-                if not lh_notes:
-                    lh_notes = slice_notes[:4]
-                if not rh_notes:
-                    rh_notes = slice_notes[-6:]
-
-                lh_base = lh_notes[0][1]
-                rh_base = rh_notes[0][1]
-                lh_ivs = [int(n[1] - lh_base) for n in lh_notes[:6]]
-                rh_ivs = [int(n[1] - rh_base) for n in rh_notes[:8]]
-                spread = int(
-                    round(
-                        float(np.median([n[1] for n in rh_notes]))
-                        - float(np.median([n[1] for n in lh_notes]))
-                    )
-                )
-                spread = max(12, min(42, spread))
-
-                beats = [max(0.20, min(1.8, round(n[2] / tpq, 2))) for n in rh_notes[:6]]
-                vels = [max(24, min(102, n[3])) for n in rh_notes[:6]]
-                avg_dur = float(np.mean(beats)) if beats else 0.5
-                momentum = round(min(1.0, 0.35 / max(0.15, avg_dur)), 2)
-
-                k_cmp = min(len(lh_notes), len(rh_notes))
-                contrary = 0
-                for i in range(1, k_cmp):
-                    dl = lh_notes[i][1] - lh_notes[i - 1][1]
-                    dr = rh_notes[i][1] - rh_notes[i - 1][1]
-                    if dl * dr < 0:
-                        contrary += 1
-                contrary_ratio = round(contrary / max(1, k_cmp - 1), 2)
-
-                rh_leaps = [abs(rh_ivs[i] - rh_ivs[i - 1]) for i in range(1, len(rh_ivs))]
-                diss = sum(1 for iv in rh_leaps if iv % 12 in (1, 2, 6, 11))
-                tension = round(min(1.0, 0.25 + 0.14 * diss), 2)
-
-                extracted.append(
-                    {
-                        "id": f"corpus_{mf.stem[:24]}",
-                        "title": f"Structural Voicing Grammar ({mf.parent.name}/{mf.stem[:20]})",
-                        "lh_intervals": lh_ivs[:4],
-                        "rh_intervals": rh_ivs[:6],
-                        "intervals": rh_ivs[:6],
-                        "rhythm_beats": beats,
-                        "velocities": vels,
-                        "voicing_spread": spread,
-                        "contrary_ratio": contrary_ratio,
-                        "tension_level": tension,
-                        "momentum": momentum,
-                        "pedal_curve_summary": "delayed_half_repedal",
-                    }
-                )
-            except Exception:
-                continue
+        if target_files:
+            with ThreadPoolExecutor(max_workers=min(8, max(2, len(target_files)))) as pool:
+                for pat in pool.map(self._parse_single_midi_pattern, target_files):
+                    if pat is not None:
+                        extracted.append(pat)
 
         if extracted:
             self.patterns = extracted + BUILTIN_CHAMBER_SEED_DICTIONARY
-            self.source_mode = f"symusic_midi_corpus({len(extracted)}_files)"
+            self.source_mode = f"symusic_ram_corpus({len(extracted)}_files)"
             self.loaded_file_count = len(extracted)
         else:
             self.patterns = list(BUILTIN_CHAMBER_SEED_DICTIONARY)
@@ -314,6 +329,15 @@ class ZeroConfigCorpusLoader:
             for p in self.patterns
         ]
         self.feature_matrix = np.asarray(feats, dtype=np.float32)
+        self._cpu_norms = np.linalg.norm(self.feature_matrix, axis=1) + 1e-8
+        self._cuda_feature_matrix = None
+        if _HAS_CUDA and torch is not None and len(self.feature_matrix) > 0:
+            try:
+                m_t = torch.tensor(self.feature_matrix, device="cuda")
+                self._cuda_feature_matrix = torch.nn.functional.normalize(m_t, dim=1)
+            except Exception:
+                self._cuda_feature_matrix = None
+        self.index_time_ms = round((time.perf_counter() - t0) * 1000.0, 2)
         return self.patterns
 
     def retrieve_voicing_references(
@@ -324,24 +348,26 @@ class ZeroConfigCorpusLoader:
         contrary_pref: float = 0.72,
         top_k: int = 3,
     ) -> List[Dict[str, Any]]:
+        t0 = time.perf_counter()
         if not self.patterns or len(self.feature_matrix) == 0:
+            self.last_query_ms = 0.0
             return list(BUILTIN_CHAMBER_SEED_DICTIONARY[:top_k])
 
         query = np.array([tension, momentum, target_spread_norm, contrary_pref], dtype=np.float32)
-        if _HAS_CUDA and torch is not None:
+        if _HAS_CUDA and torch is not None and self._cuda_feature_matrix is not None:
             try:
-                mat_t = torch.tensor(self.feature_matrix, device="cuda")
-                q_t = torch.tensor(query, device="cuda").unsqueeze(0)
-                sims = torch.nn.functional.cosine_similarity(mat_t, q_t, dim=1)
-                idx_top = torch.argsort(sims, descending=True)[:top_k].detach().cpu().tolist()
+                q_t = torch.nn.functional.normalize(torch.tensor(query, device="cuda").unsqueeze(0), dim=1)
+                sims = (self._cuda_feature_matrix @ q_t.t()).squeeze(1)
+                idx_top = torch.topk(sims, k=min(top_k, len(self.patterns))).indices.detach().cpu().tolist()
+                self.last_query_ms = round((time.perf_counter() - t0) * 1000.0, 3)
                 return [self.patterns[i] for i in idx_top]
             except Exception:
                 pass
 
         q_norm = np.linalg.norm(query) + 1e-8
-        m_norms = np.linalg.norm(self.feature_matrix, axis=1) + 1e-8
-        sims = (self.feature_matrix @ query) / (m_norms * q_norm)
+        sims = (self.feature_matrix @ query) / (self._cpu_norms * q_norm)
         idx_top = np.argsort(sims)[::-1][:top_k]
+        self.last_query_ms = round((time.perf_counter() - t0) * 1000.0, 3)
         return [self.patterns[int(i)] for i in idx_top]
 
 
@@ -477,9 +503,13 @@ class MultipleCandidateComposer:
         self,
         corpus_loader: Optional[ZeroConfigCorpusLoader] = None,
         phrase_model: Optional[CorpusPhraseModelManager] = None,
+        anticipatory_engine: Optional[AnticipatoryContinuationEngine] = None,
+        midigpt_engine: Optional[MIDIGPTAccompanimentEngine] = None,
     ) -> None:
         self.corpus_loader = corpus_loader or ZeroConfigCorpusLoader()
         self.phrase_model = phrase_model or CorpusPhraseModelManager()
+        self.anticipatory_engine = anticipatory_engine or AnticipatoryContinuationEngine()
+        self.midigpt_engine = midigpt_engine or MIDIGPTAccompanimentEngine()
         self.turn_counter: int = 0
         self._counter_lock = threading.Lock()
         self._candidate_pool = ThreadPoolExecutor(max_workers=4, thread_name_prefix="L3CandWorker")
@@ -1009,22 +1039,47 @@ class MultipleCandidateComposer:
                 if act_num_cur == 4
                 else "syncopated_offbeat_harmony",
             }.get(strat, blueprint.lh_idiom)
-            evs, c64, c67 = HarmonicBeautyRealizer.realize_2bar_candidate(
-                human_notes=human_notes,
-                tonality=intent.tonal_center,
-                chord_symbols=syms_2,
-                act_number=act_num_cur,
-                phrase_function=str(macro_dict["phrase_function"]),
-                strategy=strat,
-                bridge_pitch=int(macro_dict["voice_leading_bridge_pitch"]),
-                target_apex=int(macro_dict["target_apex_pitch"]),
-                lh_idiom=lh_idiom_sel,
-                blueprint_offsets=list(blueprint.melody_degree_offsets),
-                agogic_ratios=list(blueprint.agogic_ratios),
-                velocity_curve=list(blueprint.velocity_curve),
-                pedal_strategy=intent.pedal_strategy,
-            )
-            lh_idiom = lh_idiom_sel
+
+            if cid == "C" and human_mode == "cello":
+                mg_res = self.midigpt_engine.generate_accompaniment_for_cello(
+                    cello_notes=human_notes,
+                    tonality=intent.tonal_center,
+                    chord_symbols=syms_2,
+                    bpm=74.0,
+                    density=float(intent.target_density),
+                )
+                evs = list(mg_res["events"])
+                c64 = list(mg_res["cc64_curve"])
+                c67 = list(mg_res["cc67_curve"])
+                lh_idiom = "midigpt_cpu_accompaniment"
+            elif cid == "B" and human_mode == "piano":
+                ant_res = self.anticipatory_engine.continue_phrase(
+                    human_notes=human_notes,
+                    tonality=intent.tonal_center,
+                    bpm=76.0,
+                    bars=2,
+                )
+                evs = list(ant_res["events"])
+                c64 = list(ant_res["cc64_curve"])
+                c67 = list(ant_res["cc67_curve"])
+                lh_idiom = "anticipatory_gpu_continuation"
+            else:
+                evs, c64, c67 = HarmonicBeautyRealizer.realize_2bar_candidate(
+                    human_notes=human_notes,
+                    tonality=intent.tonal_center,
+                    chord_symbols=syms_2,
+                    act_number=act_num_cur,
+                    phrase_function=str(macro_dict["phrase_function"]),
+                    strategy=strat,
+                    bridge_pitch=int(macro_dict["voice_leading_bridge_pitch"]),
+                    target_apex=int(macro_dict["target_apex_pitch"]),
+                    lh_idiom=lh_idiom_sel,
+                    blueprint_offsets=list(blueprint.melody_degree_offsets),
+                    agogic_ratios=list(blueprint.agogic_ratios),
+                    velocity_curve=list(blueprint.velocity_curve),
+                    pedal_strategy=intent.pedal_strategy,
+                )
+                lh_idiom = lh_idiom_sel
         else:
             evs, c64, c67, lh_idiom = self._build_polyphonic_candidate(
                 strat,

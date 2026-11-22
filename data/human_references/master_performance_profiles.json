@@ -7,10 +7,10 @@
     "arch": "AMD64",
     "cpu_cores": 20,
     "worker_count": 8,
-    "cuda_available": true,
-    "gpu_name": "NVIDIA GeForce RTX 3070",
+    "cuda_available": false,
+    "gpu_name": null,
     "mps_available": false,
-    "vector_backend": "NVIDIA CUDA (NVIDIA GeForce RTX 3070) + Multi-Core CPU"
+    "vector_backend": "Multi-Core SIMD (NumPy Vectorized)"
   },
   "lineages": {
     "tchaikovsky": {

@@ -15,10 +15,18 @@ from src.stage.layer1_perception import PerceptionSnapshot
 from src.stage.layer2_intent_llm import MusicalIntentEngine
 from src.stage.layer3_candidate_composer import MultipleCandidateComposer, ZeroConfigCorpusLoader
 from src.stage.layer5_disklavier_output import DisklavierStageOutputLayer
-from src.stage.notagen_live_engine import (
+from src.stage.notagen_engine import (
+    _HAS_TORCH,
     ABCStreamParser,
+    AnticipatoryContinuationEngine,
     LivePolyphonyHarmonyGuard,
+    MIDIGPTAccompanimentEngine,
     NotaGenLiveEngine,
+    NotaGenSmallQuantizedModel,
+    PeriodStructurePlanner,
+)
+from src.stage.notagen_live_engine import (
+    NotaGenLiveEngine as NotaGenLiveEngineCompat,
 )
 from src.stage.parallel_pipeline import SpeculativePreGenWorker
 from src.stage.stage_server import create_stage_app
@@ -289,3 +297,119 @@ def test_6_stage_server_live_parallel_and_notagen_endpoints() -> None:
         hud = r_state.json()
         assert hud["notagen"]["bars_completed"] == 4
         assert hud["telemetry_hud"]["total_workers"] == 6
+
+
+def test_7_period_structure_and_notagen_small_quantized() -> None:
+    assert NotaGenLiveEngineCompat is NotaGenLiveEngine
+    plans = PeriodStructurePlanner.build_period_plan(
+        tonality="D_minor",
+        total_bars=8,
+        instruction_ja="高揚してからウナ・コルダで解決",
+    )
+    assert len(plans) == 8
+    assert plans[3].period_role == "antecedent_half_cadence"
+    assert plans[3].cadence_target == "half_V"
+    assert any(p.period_role == "consequent_apex" and p.target_apex for p in plans)
+    assert plans[-1].period_role == "consequent_cadence"
+    assert plans[-1].cadence_target == "authentic_I"
+    assert plans[-1].una_corda_level >= 80
+
+    ng_model = NotaGenSmallQuantizedModel()
+    ok = ng_model.ensure_loaded()
+    if _HAS_TORCH:
+        assert ok is True
+        assert ng_model.loaded is True
+        assert ng_model.quantization_mode in ("fp16_sdpa_cuda", "fp16_cuda", "int8_dynamic_cpu", "fp32_cpu", "theory_fallback")
+        assert ng_model.ckpt_path.exists()
+    else:
+        assert ok is False
+
+    engine = NotaGenLiveEngine(use_ollama=False)
+    st = engine.start_generation(
+        seed_notes="D4 F4 A4",
+        prompt_ja="古典的楽節対比テスト",
+        tonality="D_minor",
+        bars=4,
+        engine="notagen_small",
+        play_audio=False,
+        blocking=True,
+    )
+    assert st["status"] == "completed"
+    assert st["active_backend"] == "notagen_small"
+    assert st["bars_completed"] == 4
+    assert len(st["events"]) >= 24
+    assert st["audit"]["beauty_score"] > 60.0
+    assert st["audit"]["preflight_passed"] is True
+    assert any(ev.get("control") == 64 for ev in st["events"])
+    assert any(ev.get("control") == 67 for ev in st["events"])
+
+
+def test_8_anticipatory_continuation_and_infill() -> None:
+    ant = AnticipatoryContinuationEngine()
+    res = ant.continue_phrase(_sample_human_notes(), tonality="D_minor", bpm=76.0, bars=4)
+    assert res["engine"] == "anticipatory_transformer"
+    note_evs = [e for e in res["events"] if int(e.get("pitch", 0)) > 0]
+    rh_notes = [e for e in note_evs if e.get("hand") == "rh"]
+    lh_notes = [e for e in note_evs if e.get("hand") == "lh"]
+    assert len(rh_notes) >= 12
+    assert len(lh_notes) >= 8
+    assert len(res["chord_timeline"]) == 4
+
+    infilled = ant.infill_bars(res["events"], target_bars=[2, 3], tonality="D_minor", bpm=76.0)
+    assert len(infilled) >= len(res["events"]) * 0.75
+
+
+def test_9_midigpt_cpu_accompaniment_and_vram_profiles() -> None:
+    midigpt = MIDIGPTAccompanimentEngine()
+    assert midigpt.device == "cpu"
+    assert midigpt.vram_gb == 0.0
+    cello_seed = [
+        {"pitch": 48, "onset_s": 0.0, "duration_s": 0.8, "velocity": 72},
+        {"pitch": 53, "onset_s": 0.8, "duration_s": 0.8, "velocity": 76},
+    ]
+    out = midigpt.generate_accompaniment_for_cello(
+        cello_seed,
+        tonality="C_major",
+        chord_symbols=["Cadd9", "G/B", "Am7", "Fmaj7"],
+        bpm=74.0,
+        density=0.60,
+    )
+    assert out["engine"] == "midigpt_cpu"
+    assert out["vram_gb"] == 0.0
+    assert any(int(e.get("pitch", 0)) > 0 and e.get("hand") == "lh" for e in out["events"])
+    assert any(int(e.get("pitch", 0)) > 0 and e.get("hand") == "rh" for e in out["events"])
+
+    vram = RTX3070VRAMManager(total_vram_gb=8.0, realtime_cap_gb=6.5)
+    vram.register_resident("ollama", 3.6)
+    vram.register_resident("anticipatory", 0.31)
+    assert vram.estimated_resident_gb() < 6.5
+
+    released: List[str] = []
+    sw_full = vram.switch_profile(
+        "notagen_full",
+        release_callbacks={
+            "anticipatory": lambda: released.append("anticipatory"),
+            "notagen": lambda: released.append("notagen"),
+        },
+    )
+    assert sw_full["active_profile"] == "notagen_full"
+    sw_rt = vram.switch_profile(
+        "realtime_dialogue",
+        release_callbacks={
+            "anticipatory": lambda: released.append("anticipatory"),
+            "notagen": lambda: released.append("notagen"),
+        },
+    )
+    assert sw_rt["active_profile"] == "realtime_dialogue"
+    assert "notagen" in released
+    assert vram.get_status()["realtime_cap_gb"] <= 6.5
+
+
+def test_10_corpus_parallel_symusic_indexing() -> None:
+    corpus = ZeroConfigCorpusLoader(max_files=64)
+    assert len(corpus.patterns) >= 8
+    assert corpus.index_time_ms >= 0.0
+    refs = corpus.retrieve_voicing_references(tension=0.55, momentum=0.45, target_spread_norm=0.45, top_k=3)
+    assert len(refs) == 3
+    assert corpus.last_query_ms >= 0.0
+

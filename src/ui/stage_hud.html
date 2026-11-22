@@ -6,32 +6,34 @@
   <title>DISKLAVIER STAGE HUD | 舞台投影・リアルタイム五線譜</title>
   <link rel="icon" href="/favicon.ico" />
   <style>
+    /* Editorial stage palette registry (legacy ref: #060608 #5A5852 #C83E2B #EAE6DF) */
     :root {
-      --bg-stage: #060608;
-      --bg-panel: #0B0B0F;
-      --bg-card: #121217;
-      --rule-hairline: #26241F;
-      --rule-strong: #3E3A32;
+      --bg-stage: #1C1D20;
+      --bg-projection: #141517;
+      --rule-hairline: #34373E;
+      --rule-strong: #585C66;
       --ink-adopted: #EAE6DF;
-      --ink-secondary: #B4AEA3;
-      --ink-dim: #5A5852;
-      --ink-vermilion: #C83E2B;
+      --ink-secondary: #C6C1B8;
+      --ink-dim: #A49F96;
+      --ink-vermilion: #E85E4B;
+      --ink-vermilion-bg: #B53524;
       --ink-human: #A8C8E8;
       --ink-ai: #E5C88F;
+      --track-bg: #2C2E34;
       --font-serif: "Yu Mincho", "Hiragino Mincho ProN", "Noto Serif JP", Georgia, serif;
       --font-sans: "Yu Gothic UI", "Hiragino Kaku Gothic ProN", "Meiryo", sans-serif;
       --font-mono: "Cascadia Mono", "JetBrains Mono", "Consolas", monospace;
     }
 
-    * { box-sizing: border-box; margin: 0; padding: 0; }
+    * { box-sizing: border-box; margin: 0; padding: 0; box-shadow: none !important; }
 
     html, body {
       min-height: 100%;
-      background: #060608;
-      color: #EAE6DF;
+      background-color: var(--bg-stage);
+      color: var(--ink-adopted);
       font-family: var(--font-sans);
       font-size: 15px;
-      line-height: 1.5;
+      line-height: 1.55;
       overflow-x: hidden;
       -webkit-font-smoothing: antialiased;
     }
@@ -43,12 +45,21 @@
       width: 100%;
       max-width: 1900px;
       margin: 0 auto;
-      padding: 12px 18px 18px;
-      gap: 12px;
-      background: #060608;
+      padding: 14px 20px 24px;
+      gap: 18px;
+      background-color: var(--bg-stage);
     }
 
     /* F10 Clean Stage Projection Mode hides interactive chrome */
+    .stage-shell.projection-clean,
+    .stage-shell.projection-clean .zone-a,
+    .stage-shell.projection-clean .panel,
+    .stage-shell.projection-clean .monologue-box,
+    .stage-shell.projection-clean .tile,
+    .stage-shell.projection-clean .pedal-card,
+    .stage-shell.projection-clean .cand-card {
+      background-color: var(--bg-projection);
+    }
     .stage-shell.projection-clean .control-bar,
     .stage-shell.projection-clean .demo-deck,
     .stage-shell.projection-clean .meta-arena {
@@ -66,13 +77,18 @@
     .stage-shell.projection-clean .proj-exit-pill {
       display: inline-flex;
     }
+    .stage-shell.projection-clean .zone-a-top {
+      padding-right: 220px;
+    }
 
     .btn {
       min-height: 44px;
       padding: 8px 14px;
-      background: var(--bg-panel);
+      background-color: var(--bg-stage);
       color: var(--ink-adopted);
-      border: 1px solid var(--rule-strong);
+      border: none;
+      border-bottom: 2px solid var(--rule-strong);
+      border-radius: 0;
       font-family: var(--font-sans);
       font-size: 15px;
       font-weight: 500;
@@ -84,19 +100,21 @@
       gap: 6px;
       white-space: nowrap;
     }
-    .btn:hover { border-color: var(--ink-adopted); background: #19181D; }
-    .btn.active { border-color: var(--ink-adopted); background: #1B1915; font-weight: 700; }
-    .btn.primary-fill { background: var(--ink-adopted); color: #060608; border-color: var(--ink-adopted); font-weight: 700; }
-    .btn.vermilion { border-color: var(--ink-vermilion); color: var(--ink-vermilion); }
-    .btn.vermilion:hover, .btn.vermilion.active { background: var(--ink-vermilion); color: #060608; font-weight: 700; }
+    .btn:hover { border-bottom-color: var(--ink-adopted); }
+    .btn.active { border-bottom: 3px solid var(--ink-adopted); font-weight: 700; }
+    .btn.primary-fill { background-color: var(--ink-adopted); color: var(--bg-stage); border-bottom-color: var(--ink-adopted); font-weight: 700; }
+    .btn.vermilion { border-bottom-color: var(--ink-vermilion); color: var(--ink-vermilion); font-weight: 600; }
+    .btn.vermilion:hover, .btn.vermilion.active { background-color: var(--ink-vermilion-bg); color: var(--ink-adopted); border-bottom-color: var(--ink-vermilion-bg); font-weight: 700; }
     .btn.compact { min-height: 40px; padding: 6px 12px; font-size: 14px; }
 
     .field {
       min-height: 42px;
-      padding: 7px 12px;
-      background: #060608;
-      color: #EAE6DF;
-      border: 1px solid var(--rule-strong);
+      padding: 7px 10px;
+      background-color: var(--bg-stage);
+      color: var(--ink-adopted);
+      border: none;
+      border-bottom: 1.5px solid var(--rule-strong);
+      border-radius: 0;
       font-family: var(--font-sans);
       font-size: 15px;
     }
@@ -107,16 +125,17 @@
       align-items: center;
       justify-content: space-between;
       gap: 10px;
-      padding: 10px 14px;
-      background: var(--bg-panel);
-      border: 1px solid var(--rule-hairline);
+      padding: 10px 4px 12px;
+      background-color: var(--bg-stage);
+      border: none;
+      border-bottom: 1px solid var(--rule-hairline);
       flex-wrap: wrap;
     }
 
     .ctrl-group {
       display: flex;
       align-items: center;
-      gap: 8px;
+      gap: 10px;
       flex-wrap: wrap;
     }
 
@@ -129,11 +148,88 @@
       margin-right: 6px;
     }
 
-    /* Zone A: Act Arc & Chord + Factual Stage Memo */
+    /* Rule 1 + Rule 2 + Rule 3 containers */
+    .zone-a,
+    .panel,
+    .demo-deck,
+    .meta-arena,
+    .cand-card {
+      position: relative;
+      overflow: hidden;
+      background-color: var(--bg-stage);
+      border: none;
+      border-bottom: 1px solid var(--rule-hairline);
+      border-radius: 0;
+      box-shadow: none;
+    }
+
+    .zone-a > *,
+    .panel > *,
+    .demo-deck > *,
+    .meta-arena > *,
+    .cand-card > * {
+      position: relative;
+      z-index: 1;
+    }
+
+    .zone-a::before,
+    .panel::before,
+    .demo-deck::before,
+    .meta-arena::before,
+    .cand-card::before {
+      content: "";
+      position: absolute;
+      right: 14px;
+      bottom: 10px;
+      width: 68px;
+      height: 68px;
+      opacity: 0.05;
+      pointer-events: none;
+      background-repeat: no-repeat;
+      background-position: center;
+      background-size: contain;
+      z-index: 0;
+    }
+
+    .zone-a:nth-child(5n+1)::before,
+    .panel:nth-child(5n+1)::before,
+    .demo-deck:nth-child(5n+1)::before,
+    .meta-arena:nth-child(5n+1)::before,
+    .cand-card:nth-child(5n+1)::before {
+      background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 80 80'%3E%3Ccircle cx='40' cy='40' r='28' fill='none' stroke='%23EAE6DF' stroke-width='2.5'/%3E%3C/svg%3E");
+    }
+    .zone-a:nth-child(5n+2)::before,
+    .panel:nth-child(5n+2)::before,
+    .demo-deck:nth-child(5n+2)::before,
+    .meta-arena:nth-child(5n+2)::before,
+    .cand-card:nth-child(5n+2)::before {
+      background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 80 80'%3E%3Cpolygon points='40,12 68,62 12,62' fill='none' stroke='%23EAE6DF' stroke-width='2.5'/%3E%3C/svg%3E");
+    }
+    .zone-a:nth-child(5n+3)::before,
+    .panel:nth-child(5n+3)::before,
+    .demo-deck:nth-child(5n+3)::before,
+    .meta-arena:nth-child(5n+3)::before,
+    .cand-card:nth-child(5n+3)::before {
+      background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 80 80'%3E%3Crect x='14' y='14' width='52' height='52' fill='none' stroke='%23EAE6DF' stroke-width='2.5'/%3E%3C/svg%3E");
+    }
+    .zone-a:nth-child(5n+4)::before,
+    .panel:nth-child(5n+4)::before,
+    .demo-deck:nth-child(5n+4)::before,
+    .meta-arena:nth-child(5n+4)::before,
+    .cand-card:nth-child(5n+4)::before {
+      background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 80 80'%3E%3Cpath d='M12,56 A28,28 0 0,1 68,56 Z' fill='none' stroke='%23EAE6DF' stroke-width='2.5'/%3E%3C/svg%3E");
+    }
+    .zone-a:nth-child(5n+5)::before,
+    .panel:nth-child(5n+5)::before,
+    .demo-deck:nth-child(5n+5)::before,
+    .meta-arena:nth-child(5n+5)::before,
+    .cand-card:nth-child(5n+5)::before {
+      background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 80 80'%3E%3Cline x1='14' y1='66' x2='66' y2='14' stroke='%23EAE6DF' stroke-width='2.5'/%3E%3C/svg%3E");
+    }
+
+    /* Zone A: Act Progression, Harmony & Large Factual Chamber Music Memo */
     .zone-a {
-      background: var(--bg-panel);
-      border: 1px solid var(--rule-hairline);
-      padding: 14px 16px;
+      padding: 14px 4px 18px;
       display: flex;
       flex-direction: column;
       gap: 12px;
@@ -150,27 +246,27 @@
     .act-arc {
       display: flex;
       align-items: center;
-      gap: 6px;
+      gap: 10px;
       flex-wrap: wrap;
     }
 
     .act-pill {
       font-family: var(--font-serif);
       font-size: 14.5px;
-      padding: 6px 12px;
-      border: 1px solid var(--rule-hairline);
+      padding: 6px 10px;
+      border: none;
+      border-bottom: 1px solid var(--rule-hairline);
       color: var(--ink-dim);
-      background: #060608;
+      background-color: var(--bg-stage);
       white-space: nowrap;
     }
     .act-pill.active {
-      border-color: var(--ink-adopted);
+      border-bottom: 2px solid var(--ink-adopted);
       color: var(--ink-adopted);
-      background: #171512;
       font-weight: 700;
     }
     .act-pill.climax.active {
-      border-color: var(--ink-vermilion);
+      border-bottom-color: var(--ink-vermilion);
       color: var(--ink-vermilion);
     }
 
@@ -178,6 +274,7 @@
       display: flex;
       align-items: baseline;
       gap: 12px;
+      flex-wrap: wrap;
     }
     .chord-val {
       font-family: var(--font-mono);
@@ -197,12 +294,13 @@
     }
 
     .monologue-box {
-      border-left: 4px solid var(--ink-adopted);
-      padding: 12px 16px;
-      background: #060608;
+      border: none;
+      border-bottom: 1px solid var(--rule-strong);
+      padding: 12px 4px 14px;
+      background-color: var(--bg-stage);
       font-family: var(--font-serif);
-      font-size: clamp(24px, 1.9vw, 32px);
-      line-height: 1.48;
+      font-size: clamp(22px, 1.8vw, 30px);
+      line-height: 1.5;
       color: var(--ink-adopted);
       overflow-wrap: anywhere;
     }
@@ -211,7 +309,7 @@
     .stage-main-grid {
       display: grid;
       grid-template-columns: minmax(310px, 0.85fr) minmax(0, 1.65fr);
-      gap: 14px;
+      gap: 24px;
       align-items: start;
     }
     @media (max-width: 1180px) {
@@ -219,12 +317,10 @@
     }
 
     .panel {
-      background: var(--bg-panel);
-      border: 1px solid var(--rule-hairline);
-      padding: 14px 16px;
+      padding: 14px 4px 18px;
       display: flex;
       flex-direction: column;
-      gap: 12px;
+      gap: 14px;
       min-width: 0;
     }
 
@@ -252,16 +348,17 @@
     .metric-tiles {
       display: grid;
       grid-template-columns: repeat(2, minmax(0, 1fr));
-      gap: 8px;
+      gap: 12px;
     }
     .tile {
-      border: 1px solid #22201A;
-      background: #060608;
-      padding: 10px 12px;
+      border: none;
+      border-bottom: 1px solid var(--rule-hairline);
+      background-color: var(--bg-stage);
+      padding: 10px 4px;
     }
     .tile-k {
       font-family: var(--font-mono);
-      font-size: 13px;
+      font-size: 13.5px;
       color: var(--ink-secondary);
     }
     .tile-v {
@@ -269,33 +366,34 @@
       font-size: 18px;
       font-weight: 600;
       color: var(--ink-adopted);
-      margin-top: 3px;
+      margin-top: 4px;
     }
 
     .breath-bar {
-      height: 12px;
-      background: #171612;
-      border: 1px solid var(--rule-strong);
+      height: 10px;
+      background-color: var(--track-bg);
+      border: none;
       margin-top: 6px;
     }
     .breath-fill {
       height: 100%;
       width: 0%;
-      background: var(--ink-adopted);
+      background-color: var(--ink-adopted);
       transition: width 0.08s linear;
     }
-    .breath-fill.ready { background: var(--ink-vermilion); }
+    .breath-fill.ready { background-color: var(--ink-vermilion); }
 
     /* Spatial Dual Pedals: LEFT = UNA CORDA (CC#67), RIGHT = DAMPER (CC#64) */
     .pedal-pair {
       display: grid;
       grid-template-columns: 1fr 1fr;
-      gap: 10px;
+      gap: 14px;
     }
     .pedal-card {
-      border: 1px solid #23211C;
-      background: #060608;
-      padding: 10px 12px;
+      border: none;
+      border-bottom: 1px solid var(--rule-hairline);
+      background-color: var(--bg-stage);
+      padding: 10px 4px;
     }
     .pedal-head {
       display: flex;
@@ -304,13 +402,13 @@
       font-family: var(--font-mono);
       font-size: 14px;
       color: var(--ink-adopted);
-      margin-bottom: 6px;
+      margin-bottom: 8px;
     }
     .pedal-track {
       position: relative;
       height: 12px;
-      background: #181714;
-      border: 1px solid var(--rule-strong);
+      background-color: var(--track-bg);
+      border: none;
     }
     .pedal-half {
       position: absolute;
@@ -318,19 +416,20 @@
       width: 35%;
       top: 0;
       bottom: 0;
-      border-left: 1px dashed var(--ink-dim);
-      border-right: 1px dashed var(--ink-dim);
+      border-left: 1px dashed #828691;
+      border-right: 1px dashed #828691;
       pointer-events: none;
     }
-    .fill-67 { height: 100%; width: 0%; background: var(--ink-vermilion); transition: width 0.08s linear; }
-    .fill-64 { height: 100%; width: 0%; background: var(--ink-adopted); transition: width 0.08s linear; }
+    .fill-67 { height: 100%; width: 0%; background-color: var(--ink-vermilion); transition: width 0.08s linear; }
+    .fill-64 { height: 100%; width: 0%; background-color: var(--ink-adopted); transition: width 0.08s linear; }
 
     /* Zone C: Hero Grand Staff + 4 Summary/Rejection Cards */
     .hero-staff-box {
       width: 100%;
       height: 310px;
-      border: 1px solid var(--rule-strong);
-      background: #060608;
+      border: none;
+      border-bottom: 1px solid var(--rule-strong);
+      background-color: var(--bg-stage);
     }
     .hero-staff-box canvas {
       width: 100%;
@@ -341,7 +440,7 @@
     .cand-summary-grid {
       display: grid;
       grid-template-columns: repeat(4, minmax(0, 1fr));
-      gap: 10px;
+      gap: 14px;
     }
     @media (max-width: 1280px) {
       .cand-summary-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
@@ -349,9 +448,7 @@
 
     .cand-card {
       text-align: left;
-      border: 1px solid var(--rule-hairline);
-      background: #060608;
-      padding: 11px 13px;
+      padding: 12px 4px 14px;
       color: var(--ink-adopted);
       cursor: pointer;
       display: flex;
@@ -359,9 +456,9 @@
       gap: 6px;
       width: 100%;
     }
-    .cand-card:hover { border-color: var(--ink-adopted); background: #141318; }
-    .cand-card.adopted { border-color: var(--ink-adopted); background: #13120F; }
-    .cand-card.inspecting { border-width: 2px; border-color: var(--ink-vermilion); }
+    .cand-card:hover { border-bottom-color: var(--ink-adopted); }
+    .cand-card.adopted { border-bottom: 2px solid var(--ink-adopted); }
+    .cand-card.inspecting { border-bottom: 3px solid var(--ink-vermilion); }
     .cand-top {
       display: flex;
       justify-content: space-between;
@@ -373,7 +470,7 @@
     .cand-score { font-family: var(--font-mono); font-size: 15px; }
     .cand-reason {
       font-size: 13.5px;
-      line-height: 1.45;
+      line-height: 1.48;
       color: var(--ink-vermilion);
     }
     .cand-card.adopted .cand-reason { color: var(--ink-adopted); }
@@ -381,14 +478,20 @@
     /* Zone D: Demo Deck + Directive Meta Arena */
     .demo-deck,
     .meta-arena {
-      background: var(--bg-panel);
-      border: 1px solid var(--rule-hairline);
-      padding: 12px 16px;
+      padding: 12px 4px 14px;
       display: flex;
       align-items: center;
       justify-content: space-between;
       gap: 12px;
       flex-wrap: wrap;
+    }
+
+    @media (max-width: 768px) {
+      .stage-shell { padding: 10px 12px 24px; gap: 14px; }
+      .metric-tiles, .cand-summary-grid { grid-template-columns: 1fr; }
+      .hero-staff-box { height: 220px; }
+      .monologue-box { font-size: 18px; }
+      .ctrl-group .btn, .ctrl-group .field { width: 100%; }
     }
   </style>
 </head>
@@ -565,6 +668,55 @@
         return (Math.floor(m / 12) - 1) * 7 + steps[((m % 12) + 12) % 12];
       }
 
+      const _bgCache = new WeakMap();
+      function getStaffBg(canvas, width, height, dpr, bgHex) {
+        const key = `${width}x${height}x${dpr}x${bgHex}`;
+        const prev = _bgCache.get(canvas);
+        if (prev && prev.key === key) return prev.off;
+        const off = document.createElement("canvas");
+        off.width = Math.floor(width * dpr);
+        off.height = Math.floor(height * dpr);
+        const octx = off.getContext("2d");
+        octx.setTransform(dpr, 0, 0, dpr, 0, 0);
+        octx.fillStyle = bgHex;
+        octx.fillRect(0, 0, width, height);
+
+        const padLeft = 56;
+        const padRight = 24;
+        const trebleBaseY = Math.round(height * 0.46);
+        const bassBaseY = Math.round(height * 0.85);
+        const stepPx = Math.max(4.4, Math.min(6.0, height / 50));
+
+        octx.strokeStyle = "#484B53";
+        octx.lineWidth = 1;
+        for (let i = 0; i < 5; i++) {
+          const yt = trebleBaseY - i * 2 * stepPx;
+          octx.beginPath();
+          octx.moveTo(padLeft - 12, yt);
+          octx.lineTo(width - padRight, yt);
+          octx.stroke();
+
+          const yb = bassBaseY - i * 2 * stepPx;
+          octx.beginPath();
+          octx.moveTo(padLeft - 12, yb);
+          octx.lineTo(width - padRight, yb);
+          octx.stroke();
+        }
+        octx.strokeStyle = "#6C707A";
+        octx.lineWidth = 2;
+        octx.beginPath();
+        octx.moveTo(padLeft - 12, trebleBaseY - 8 * stepPx);
+        octx.lineTo(padLeft - 12, bassBaseY);
+        octx.stroke();
+
+        octx.fillStyle = "#B0ACA4";
+        octx.font = "600 14px serif";
+        octx.fillText("G", 20, trebleBaseY - stepPx);
+        octx.fillText("F", 20, bassBaseY - 5 * stepPx);
+        _bgCache.set(canvas, { key, off });
+        return off;
+      }
+
       function drawHeroStaff(events, chords) {
         const canvas = $("staff-hero");
         if (!canvas) return;
@@ -577,47 +729,21 @@
           canvas.width = w;
           canvas.height = h;
         }
-        const ctx = canvas.getContext("2d");
-        ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
-
         const width = rect.width;
         const height = rect.height;
-        ctx.fillStyle = "#060608";
-        ctx.fillRect(0, 0, width, height);
+        const bgHex = projClean ? "#141517" : "#1C1D20";
+        const ctx = canvas.getContext("2d");
+        const bg = getStaffBg(canvas, width, height, dpr, bgHex);
+        ctx.setTransform(1, 0, 0, 1, 0, 0);
+        ctx.drawImage(bg, 0, 0);
+        ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
 
         const padLeft = 56;
         const padRight = 24;
         const usableW = Math.max(80, width - padLeft - padRight);
-        const trebleBaseY = Math.round(height * 0.43);
-        const bassBaseY = Math.round(height * 0.84);
-        const stepPx = Math.max(4.4, Math.min(6.4, height / 47));
-
-        ctx.strokeStyle = "#302D27";
-        ctx.lineWidth = 1;
-        for (let i = 0; i < 5; i++) {
-          const yt = trebleBaseY - i * 2 * stepPx;
-          ctx.beginPath();
-          ctx.moveTo(padLeft - 12, yt);
-          ctx.lineTo(width - padRight, yt);
-          ctx.stroke();
-
-          const yb = bassBaseY - i * 2 * stepPx;
-          ctx.beginPath();
-          ctx.moveTo(padLeft - 12, yb);
-          ctx.lineTo(width - padRight, yb);
-          ctx.stroke();
-        }
-        ctx.strokeStyle = "#5A5852";
-        ctx.lineWidth = 2;
-        ctx.beginPath();
-        ctx.moveTo(padLeft - 12, trebleBaseY - 8 * stepPx);
-        ctx.lineTo(padLeft - 12, bassBaseY);
-        ctx.stroke();
-
-        ctx.fillStyle = "#8C857A";
-        ctx.font = "600 14px serif";
-        ctx.fillText("G", 20, trebleBaseY - stepPx);
-        ctx.fillText("F", 20, bassBaseY - 5 * stepPx);
+        const trebleBaseY = Math.round(height * 0.46);
+        const bassBaseY = Math.round(height * 0.85);
+        const stepPx = Math.max(4.4, Math.min(6.0, height / 50));
 
         const notes = (events || []).map((e) => ({
           p: Number(e.pitch ?? e.p ?? 60),
@@ -630,11 +756,11 @@
         const span = Math.max(1.2, maxT - minT);
 
         if (Array.isArray(chords) && chords.length) {
-          ctx.fillStyle = "#B4AEA3";
+          ctx.fillStyle = "#C6C1B8";
           ctx.font = '600 14px "Cascadia Mono", monospace';
           chords.slice(0, 6).forEach((ch, idx) => {
             const cx = padLeft + (idx / Math.max(1, Math.min(6, chords.length))) * usableW;
-            ctx.fillText(String(ch), cx + 4, Math.max(15, trebleBaseY - 10.6 * stepPx));
+            ctx.fillText(String(ch), cx + 4, 16);
           });
         }
 
@@ -647,7 +773,7 @@
           const delta = Math.max(-7, Math.min(13, pitchToDiatonic(n.p) - ref));
           const y = baseY - delta * stepPx;
 
-          const color = n.h === "human" ? "#A8C8E8" : n.h === "lh" ? "#C4BDB0" : "#EAE6DF";
+          const color = n.h === "human" ? "#A8C8E8" : n.h === "lh" ? "#D0CBC2" : "#EAE6DF";
           ctx.fillStyle = n.h === "human" ? "rgba(168, 200, 232, 0.25)" : "rgba(234, 230, 223, 0.16)";
           ctx.fillRect(x, y - stepPx * 0.4, tail, stepPx * 0.8);
           ctx.fillStyle = color;
@@ -656,8 +782,6 @@
           ctx.fill();
         });
       }
-
-      let lastRenderedTurn = -1;
 
       function formatCandReason(cand) {
         if (!cand) return "比較待機中";
@@ -683,7 +807,6 @@
         const out = s.output || {};
         const th = s.telemetry_hud || {};
         const actNum = Number(intent.act_number || 1);
-        const turnId = Number(s.turn_id || 0);
 
         $("act-arc")?.querySelectorAll(".act-pill").forEach((el) => {
           el.classList.toggle("active", Number(el.dataset.act || 1) === actNum);
@@ -733,10 +856,6 @@
 
         const cands = s.candidates || [];
         const adopted = cands.find((c) => c.adopted) || cands[0];
-        if (turnId !== lastRenderedTurn && adopted) {
-          inspectedCid = adopted.candidate_id;
-          lastRenderedTurn = turnId;
-        }
         if (!inspectedCid || !cands.some((c) => c.candidate_id === inspectedCid)) {
           inspectedCid = adopted ? adopted.candidate_id : "A";
         }

@@ -32,10 +32,10 @@
     html, body {
       margin: 0;
       padding: 0;
-      background: radial-gradient(1200px 600px at 15% -10%, #172036 0%, var(--bg) 60%);
+      background: #1C1D20;
       color: var(--text);
       font-family: -apple-system, BlinkMacSystemFont, "Hiragino Sans", "Noto Sans JP", "Segoe UI", sans-serif;
-      font-size: 14px;
+      font-size: 15px;
       line-height: 1.5;
     }
 
@@ -101,21 +101,21 @@
       white-space: nowrap;
       transition: background 0.15s ease, transform 0.1s ease, border-color 0.15s ease;
     }
-    .btn:hover { background: var(--surface-2); border-color: var(--accent); }
+    .btn:hover { background: #1C1D20; border-bottom-color: #EAE6DF; }
     .btn:active { transform: translateY(1px); }
-    .btn-primary { background: linear-gradient(135deg, #059669, #047857); border-color: #34d399; color: #fff; }
-    .btn-primary:hover { background: linear-gradient(135deg, #10b981, #059669); }
-    .btn-gold { background: linear-gradient(135deg, #d97706, #b45309); border-color: #fcd34d; color: #fff; }
-    .btn-gold:hover { background: linear-gradient(135deg, #f59e0b, #d97706); }
-    .btn-blue { background: linear-gradient(135deg, #0284c7, #0369a1); border-color: #7dd3fc; color: #fff; }
+    .btn-primary { background: #EAE6DF; border-bottom-color: #EAE6DF; color: #1C1D20; }
+    .btn-primary:hover { background: #D7D2C8; }
+    .btn-gold { background: #1C1D20; border-bottom-color: #EAE6DF; color: #EAE6DF; }
+    .btn-gold:hover { background: #26282C; }
+    .btn-blue { background: #1C1D20; border-bottom-color: #A8C8E8; color: #EAE6DF; }
     .btn-panic {
-      background: linear-gradient(135deg, #dc2626, #991b1b);
-      border-color: #fca5a5;
-      color: #ffffff;
+      background: #B53524;
+      border-bottom-color: #E85E4B;
+      color: #EAE6DF;
       font-weight: 800;
       padding: 8px 14px;
     }
-    .btn-panic:hover { background: linear-gradient(135deg, #ef4444, #b91c1c); }
+    .btn-panic:hover { background: #9E2B1C; }
 
     /* Browser-Style Multi-Song Workspace Bar + Time-Machine */
     .workspace-strip {
@@ -214,8 +214,7 @@
       --control-value: 1;
       flex: 1;
       height: 8px;
-      border-radius: 999px;
-      background: linear-gradient(90deg, #38bdf8, #f59e0b);
+      background: #2C2E34;
       appearance: none;
       -webkit-appearance: none;
       outline: none;
@@ -327,10 +326,10 @@
 
     /* Live Story Subtitle & Thought Bubble */
     .story-hero {
-      background: linear-gradient(135deg, rgba(245, 158, 11, 0.14), rgba(56, 189, 248, 0.08));
-      border: 1px solid rgba(245, 158, 11, 0.42);
-      border-radius: 14px;
-      padding: 12px 16px;
+      background: #1C1D20;
+      border: none;
+      border-bottom: 1px solid #34373E;
+      padding: 12px 4px;
       margin-bottom: 12px;
     }
     .story-subtitle {
@@ -353,13 +352,9 @@
       position: relative;
       width: 100%;
       aspect-ratio: 1.25 / 1;
-      border-radius: 12px;
-      border: 1px solid var(--border-strong);
-      background:
-        radial-gradient(circle at 20% 25%, rgba(56, 189, 248, 0.22), transparent 55%),
-        radial-gradient(circle at 82% 22%, rgba(245, 158, 11, 0.25), transparent 55%),
-        radial-gradient(circle at 50% 85%, rgba(16, 185, 129, 0.16), transparent 60%),
-        #0c1220;
+      border: none;
+      border-bottom: 1px solid var(--border-strong);
+      background: #1C1D20;
       cursor: crosshair;
       touch-action: none;
       overflow: hidden;
@@ -384,9 +379,8 @@
       width: 24px;
       height: 24px;
       border-radius: 50%;
-      background: radial-gradient(circle, #ffffff 15%, var(--accent) 70%);
-      border: 2px solid #fff;
-      box-shadow: 0 0 18px rgba(245, 158, 11, 0.85);
+      background: #EAE6DF;
+      border: 2px solid #EAE6DF;
       transform: translate(-50%, -50%);
       pointer-events: none;
     }
@@ -413,8 +407,7 @@
     }
     .meter-fill {
       height: 100%;
-      border-radius: 999px;
-      background: linear-gradient(90deg, var(--blue), var(--accent-bright));
+      background: #EAE6DF;
       transition: width 0.35s ease;
     }
 
@@ -503,10 +496,10 @@
       align-items: center;
       flex-wrap: wrap;
       gap: 10px;
-      padding: 10px 14px;
-      background: linear-gradient(135deg, rgba(167, 139, 250, 0.14), rgba(245, 158, 11, 0.10));
-      border: 1px solid rgba(245, 158, 11, 0.38);
-      border-radius: 12px;
+      padding: 10px 4px;
+      background: #1C1D20;
+      border: none;
+      border-bottom: 1px solid #34373E;
       margin-bottom: 10px;
     }
     .work-title-ja { font-size: 1.06rem; font-weight: 800; color: #fef3c7; }
@@ -649,6 +642,70 @@
     @media (prefers-reduced-motion: reduce) {
       *, *::before, *::after { transition: none !important; animation: none !important; }
     }
+
+    /* 5 Mandatory Editorial Design Rules Enforcement Override */
+    :root {
+      --bg: #1C1D20;
+      --bg-elevated: #1C1D20;
+      --surface: #1C1D20;
+      --surface-2: #1C1D20;
+      --border: #34373E;
+      --border-strong: #585C66;
+      --text: #EAE6DF;
+      --text-dim: #C6C1B8;
+      --accent: #EAE6DF;
+      --accent-bright: #EAE6DF;
+      --accent-soft: #2C2E34;
+    }
+    * { box-shadow: none !important; }
+    html, body {
+      background: #1C1D20 !important;
+      color: #EAE6DF !important;
+      font-size: 15px !important;
+      background-image: none !important;
+    }
+    .topbar, .workspace-strip, .card, .score-card, .feat-card, .story-hero, .thought-bubble,
+    .work-banner, .pad-box, .md-viewer-box, .log-table-wrap, dialog#qr-dialog, dialog#explorer-dialog,
+    .toast, .mutation-caption, #critic-logs, #cello-live-readout, canvas.stage-canvas {
+      background: #1C1D20 !important;
+      background-image: none !important;
+      border: none !important;
+      border-bottom: 1px solid #34373E !important;
+      border-radius: 0 !important;
+      box-shadow: none !important;
+    }
+    .btn, .song-tab, .main-tab, .preset-chip, .badge, .form-pill, .status-banner,
+    textarea, input[type="text"], select.studio-select, input[type="number"].studio-num {
+      background: #1C1D20 !important;
+      background-image: none !important;
+      border: none !important;
+      border-bottom: 1.5px solid #585C66 !important;
+      border-radius: 0 !important;
+      color: #EAE6DF !important;
+      font-size: max(13.5px, 0.9rem) !important;
+    }
+    .btn-primary { background: #EAE6DF !important; color: #1C1D20 !important; border-bottom-color: #EAE6DF !important; }
+    .btn-panic { background: #B53524 !important; color: #EAE6DF !important; border-bottom-color: #E85E4B !important; }
+    .pad-orb { background: #EAE6DF !important; }
+    input[type="range"].studio-slider, .meter-track, .meter-fill { background: #2C2E34 !important; background-image: none !important; }
+    .meter-fill { background: #EAE6DF !important; }
+    .card { position: relative; overflow: hidden; }
+    .card > * { position: relative; z-index: 1; }
+    .card::before {
+      content: ""; position: absolute; right: 12px; bottom: 8px; width: 64px; height: 64px;
+      opacity: 0.05; pointer-events: none; background-repeat: no-repeat; background-size: contain; z-index: 0;
+    }
+    .card:nth-child(5n+1)::before { background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 80 80'%3E%3Ccircle cx='40' cy='40' r='28' fill='none' stroke='%23EAE6DF' stroke-width='2.5'/%3E%3C/svg%3E"); }
+    .card:nth-child(5n+2)::before { background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 80 80'%3E%3Cpolygon points='40,12 68,62 12,62' fill='none' stroke='%23EAE6DF' stroke-width='2.5'/%3E%3C/svg%3E"); }
+    .card:nth-child(5n+3)::before { background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 80 80'%3E%3Crect x='14' y='14' width='52' height='52' fill='none' stroke='%23EAE6DF' stroke-width='2.5'/%3E%3C/svg%3E"); }
+    .card:nth-child(5n+4)::before { background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 80 80'%3E%3Cpath d='M12,56 A28,28 0 0,1 68,56 Z' fill='none' stroke='%23EAE6DF' stroke-width='2.5'/%3E%3C/svg%3E"); }
+    .card:nth-child(5n+5)::before { background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 80 80'%3E%3Cline x1='14' y1='66' x2='66' y2='14' stroke='%23EAE6DF' stroke-width='2.5'/%3E%3C/svg%3E"); }
+    .banner-sub, .scrubber-tag, .pad-axis-label, .meter-hd, .score-desc, .score-name,
+    .feat-title, .feat-desc, .work-title-eu, .log-table, .weight-slider-row, .tab-close-x,
+    .mutation-caption, .story-subtitle, .thought-bubble, .analytics-kpi-grid,
+    .song-tabs-row span, .stage-act-strip span, label {
+      font-size: 13.5px !important;
+    }
   </style>
 </head>
 <body>
@@ -681,7 +738,7 @@
     <!-- BROWSER-STYLE MULTI-SONG WORKSPACE TABS + TIME-MACHINE -->
     <section class="workspace-strip" aria-label="曲の切り替えとタイムマシン履歴">
       <div class="song-tabs-row">
-        <span style="font-size:0.8rem; font-weight:800; color:var(--text-dim); white-space:nowrap;">🗂️ 曲のタブ</span>
+        <span style="font-size:13.5px; font-weight:800; color:var(--text-dim); white-space:nowrap;">🗂️ 曲のタブ</span>
         <div id="song-tablist" class="tablist-scroll" role="tablist" aria-label="作業中の曲タブ" focusgroup="tablist nomemory"></div>
         <button class="btn" onclick="postAction('/api/tabs/new', {})">＋ 新しい曲を作る</button>
         <button class="btn" onclick="postAction('/api/tabs/restore', {})">↩ 閉じた曲を戻す</button>
@@ -737,7 +794,7 @@
         <div id="live-story-subtitle" class="story-subtitle">新しいオリジナルの物語を紡ぎ始めています…</div>
         <div id="pianist-thought-bubble" class="thought-bubble">💬 AIピアニスト: レガートの響きとメロディの輪郭を探しています</div>
         <div class="stage-act-strip">
-          <span style="font-size:0.78rem; font-weight:800; color:#fde68a;">🎬 コンサートステージ実演スクリプト:</span>
+          <span style="font-size:13.5px; font-weight:800; color:#EAE6DF;">🎬 コンサートステージ実演スクリプト:</span>
           <button class="btn btn-gold" onclick="triggerStageAct(1)">第1幕: 原石→自己進化(A/B)</button>
           <button class="btn btn-blue" onclick="triggerStageAct(2)">第2幕: パッセージ対話＆超絶変奏</button>
           <button class="btn btn-primary" onclick="triggerStageAct(3)">第3幕: 88鍵カスケード＆倍音共鳴</button>
@@ -775,7 +832,7 @@
               <span class="card-title">🤝 双方向パッセージ対話＆超絶技巧</span>
               <span class="badge badge-ok">MIDI In / C519ML対応</span>
             </div>
-            <div style="font-size:0.78rem; color:var(--text-dim); margin-bottom:8px;">
+            <div style="font-size:13.5px; color:var(--text-dim); margin-bottom:8px;">
               鍵盤やチェロで弾いたフレーズを瞬時に解析し、自動演奏ピアノならではの対位法・88鍵カスケードで弾き返します。
             </div>
             <div style="display:flex; flex-direction:column; gap:6px; margin-bottom:10px;">
@@ -783,7 +840,7 @@
               <button class="btn btn-gold" onclick="sendPassageReply('liszt_rachmaninoff_virtuoso')">② リスト＆ラフマニノフ風 超絶技巧変奏</button>
               <button class="btn btn-primary" onclick="sendPassageReply('evolve_symphonic_masterwork')">③ このパッセージを第1主題に大曲へ進化</button>
             </div>
-            <div class="card-title" style="font-size:0.84rem; margin-bottom:6px;">🌟 自動演奏ピアノ限定の超絶表現</div>
+            <div class="card-title" style="font-size:14.5px; margin-bottom:6px;">🌟 自動演奏ピアノ限定の超絶表現</div>
             <div class="preset-grid">
               <button class="btn" onclick="triggerVirtuosoExpr('4hand_layering')">👐 4手立体ポリフォニー</button>
               <button class="btn" onclick="triggerVirtuosoExpr('88key_cascade')">🌊 88鍵カスケード</button>
@@ -798,7 +855,7 @@
               <span id="inspiration-top" class="badge badge-gold">自発ブレンド</span>
             </div>
             <div id="inspiration-bars"></div>
-            <div id="inspiration-comment" style="font-size:0.78rem; color:var(--text-dim); margin-top:6px;"></div>
+            <div id="inspiration-comment" style="font-size:13.5px; color:var(--text-dim); margin-top:6px;"></div>
           </div>
         </div>
 
@@ -882,7 +939,7 @@
             </div>
           </div>
           <canvas id="canvas-evo" class="stage-canvas" width="600" height="235"></canvas>
-          <div id="hyper-summary" style="font-size:0.82rem; color:var(--text-dim); margin-top:8px;"></div>
+          <div id="hyper-summary" style="font-size:13.5px; color:var(--text-dim); margin-top:8px;"></div>
         </div>
       </div>
 
@@ -899,7 +956,7 @@
           <div class="card-hd">
             <span class="card-title">📝 AI Composer's Mind & Critic Stream（推敲とダメ出しの記録）</span>
           </div>
-          <div id="critic-logs" style="font-size:0.83rem; color:var(--text); max-height:220px; overflow:auto; background:#0b0f18; padding:10px; border-radius:10px; display:flex; flex-direction:column; gap:6px;"></div>
+          <div id="critic-logs" style="font-size:13.5px; color:var(--text); max-height:220px; overflow:auto; padding:10px; display:flex; flex-direction:column; gap:6px;"></div>
         </div>
       </div>
 
@@ -949,7 +1006,7 @@
             <span class="card-title">🎭 ブラインド A/B 進化比較テスト（X vs Y）</span>
             <span id="blind-ab-score-badge" class="badge badge-gold">投票 0勝 / 0勝</span>
           </div>
-          <p style="font-size:0.82rem; color:var(--text-dim); margin-top:0;">
+          <p style="font-size:13.5px; color:var(--text-dim); margin-top:0;">
             第1世代（進化前）と最新世代（進化後）を順番を伏せて再生し、耳だけで優れている方を選びます。
           </p>
           <div style="display:flex; flex-wrap:wrap; gap:6px; margin-bottom:10px;">
@@ -974,7 +1031,7 @@
             <span class="card-title">🎻 リアルタイム・チェロ共演</span>
             <span id="mic-badge" class="badge">マイク待機中</span>
           </div>
-          <p style="color:var(--text-dim); font-size:0.86rem; margin-top:0;">
+          <p style="color:var(--text-dim); font-size:13.5px; margin-top:0;">
             チェロの音程をリアルタイムで聴き取り、邪魔をしない美しい帯域でピアノ伴奏をつけます。実チェロが手元にないときは代理テスト演奏も試せます。
           </p>
           <div style="display:flex; flex-wrap:wrap; gap:8px; margin-bottom:10px;">
@@ -983,10 +1040,10 @@
             <button class="btn" onclick="postAction('/api/session/proxy_demo', {style:'faure'})">🎼 代理チェロと自動共演テスト</button>
             <button class="btn" onclick="postAction('/api/safety/test_note', {})">🎹 確認テスト音</button>
           </div>
-          <div id="cello-live-readout" style="background:#0c111b; border:1px solid var(--border); border-radius:10px; padding:10px; font-weight:700; margin-bottom:10px;">
+          <div id="cello-live-readout" style="padding:10px; font-weight:700; margin-bottom:10px;">
             検出中の音高: 待機中
           </div>
-          <div class="card-title" style="font-size:0.9rem; margin-bottom:6px;">🧬 IMSLP 名曲群の深層音楽学 DNA 解析結果</div>
+          <div class="card-title" style="font-size:14.5px; margin-bottom:6px;">🧬 IMSLP 名曲群の深層音楽学 DNA 解析結果</div>
           <div id="imslp-dna-box" style="display:flex; flex-direction:column; gap:6px; max-height:240px; overflow:auto;"></div>
         </div>
 
@@ -1007,7 +1064,7 @@
             <button class="btn" onclick="saveCanvasPng('canvas-dialogue-compare', 'dialogue_comparison.png')">🖼️ PNG保存</button>
           </div>
         </div>
-        <div id="dialogue-compare-summary" style="font-size:0.83rem; color:var(--text-dim); margin-bottom:8px;">パッセージ応答や対話演奏を行うと、人間のフレーズ輪郭とAIの対話応答を比較表示します。</div>
+        <div id="dialogue-compare-summary" style="font-size:13.5px; color:var(--text-dim); margin-bottom:8px;">パッセージ応答や対話演奏を行うと、人間のフレーズ輪郭とAIの対話応答を比較表示します。</div>
         <canvas id="canvas-dialogue-compare" class="stage-canvas" width="980" height="230"></canvas>
       </div>
     </section>
@@ -1022,12 +1079,12 @@
             <span class="card-title">💌 AIピアニストへのリクエストメモ</span>
             <button class="btn btn-gold" onclick="saveDirectives()">✨ リクエストを送信</button>
           </div>
-          <p style="font-size:0.82rem; color:var(--text-dim); margin-top:0;">
+          <p style="font-size:13.5px; color:var(--text-dim); margin-top:0;">
             例:「もっとレガートで歌って」「情熱的に盛り上げて」「速く駆け抜けて」「静かなペダルで」のように日本語で指示を書けます。
           </p>
           <textarea id="directives-input" rows="4" placeholder="例: レガートを極限まで滑らかにして、ときどき情熱的に盛り上がってください"></textarea>
           <div style="margin-top:12px;">
-            <div class="card-title" style="font-size:0.88rem; margin-bottom:6px;">🏆 進化の系統樹 ＆ 殿堂入りアーカイブ</div>
+            <div class="card-title" style="font-size:14.5px; margin-bottom:6px;">🏆 進化の系統樹 ＆ 殿堂入りアーカイブ</div>
             <div id="hof-list" style="display:flex; flex-direction:column; gap:6px;"></div>
           </div>
         </div>
@@ -1086,7 +1143,7 @@
           <button class="preset-chip" data-profile="dkv_e3_conservative" onclick="setSafetyProfile('dkv_e3_conservative')">Disklavier E3 / 古典機 (慎重保護)</button>
           <button class="preset-chip" data-profile="dcx_enspire_pro" onclick="setSafetyProfile('dcx_enspire_pro')">DCFX / Concert Pro (高速応答)</button>
         </div>
-        <div id="safety-profile-summary" style="font-size:0.82rem; color:var(--text-dim);">同時保持上限・連打防止間隔・ソレノイド保護しきい値を実機モデルに合わせて調整します。</div>
+        <div id="safety-profile-summary" style="font-size:13.5px; color:var(--text-dim);">同時保持上限・連打防止間隔・ソレノイド保護しきい値を実機モデルに合わせて調整します。</div>
       </div>
 
       <div class="panel-grid-2" style="margin-bottom:12px;">
@@ -1127,7 +1184,7 @@
             <button class="btn" onclick="saveCanvasPng('canvas-vdl-curve', 'exp1_vdl_curve.png')">🖼️ PNG保存</button>
           </div>
           <canvas id="canvas-vdl-curve" class="stage-canvas" width="600" height="250" style="margin-bottom:10px;"></canvas>
-          <div style="display:flex; flex-wrap:wrap; gap:8px; align-items:center; font-size:0.8rem;">
+          <div style="display:flex; flex-wrap:wrap; gap:8px; align-items:center; font-size:13.5px;">
             <label>基礎遅延(ms): <input id="vdl-base-min" type="number" class="studio-num" step="1" value="35" style="width:74px;"></label>
             <label>弱打振幅(ms): <input id="vdl-amp" type="number" class="studio-num" step="5" value="180" style="width:74px;"></label>
             <label>減衰係数: <input id="vdl-decay" type="number" class="studio-num" step="0.002" value="0.032" style="width:78px;"></label>
@@ -1142,7 +1199,7 @@
             <button class="btn" onclick="saveCanvasPng('canvas-pedal-rt60', 'exp2_pedal_rt60.png')">🖼️ PNG保存</button>
           </div>
           <canvas id="canvas-pedal-rt60" class="stage-canvas" width="600" height="250"></canvas>
-          <div id="pedal-opt-note" style="font-size:0.8rem; color:var(--text-dim); margin-top:8px;">チェロ中低音との調和点（推奨上限 CC#64 ≈ 58）をリアルタイム参照できます。</div>
+          <div id="pedal-opt-note" style="font-size:13.5px; color:var(--text-dim); margin-top:8px;">チェロ中低音との調和点（推奨上限 CC#64 ≈ 58）をリアルタイム参照できます。</div>
         </div>
       </div>
 
@@ -1214,7 +1271,7 @@
             <option value="experiment_runs">experiment_runs (自動実験)</option>
           </select>
           <input id="log-search-q" type="text" placeholder="キーワード検索 (例: legato, FAURE, C4)" style="max-width:250px;" />
-          <label style="font-size:0.8rem;">最低スコア: <input id="log-min-score" type="number" class="studio-num" placeholder="例: 75" step="1" style="width:82px;"></label>
+          <label style="font-size:13.5px;">最低スコア: <input id="log-min-score" type="number" class="studio-num" placeholder="例: 75" step="1" style="width:82px;"></label>
           <button class="btn btn-primary" onclick="loadSqlLogs()">🔍 検索</button>
           <button class="btn" onclick="exportSqlLogs('csv')">⬇️ CSV保存</button>
           <button class="btn" onclick="exportSqlLogs('json')">⬇️ JSON保存</button>
@@ -1241,7 +1298,7 @@
     <div class="card-hd" style="margin-bottom:12px;">
       <div>
         <h3 id="obs-dlg-title" style="margin:0; color:var(--accent-bright);">🧠 イン・アプリ音楽知識グラフ ＆ 進化思考ノートビューア</h3>
-        <div style="font-size:0.8rem; color:var(--text-dim);">obsidian_vault/ の思考ログ・進化の系統樹・採用理由を外部アプリを開かずリアルタイム閲覧できます</div>
+        <div style="font-size:13.5px; color:var(--text-dim);">obsidian_vault/ の思考ログ・進化の系統樹・採用理由を外部アプリを開かずリアルタイム閲覧できます</div>
       </div>
       <button class="btn" onclick="document.getElementById('explorer-dialog').close()" autofocus>✕ 閉じる</button>
     </div>
@@ -1260,9 +1317,9 @@
   <!-- QR SMARTPHONE REMOTE MODAL -->
   <dialog id="qr-dialog" aria-labelledby="qr-dlg-title">
     <h3 id="qr-dlg-title" style="margin-top:0; color:var(--accent-bright);">📱 スマホ・iPad ライブコントローラー</h3>
-    <p style="font-size:0.84rem; color:var(--text-dim);">同じWi-FiにつないだスマホやiPadのカメラで読み取ると、手元から曲の切り替えや演奏操作ができます。</p>
+    <p style="font-size:13.5px; color:var(--text-dim);">同じWi-FiにつないだスマホやiPadのカメラで読み取ると、手元から曲の切り替えや演奏操作ができます。</p>
     <div id="qr-svg-box" style="margin:12px auto; display:flex; justify-content:center;"></div>
-    <div id="qr-url-text" style="font-family:monospace; font-size:0.86rem; background:#0b0f18; padding:8px; border-radius:8px; word-break:break-all;"></div>
+    <div id="qr-url-text" style="font-family:monospace; font-size:13.5px; background:#1C1D20; border-bottom:1px solid #34373E; padding:8px; word-break:break-all;"></div>
     <div style="margin-top:12px; display:flex; justify-content:center; gap:8px;">
       <a id="qr-open-link" class="btn btn-blue" href="/remote" target="_blank">🔗 このブラウザで開く</a>
       <button class="btn" onclick="document.getElementById('qr-dialog').close()" autofocus>閉じる</button>
@@ -2557,7 +2614,7 @@
             <div class="feat-desc" style="margin-top:3px;">${f.desc_ja}</div>
           </div>
           <div style="display:flex; justify-content:space-between; align-items:center;">
-            <span style="font-size:0.72rem; color:var(--text-dim);">${f.module}</span>
+            <span style="font-size:13px; color:var(--text-dim);">${f.module}</span>
             <button class="btn" onclick="invokeFeatureById('${f.id}')">▶ お試し・確認</button>
           </div>
         `;
@@ -2579,8 +2636,8 @@
       box.innerHTML = '';
       (doc.checks || []).forEach(c => {
         const el = document.createElement('div');
-        el.style.cssText = 'padding:10px; border-radius:10px; background:#0d1320; border:1px solid ' + (c.ok ? '#10b981' : '#ef4444');
-        el.innerHTML = `<div style="font-weight:800;">${c.ok ? '✅' : '⚠️'} ${c.name_ja}</div><div style="font-size:0.8rem; color:#9aa7c0;">${c.detail_ja}</div>`;
+        el.style.cssText = 'padding:10px; background:#1C1D20; border-bottom:1px solid ' + (c.ok ? '#3A6655' : '#8A4842') + '; font-size:13.5px;';
+        el.innerHTML = `<div style="font-weight:800;">${c.ok ? '✅' : '⚠️'} ${c.name_ja}</div><div style="font-size:13.5px; color:#C6C1B8;">${c.detail_ja}</div>`;
         box.appendChild(el);
       });
     }
@@ -2606,7 +2663,7 @@
         const notes = exp.recent_notes_full || [];
         notes.forEach((n, idx) => {
           const item = document.createElement('div');
-          item.style.cssText = 'display:flex; justify-content:space-between; align-items:center; gap:6px; padding:7px 9px; background:#0d1320; border:1px solid #28344d; border-radius:9px; cursor:pointer;';
+          item.style.cssText = 'display:flex; justify-content:space-between; align-items:center; gap:6px; padding:7px 9px; background:#1C1D20; border-bottom:1px solid #34373E; cursor:pointer; font-size:13.5px;';
           const scoreTag = n.score ? ` (${n.score}点)` : '';
           item.innerHTML = `<div><span class="badge">${n.category}</span> <strong>${n.title}</strong>${scoreTag}</div>`;
           item.onclick = () => {
@@ -2637,7 +2694,7 @@
         box.innerHTML = '';
         (dna.masterwork_dna_profiles || []).forEach(p => {
           const el = document.createElement('div');
-          el.style.cssText = 'padding:7px 9px; background:#0d1320; border:1px solid #28344d; border-radius:9px; font-size:0.79rem;';
+          el.style.cssText = 'padding:7px 9px; background:#1C1D20; border-bottom:1px solid #34373E; font-size:13.5px;';
           const mc = p.melody_contour || {};
           const hb = p.harmony_and_bass || {};
           const pe = p.pianistic_ecriture || {};

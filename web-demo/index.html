@@ -7,13 +7,13 @@
   <link rel="icon" href="./favicon.ico" />
   <style>
     :root {
-      --bg-stage: #060608;
+      --bg-stage: #1C1D20;
       --ink-adopted: #EAE6DF;
-      --ink-dim: #5A5852;
-      --ink-vermilion: #C83E2B;
+      --ink-dim: #A49F96;
+      --ink-vermilion: #E85E4B;
     }
     html, body {
-      background: #060608;
+      background-color: #1C1D20;
       color: #EAE6DF;
     }
   </style>
@@ -32,8 +32,8 @@
         <nav class="mode-nav" role="tablist" aria-label="演奏・作曲モード選択">
           <button class="mode-tab" id="mode-tab-cello" type="button" role="tab" aria-selected="false" aria-controls="view-cello" data-mode-view="cello">[1] チェロ対話</button>
           <button class="mode-tab" id="mode-tab-piano" type="button" role="tab" aria-selected="false" aria-controls="view-piano" data-mode-view="piano">[2] ピアノ対話</button>
-          <button class="mode-tab" id="mode-tab-notagen" type="button" role="tab" aria-selected="false" aria-controls="view-notagen" data-mode-view="notagen">[3] LLM/NotaGen 作曲ライブ</button>
-          <button class="mode-tab" id="mode-tab-library" type="button" role="tab" aria-selected="true" aria-controls="view-library" data-mode-view="library">[4] 楽曲ライブラリ</button>
+          <button class="mode-tab" id="mode-tab-notagen" type="button" role="tab" aria-selected="false" aria-controls="view-notagen" data-mode-view="notagen">[3] NotaGen/LLM 一から作曲</button>
+          <button class="mode-tab" id="mode-tab-library" type="button" role="tab" aria-selected="true" aria-controls="view-library" data-mode-view="library">[4] デモ試聴・アーカイブ</button>
         </nav>
       </div>
 
@@ -50,7 +50,7 @@
     <div class="onboarding-bar" id="onboarding-banner">
       <div class="onboarding-steps">
         <strong>初めての方へ:</strong>
-        <span class="step-pill">1. 右の曲一覧から作品を選ぶか、上のタブで対話デモを開く</span>
+        <span class="step-pill">1. 曲一覧から作品を選ぶか、対話モードへ切り替える</span>
         <span class="step-pill">2. 「再生」を押すと楽譜とハーモニックX-Rayが同期します</span>
         <span class="step-pill">3. 大譜表クリックや鍵盤入力で対話応答も試聴できます</span>
       </div>
@@ -107,35 +107,15 @@
       </div>
 
       <div class="live-split">
-        <div class="card" style="display:flex;flex-direction:column;gap:12px;">
+        <div class="card" style="display:flex;flex-direction:column;gap:14px;">
           <div class="card-head">
             <h2 class="panel-heading">チェロ音響知覚 / 左右デュアルペダル</h2>
-            <span class="mono-sub" id="cello-perception-meta">WebAudio シミュレーション</span>
+            <span class="mono-sub" id="cello-perception-meta">WebAudio + MIDI-GPT CPU伴奏設計</span>
           </div>
 
           <div class="action-toolbar">
             <input class="field" id="inp-cello-directive" type="text" placeholder="対話への指示（例：中音域で半歩引いて、左ペダルで支えて）" style="flex:1;min-width:180px;" />
             <button class="btn" id="btn-cello-directive" type="button">指示を反映</button>
-          </div>
-
-          <div class="metric-grid-2">
-            <div class="metric-tile">
-              <div class="metric-k">検出音高 / F0周波数</div>
-              <div class="metric-v" id="cello-f0-val">D3 (146.8 Hz)</div>
-            </div>
-            <div class="metric-tile">
-              <div class="metric-k">奏法 / ビブラート</div>
-              <div class="metric-v" id="cello-art-val">Cantabile / 14 ct</div>
-            </div>
-            <div class="metric-tile">
-              <div class="metric-k">NLMS エコー抑圧 / キャンセル</div>
-              <div class="metric-v" id="cello-erle-val">+15.4 dB / 0件</div>
-            </div>
-            <div class="metric-tile">
-              <div class="metric-k">呼吸・終止検知（発音待機）</div>
-              <div class="metric-v" id="cello-breath-val">68%</div>
-              <div class="breath-track"><div class="breath-fill" id="cello-breath-fill" style="width:68%;"></div></div>
-            </div>
           </div>
 
           <div class="pedal-gauges" aria-label="ピアノ物理ペダル配置：左UNA CORDA・右DAMPER">
@@ -161,6 +141,29 @@
             </div>
           </div>
 
+          <details class="mobile-accordion" open>
+            <summary class="mobile-accordion-summary">音響知覚・NLMS・呼吸詳細を表示 / 格納</summary>
+            <div class="metric-grid-2" style="padding-top:8px;">
+              <div class="metric-tile">
+                <div class="metric-k">検出音高 / F0周波数</div>
+                <div class="metric-v" id="cello-f0-val">D3 (146.8 Hz)</div>
+              </div>
+              <div class="metric-tile">
+                <div class="metric-k">奏法 / ビブラート</div>
+                <div class="metric-v" id="cello-art-val">Cantabile / 14 ct</div>
+              </div>
+              <div class="metric-tile">
+                <div class="metric-k">NLMS エコー抑圧 / キャンセル</div>
+                <div class="metric-v" id="cello-erle-val">+15.4 dB / 0件</div>
+              </div>
+              <div class="metric-tile">
+                <div class="metric-k">呼吸・終止検知（発音待機）</div>
+                <div class="metric-v" id="cello-breath-val">68%</div>
+                <div class="breath-track"><div class="breath-fill" id="cello-breath-fill" style="width:68%;"></div></div>
+              </div>
+            </div>
+          </details>
+
           <div class="action-toolbar">
             <span class="mono-sub">チェロフレーズ送信:</span>
             <button class="btn compact" type="button" data-cello-phrase="question">静かな問い (D3-F3-A3)</button>
@@ -169,7 +172,7 @@
           </div>
         </div>
 
-        <div class="card" style="display:flex;flex-direction:column;gap:12px;">
+        <div class="card" style="display:flex;flex-direction:column;gap:14px;">
           <div class="card-head">
             <h2 class="panel-heading">リアルタイム大譜表 ＆ 4候補比較</h2>
             <div class="action-toolbar">
@@ -182,7 +185,28 @@
             <canvas id="canvas-cello-hero-staff"></canvas>
           </div>
 
-          <div class="cand-cards-row" id="cello-cand-cards"></div>
+          <div class="cand-cards-row" id="cello-cand-cards">
+            <button class="cand-pick-card adopted inspecting" type="button" data-candidate-id="A">
+              <div class="cand-pick-head"><span class="cand-pick-id">案A</span><span class="cand-pick-score">--%</span></div>
+              <div class="mono-sub cand-range">--</div>
+              <div class="cand-pick-reason">待機中</div>
+            </button>
+            <button class="cand-pick-card rejected" type="button" data-candidate-id="B">
+              <div class="cand-pick-head"><span class="cand-pick-id">案B</span><span class="cand-pick-score">--%</span></div>
+              <div class="mono-sub cand-range">--</div>
+              <div class="cand-pick-reason">待機中</div>
+            </button>
+            <button class="cand-pick-card rejected" type="button" data-candidate-id="C">
+              <div class="cand-pick-head"><span class="cand-pick-id">案C</span><span class="cand-pick-score">--%</span></div>
+              <div class="mono-sub cand-range">--</div>
+              <div class="cand-pick-reason">待機中</div>
+            </button>
+            <button class="cand-pick-card rejected" type="button" data-candidate-id="D">
+              <div class="cand-pick-head"><span class="cand-pick-id">案D</span><span class="cand-pick-score">--%</span></div>
+              <div class="mono-sub cand-range">--</div>
+              <div class="cand-pick-reason">待機中</div>
+            </button>
+          </div>
         </div>
       </div>
 
@@ -219,13 +243,13 @@
         </div>
       </div>
 
-      <div class="card" style="display:flex;flex-direction:column;gap:10px;">
+      <div class="card" style="display:flex;flex-direction:column;gap:12px;">
         <div class="card-head">
           <h2 class="panel-heading">人間 ⇄ AI 鍵盤インタラクション（クリック / PCキーボード A〜K）</h2>
           <div class="legend-row">
             <span><span class="swatch" style="background:#A8C8E8;"></span>人間の打鍵</span>
             <span><span class="swatch" style="background:#E5C88F;"></span>AI応答予定/先読み</span>
-            <span><span class="swatch" style="background:#C83E2B;"></span>L5 出力打鍵</span>
+            <span><span class="swatch" style="background:#E85E4B;"></span>L5 出力打鍵</span>
           </div>
         </div>
 
@@ -247,30 +271,10 @@
       </div>
 
       <div class="live-split">
-        <div class="card" style="display:flex;flex-direction:column;gap:12px;">
+        <div class="card" style="display:flex;flex-direction:column;gap:14px;">
           <div class="card-head">
             <h2 class="panel-heading">自己打鍵分離・先読み待機 ＆ 左右ペダル</h2>
-            <span class="mono-sub" id="piano-perception-meta">ブラウザ鍵盤シミュレーション</span>
-          </div>
-
-          <div class="metric-grid-2">
-            <div class="metric-tile">
-              <div class="metric-k">自己打鍵キャンセル済</div>
-              <div class="metric-v" id="piano-echo-val">0 音</div>
-            </div>
-            <div class="metric-tile">
-              <div class="metric-k">L5 同時発音安全上限</div>
-              <div class="metric-v" id="piano-voices-val">0 / 30 音</div>
-            </div>
-            <div class="metric-tile">
-              <div class="metric-k">先読み投機的ドラフト</div>
-              <div class="metric-v" id="piano-spec-val">準備完了</div>
-            </div>
-            <div class="metric-tile">
-              <div class="metric-k">フレーズ終止検知</div>
-              <div class="metric-v" id="piano-breath-val">0%</div>
-              <div class="breath-track"><div class="breath-fill" id="piano-breath-fill"></div></div>
-            </div>
+            <span class="mono-sub" id="piano-perception-meta">Anticipatory Transformer 128M 常駐設計</span>
           </div>
 
           <div class="pedal-gauges" aria-label="ピアノ物理ペダル配置：左UNA CORDA・右DAMPER">
@@ -295,9 +299,32 @@
               </div>
             </div>
           </div>
+
+          <details class="mobile-accordion" open>
+            <summary class="mobile-accordion-summary">自己打鍵分離・先読み待機メトリクス</summary>
+            <div class="metric-grid-2" style="padding-top:8px;">
+              <div class="metric-tile">
+                <div class="metric-k">自己打鍵キャンセル済</div>
+                <div class="metric-v" id="piano-echo-val">0 音</div>
+              </div>
+              <div class="metric-tile">
+                <div class="metric-k">L5 同時発音安全上限</div>
+                <div class="metric-v" id="piano-voices-val">0 / 30 音</div>
+              </div>
+              <div class="metric-tile">
+                <div class="metric-k">先読み投機的ドラフト</div>
+                <div class="metric-v" id="piano-spec-val">準備完了</div>
+              </div>
+              <div class="metric-tile">
+                <div class="metric-k">フレーズ終止検知</div>
+                <div class="metric-v" id="piano-breath-val">0%</div>
+                <div class="breath-track"><div class="breath-fill" id="piano-breath-fill"></div></div>
+              </div>
+            </div>
+          </details>
         </div>
 
-        <div class="card" style="display:flex;flex-direction:column;gap:12px;">
+        <div class="card" style="display:flex;flex-direction:column;gap:14px;">
           <div class="card-head">
             <h2 class="panel-heading">ピアノ対話 大譜表 ＆ 4候補比較</h2>
             <div class="action-toolbar">
@@ -310,7 +337,28 @@
             <canvas id="canvas-piano-hero-staff"></canvas>
           </div>
 
-          <div class="cand-cards-row" id="piano-cand-cards"></div>
+          <div class="cand-cards-row" id="piano-cand-cards">
+            <button class="cand-pick-card adopted inspecting" type="button" data-candidate-id="A">
+              <div class="cand-pick-head"><span class="cand-pick-id">案A</span><span class="cand-pick-score">--%</span></div>
+              <div class="mono-sub cand-range">--</div>
+              <div class="cand-pick-reason">待機中</div>
+            </button>
+            <button class="cand-pick-card rejected" type="button" data-candidate-id="B">
+              <div class="cand-pick-head"><span class="cand-pick-id">案B</span><span class="cand-pick-score">--%</span></div>
+              <div class="mono-sub cand-range">--</div>
+              <div class="cand-pick-reason">待機中</div>
+            </button>
+            <button class="cand-pick-card rejected" type="button" data-candidate-id="C">
+              <div class="cand-pick-head"><span class="cand-pick-id">案C</span><span class="cand-pick-score">--%</span></div>
+              <div class="mono-sub cand-range">--</div>
+              <div class="cand-pick-reason">待機中</div>
+            </button>
+            <button class="cand-pick-card rejected" type="button" data-candidate-id="D">
+              <div class="cand-pick-head"><span class="cand-pick-id">案D</span><span class="cand-pick-score">--%</span></div>
+              <div class="mono-sub cand-range">--</div>
+              <div class="cand-pick-reason">待機中</div>
+            </button>
+          </div>
         </div>
       </div>
 
@@ -318,26 +366,28 @@
     </section>
 
     <!-- ================================================================ -->
-    <!-- MODE [3]: NOTAGEN / LLM STREAMING DEMO PREVIEW                   -->
+    <!-- MODE [3]: NOTAGEN / ANTICIPATORY / MIDI-GPT / LLM LIVE           -->
     <!-- ================================================================ -->
     <section class="mode-workspace" id="view-notagen" role="tabpanel" aria-labelledby="mode-tab-notagen" hidden>
       <div class="card hero-header-card">
         <div class="card-head">
-          <h2 class="panel-heading">NotaGen / ローカルLLM 一からリアルタイム作曲ライブデモ</h2>
+          <h2 class="panel-heading">NotaGen / 作曲専用AI 一からリアルタイム生成ライブデモ</h2>
           <span class="mono-sub" id="ng-status-pill">公開デモ: ブラウザ内ABC逐次生成＆和声ガード体験</span>
         </div>
 
         <div class="notagen-form-grid">
-          <div class="field-group" style="grid-column: span 2;">
+          <div class="field-group span-2">
             <label class="field-label" for="inp-ng-prompt">楽曲コンセプト / 日本語演奏指示</label>
             <input class="field" id="inp-ng-prompt" type="text" value="静かな問いかけから始まり、中盤で和声的に高揚し、ウナ・コルダで静かに閉じる作品" />
           </div>
           <div class="field-group">
-            <label class="field-label" for="sel-ng-backend">生成モデル</label>
+            <label class="field-label" for="sel-ng-backend">生成エンジン</label>
             <select class="field" id="sel-ng-backend">
-              <option value="auto">自動最適選択 (公開Webデモ生成)</option>
+              <option value="auto">自動最適選択 (NotaGen-Small / Ollama)</option>
+              <option value="notagen_small">NotaGen-Small (FP16/INT8 量子化)</option>
+              <option value="anticipatory_transformer">Anticipatory Music Transformer (128M FP16)</option>
+              <option value="midigpt_cpu">MIDI-GPT 伴奏エンジン (CPU 0GB VRAM)</option>
               <option value="ollama_abc_stream">ローカルLLM (Ollama ABC逐次生成)</option>
-              <option value="notagen_small">NotaGen-Small (8GB量子化)</option>
               <option value="transformer_abc_fallback">軽量Transformerフォールバック</option>
             </select>
           </div>
@@ -359,8 +409,8 @@
           <div class="field-group">
             <label class="field-label" for="sel-ng-bars">小節数</label>
             <select class="field" id="sel-ng-bars">
-              <option value="4">4小節（速報デモ）</option>
-              <option value="8" selected>8小節（標準小品）</option>
+              <option value="4">4小節（前楽節・速報デモ）</option>
+              <option value="8" selected>8小節（二部楽節・標準小品）</option>
               <option value="12">12小節（展開形式）</option>
               <option value="16">16小節（完全小品）</option>
             </select>
@@ -379,7 +429,7 @@
       </div>
 
       <div class="notagen-grid">
-        <div class="card" style="display:flex;flex-direction:column;gap:12px;">
+        <div class="card" style="display:flex;flex-direction:column;gap:14px;">
           <div class="card-head">
             <h2 class="panel-heading">ABC記譜法 ストリーミング生成出力</h2>
             <span class="mono-sub" id="ng-metrics-sub">TTFT: -- ms / 0 小節</span>
@@ -415,7 +465,7 @@ K:Dm
           </div>
         </div>
 
-        <div class="card" style="display:flex;flex-direction:column;gap:12px;">
+        <div class="card" style="display:flex;flex-direction:column;gap:14px;">
           <div class="card-head">
             <h2 class="panel-heading">和声ガード検証済み リアルタイム五線譜</h2>
             <span class="mono-sub" id="ng-guard-summary">声部連結・倍音補完 待機中</span>
@@ -425,7 +475,7 @@ K:Dm
             <canvas id="canvas-notagen-hero"></canvas>
           </div>
 
-          <div class="monologue-hero" id="ng-commentary">上の「一からライブ生成＆即時演奏」を押すと、種モチーフから1小節ずつABC記譜が生成され、和声ガードを通して即座にWebAudioで演奏されます（ローカル実機版では RTX 3070 の Ollama / NotaGen-Small が稼働します）。</div>
+          <div class="monologue-hero" id="ng-commentary">上の「一からライブ生成＆即時演奏」を押すと、種モチーフから前楽節（半終止）→後楽節（完全終止）がABC記譜で逐次生成され、和声ガードを通して即座にWebAudioで演奏されます。</div>
         </div>
       </div>
 
@@ -493,11 +543,14 @@ K:Dm
 
           <div class="mid-grid">
             <div class="card">
-              <div class="card-head">
-                <h3 class="panel-heading">4層パート別ミキサー</h3>
-                <span class="mono-sub">SOLO / MUTE</span>
-              </div>
-              <div class="mixer-list" id="mixer-list"></div>
+              <details class="mobile-accordion" open>
+                <summary class="mobile-accordion-summary">4層パート別ミキサー (SOLO / MUTE) を開く</summary>
+                <div class="card-head" style="margin-top:4px;">
+                  <h3 class="panel-heading">4層パート別ミキサー</h3>
+                  <span class="mono-sub">SOLO / MUTE</span>
+                </div>
+                <div class="mixer-list" id="mixer-list"></div>
+              </details>
             </div>
 
             <div class="card">
@@ -542,12 +595,25 @@ K:Dm
             </div>
             <div id="panel-delib" role="tabpanel" aria-labelledby="tab-delib" hidden>
               <div class="delib-memo" id="delib-memo">監査メモ読込中...</div>
-              <div class="delib-grid" id="delib-grid"></div>
+              <div class="delib-grid" id="delib-grid">
+                <div class="cand-card adopted" data-delib-slot="0"><div class="cand-head"><span class="cand-title">案A</span><span class="cand-tag ok">--</span></div><canvas class="mini-canvas"></canvas></div>
+                <div class="cand-card rejected" data-delib-slot="1"><div class="cand-head"><span class="cand-title">案B</span><span class="cand-tag">--</span></div><canvas class="mini-canvas"></canvas></div>
+                <div class="cand-card rejected" data-delib-slot="2"><div class="cand-head"><span class="cand-title">案C</span><span class="cand-tag">--</span></div><canvas class="mini-canvas"></canvas></div>
+                <div class="cand-card rejected" data-delib-slot="3"><div class="cand-head"><span class="cand-title">案D</span><span class="cand-tag">--</span></div><canvas class="mini-canvas"></canvas></div>
+              </div>
             </div>
           </div>
         </div>
       </div>
     </section>
+
+    <!-- Fixed Mobile Bottom Navigation Bar (56px height, >=48x48px tap targets) -->
+    <nav class="mobile-bottom-nav" role="tablist" aria-label="モバイルモード切替">
+      <button class="mobile-nav-btn" type="button" role="tab" aria-selected="false" data-mode-view="cello">チェロ対話</button>
+      <button class="mobile-nav-btn" type="button" role="tab" aria-selected="false" data-mode-view="piano">ピアノ対話</button>
+      <button class="mobile-nav-btn" type="button" role="tab" aria-selected="false" data-mode-view="notagen">一から作曲</button>
+      <button class="mobile-nav-btn" type="button" role="tab" aria-selected="true" data-mode-view="library">デモ試聴</button>
+    </nav>
 
     <!-- ================================================================ -->
     <!-- HELP GUIDE MODAL                                                  -->
@@ -560,13 +626,13 @@ K:Dm
         </div>
         <div class="help-list">
           <div class="help-box">
-            <strong>[4] 楽曲ライブラリ（公開ショーケース）:</strong> AIと人間の共創による100曲をブラウザ内WebAudioおよび10曲の高音質スタジオMP3で再生できます。4層ミキサーとタイムマシンシークバーで各声部の働きを詳しく聴き分けられます。
+            <strong>[4] デモ試聴・アーカイブ:</strong> AIと人間の共創による100曲をブラウザ内WebAudioおよび10曲の高音質スタジオMP3で再生できます。4層ミキサーとタイムマシンシークバーで各声部の働きを詳しく聴き分けられます。
           </div>
           <div class="help-box">
-            <strong>[1] チェロ対話 ＆ [2] ピアノ対話:</strong> 画面ピアノ鍵盤（またはPCキーボード A〜K）やテストフレーズ送信で、AIが和声と呼吸を解釈して返す動きをリアルタイムに体験できます。左ペダルが UNA CORDA (CC#67)、右ペダルが DAMPER (CC#64) です。
+            <strong>[1] チェロ対話 ＆ [2] ピアノ対話:</strong> 画面ピアノ鍵盤（またはPCキーボード A〜K）やテストフレーズ送信で、MIDI-GPT / Anticipatory Transformer が和声と呼吸を解釈して返す動きをリアルタイムに体験できます。左ペダルが UNA CORDA (CC#67)、右ペダルが DAMPER (CC#64) です。
           </div>
           <div class="help-box">
-            <strong>[3] LLM / NotaGen 作曲ライブ:</strong> 日本語指示と数音の種モチーフから、ABC記譜を一音ずつ逐次生成して和声ガードで両手ポリフォニーへ仕上げる実演デモです。
+            <strong>[3] NotaGen / LLM 作曲ライブ:</strong> 日本語指示と数音の種モチーフから、前楽節（半終止）→後楽節（完全終止）のABC記譜を一音ずつ逐次生成して和声ガードで両手ポリフォニーへ仕上げる実演デモです。
           </div>
         </div>
       </div>

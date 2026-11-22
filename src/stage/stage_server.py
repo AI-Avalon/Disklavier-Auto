@@ -392,6 +392,8 @@ class StageOrchestrator:
             phrase_model=self.phrase_model,
             use_ollama=ollama_ready,
         )
+        self.composer.anticipatory_engine = self.notagen_engine.anticipatory_engine
+        self.composer.midigpt_engine = self.notagen_engine.midigpt_engine
 
         # 6-Worker Parallel Architecture (W2 Perception, W3 Async LLM, W5 Speculative, W6 Audio)
         self.async_llm_worker = AsyncLLMIntentWorker()
@@ -1417,6 +1419,9 @@ class StageOrchestrator:
                     "vram_used_gb": vram_info.get("used_gb", self._gpu_vram_gb or 0.0),
                     "vram_total_gb": vram_info.get("total_gb", 8.0),
                     "vram_owner": self.vram_manager.current_owner,
+                    "vram_profile": self.vram_manager.active_profile,
+                    "corpus_index_ms": getattr(self.corpus_loader, "index_time_ms", 0.0),
+                    "corpus_query_ms": getattr(self.corpus_loader, "last_query_ms", 0.0),
                     "active_workers": 6,
                     "total_workers": 6,
                     "active_voices": out_tel.active_voices,
@@ -1498,6 +1503,29 @@ class StageOrchestrator:
                 },
             }
 
+    def get_broadcast_signature(self) -> Tuple[Any, ...]:
+        """Lightweight fingerprint to avoid redundant 60fps JSON serialization when state is idle."""
+        out_tel = self.output_layer.get_telemetry()
+        ng = self.notagen_engine
+        with self._lock:
+            return (
+                self.turn_revision,
+                self.mode,
+                self.production_mode,
+                self.demo_enabled,
+                self.monitor_audio,
+                self.live_listening,
+                self.deliberation_stage,
+                self.deliberation_active_reject_id,
+                round(float(self.latest_perception.timestamp), 3),
+                len(self.human_active_pitches),
+                out_tel.active_voices,
+                out_tel.pedal_cc64,
+                out_tel.pedal_cc67,
+                ng.status,
+                ng.bars_completed,
+            )
+
     def close(self) -> None:
         self._running = False
         if self._thread.is_alive():
@@ -1552,20 +1580,29 @@ class StageWSBroadcaster:
                 pass
 
     async def _broadcast_loop(self) -> None:
+        last_sig: Optional[Tuple[Any, ...]] = None
+        last_send_ts = 0.0
+        cached_json: Optional[str] = None
         while True:
             if self.clients:
-                payload = await asyncio.to_thread(self.orchestrator.get_hud_state)
-                dead: List[WebSocket] = []
-                for ws in list(self.clients):
-                    try:
-                        await asyncio.wait_for(ws.send_json(payload), timeout=1.5)
-                    except (asyncio.TimeoutError, TimeoutError):
-                        # Slow consumer frame skip; keep client subscribed
-                        continue
-                    except Exception:
-                        dead.append(ws)
-                for ws in dead:
-                    self.clients.discard(ws)
+                now = time.perf_counter()
+                sig = self.orchestrator.get_broadcast_signature()
+                if sig != last_sig or cached_json is None or (now - last_send_ts) >= 0.25:
+                    payload = await asyncio.to_thread(self.orchestrator.get_hud_state)
+                    cached_json = json.dumps(payload, ensure_ascii=False)
+                    last_sig = sig
+                    last_send_ts = now
+                    dead: List[WebSocket] = []
+                    for ws in list(self.clients):
+                        try:
+                            await asyncio.wait_for(ws.send_text(cached_json), timeout=1.5)
+                        except (asyncio.TimeoutError, TimeoutError):
+                            # Slow consumer frame skip; keep client subscribed
+                            continue
+                        except Exception:
+                            dead.append(ws)
+                    for ws in dead:
+                        self.clients.discard(ws)
             await asyncio.sleep(1.0 / 60.0)
 
 

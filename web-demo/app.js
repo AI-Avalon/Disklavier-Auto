@@ -481,7 +481,7 @@
       bottomLineY - stepPx * 3.8
     );
     ctx.stroke();
-    ctx.font = `600 ${Math.max(12, Math.round(stepPx * 2.2))}px serif`;
+    ctx.font = `600 ${Math.max(13, Math.round(stepPx * 2.2))}px serif`;
     ctx.fillText("G", x - stepPx * 2.3, gLineY + stepPx * 0.7);
     ctx.restore();
   }
@@ -505,6 +505,71 @@
     ctx.restore();
   }
 
+  // Offscreen cache for static grand staff lines & clefs (60fps optimization)
+  const _staffBgCache = new WeakMap();
+
+  function _getCachedStaffBg(canvas, width, height, dpr, numBars, bgHex) {
+    const key = `${width}x${height}x${dpr}x${numBars}x${bgHex}`;
+    const existing = _staffBgCache.get(canvas);
+    if (existing && existing.key === key) {
+      return existing.offscreen;
+    }
+    const off = document.createElement("canvas");
+    off.width = Math.floor(width * dpr);
+    off.height = Math.floor(height * dpr);
+    const octx = off.getContext("2d");
+    octx.setTransform(dpr, 0, 0, dpr, 0, 0);
+
+    octx.fillStyle = bgHex;
+    octx.fillRect(0, 0, width, height);
+
+    const padLeft = 58;
+    const padRight = 22;
+    const usableW = Math.max(80, width - padLeft - padRight);
+    const trebleBaseY = Math.round(height * 0.46);
+    const bassBaseY = Math.round(height * 0.85);
+    const stepPx = Math.max(4.4, Math.min(6.0, height / 50));
+
+    octx.strokeStyle = "#484B53";
+    octx.lineWidth = 1;
+    for (let i = 0; i < 5; i++) {
+      const yt = trebleBaseY - i * 2 * stepPx;
+      octx.beginPath();
+      octx.moveTo(padLeft - 14, yt);
+      octx.lineTo(width - padRight, yt);
+      octx.stroke();
+
+      const yb = bassBaseY - i * 2 * stepPx;
+      octx.beginPath();
+      octx.moveTo(padLeft - 14, yb);
+      octx.lineTo(width - padRight, yb);
+      octx.stroke();
+    }
+
+    octx.strokeStyle = "#6C707A";
+    octx.lineWidth = 2;
+    octx.beginPath();
+    octx.moveTo(padLeft - 14, trebleBaseY - 8 * stepPx);
+    octx.lineTo(padLeft - 14, bassBaseY);
+    octx.stroke();
+
+    drawTrebleClef(octx, 26, trebleBaseY, stepPx);
+    drawBassClef(octx, 26, bassBaseY, stepPx);
+
+    octx.strokeStyle = "#34373E";
+    octx.lineWidth = 1;
+    for (let b = 1; b <= numBars; b++) {
+      const bx = padLeft + (b / numBars) * usableW;
+      octx.beginPath();
+      octx.moveTo(bx, trebleBaseY - 8 * stepPx);
+      octx.lineTo(bx, bassBaseY);
+      octx.stroke();
+    }
+
+    _staffBgCache.set(canvas, { key, offscreen: off });
+    return off;
+  }
+
   function renderGrandStaff(canvas, rawNotes, opts = {}) {
     if (!canvas) return;
     const rect = canvas.getBoundingClientRect();
@@ -517,49 +582,14 @@
       canvas.height = h;
     }
 
-    const ctx = canvas.getContext("2d");
-    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
     const width = rect.width;
     const height = rect.height;
-
-    ctx.fillStyle = "#060608";
-    ctx.fillRect(0, 0, width, height);
-
     const padLeft = 58;
     const padRight = 22;
     const usableW = Math.max(80, width - padLeft - padRight);
-
-    const trebleBaseY = Math.round(height * 0.43); // E4 line
-    const bassBaseY = Math.round(height * 0.84); // G2 line
-    const stepPx = Math.max(4.4, Math.min(6.2, height / 47));
-
-    // Staff lines
-    ctx.strokeStyle = "#2E2B25";
-    ctx.lineWidth = 1;
-    for (let i = 0; i < 5; i++) {
-      const yt = trebleBaseY - i * 2 * stepPx;
-      ctx.beginPath();
-      ctx.moveTo(padLeft - 14, yt);
-      ctx.lineTo(width - padRight, yt);
-      ctx.stroke();
-
-      const yb = bassBaseY - i * 2 * stepPx;
-      ctx.beginPath();
-      ctx.moveTo(padLeft - 14, yb);
-      ctx.lineTo(width - padRight, yb);
-      ctx.stroke();
-    }
-
-    // Left brace bar
-    ctx.strokeStyle = "#5A5852";
-    ctx.lineWidth = 2;
-    ctx.beginPath();
-    ctx.moveTo(padLeft - 14, trebleBaseY - 8 * stepPx);
-    ctx.lineTo(padLeft - 14, bassBaseY);
-    ctx.stroke();
-
-    drawTrebleClef(ctx, 26, trebleBaseY, stepPx);
-    drawBassClef(ctx, 26, bassBaseY, stepPx);
+    const trebleBaseY = Math.round(height * 0.46); // E4 line
+    const bassBaseY = Math.round(height * 0.85); // G2 line
+    const stepPx = Math.max(4.4, Math.min(6.0, height / 50));
 
     const notes = (rawNotes || []).map(normNote).filter(Boolean);
     let minT = opts.winStart ?? 0;
@@ -569,22 +599,18 @@
       maxT = Math.max(minT + 3.2, ...notes.map((n) => n.t + n.d));
     }
     const span = Math.max(1.2, maxT - minT);
-
-    // Measure vertical dividers
     const numBars = Math.max(2, Math.min(8, Math.round(span / 1.5)));
-    ctx.strokeStyle = "#1E1C18";
-    ctx.lineWidth = 1;
-    for (let b = 1; b <= numBars; b++) {
-      const bx = padLeft + (b / numBars) * usableW;
-      ctx.beginPath();
-      ctx.moveTo(bx, trebleBaseY - 8 * stepPx);
-      ctx.lineTo(bx, bassBaseY);
-      ctx.stroke();
-    }
+    const bgHex = state.projectionClean ? "#141517" : "#1C1D20";
+
+    const ctx = canvas.getContext("2d");
+    const cachedBg = _getCachedStaffBg(canvas, width, height, dpr, numBars, bgHex);
+    ctx.setTransform(1, 0, 0, 1, 0, 0);
+    ctx.drawImage(cachedBg, 0, 0);
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
 
     // Optional chords along top
     if (Array.isArray(opts.chords) && opts.chords.length > 0) {
-      ctx.font = '600 13px "Cascadia Mono", monospace';
+      ctx.font = '600 13.5px "Cascadia Mono", monospace';
       ctx.fillStyle = "#B4AEA3";
       opts.chords.forEach((ch, idx) => {
         const cx =
@@ -592,7 +618,7 @@
             ? padLeft + ((ch.start_s - minT) / span) * usableW
             : padLeft + (idx / Math.max(1, opts.chords.length)) * usableW;
         if (cx >= padLeft - 10 && cx <= width - padRight - 24) {
-          ctx.fillText(String(ch.chord || ch), cx + 4, Math.max(15, trebleBaseY - 10.6 * stepPx));
+          ctx.fillText(String(ch.chord || ch), cx + 4, 16);
         }
       });
     }
@@ -661,7 +687,7 @@
       ctx.fill();
 
       if (sharp) {
-        ctx.font = '600 12px "Cascadia Mono", monospace';
+        ctx.font = '600 13px "Cascadia Mono", monospace';
         ctx.fillText("#", x - 9, y + 4);
       }
     }
@@ -703,7 +729,7 @@
     const width = rect.width;
     const height = rect.height;
 
-    ctx.fillStyle = "#060608";
+    ctx.fillStyle = state.projectionClean ? "#141517" : "#1C1D20";
     ctx.fillRect(0, 0, width, height);
 
     const now = performance.now();
@@ -751,7 +777,7 @@
 
       if (m % 12 === 0 || m === PIANO_MIN) {
         ctx.fillStyle = fill === "#C83E2B" ? "#EAE6DF" : "#1D1B18";
-        ctx.font = '600 12px "Cascadia Mono", monospace';
+        ctx.font = '600 13px "Cascadia Mono", monospace';
         ctx.fillText(midiToName(m), x + 5, height - 10);
       }
 
@@ -830,33 +856,41 @@
       state.inspectedCand[modeKey] = selectedId;
     }
 
-    container.innerHTML = "";
-    candidates.forEach((cand) => {
-      const cid = String(cand.candidate_id || "?");
-      const isAdopted = Boolean(cand.adopted);
+    // Rule 4: Update fixed candidate DOM slots in place (never destroy/recreate cards)
+    const slots = Array.from(container.querySelectorAll(".cand-pick-card"));
+    const slotIds = ["A", "B", "C", "D"];
+    slotIds.forEach((slotCid, idx) => {
+      const card = slots[idx];
+      if (!card) return;
+      const cand = candidates.find((c) => String(c.candidate_id) === slotCid) || candidates[idx];
+      const cid = cand ? String(cand.candidate_id || slotCid) : slotCid;
+      const isAdopted = Boolean(cand?.adopted);
       const isInspecting = cid === selectedId;
-      const pct = cand.total_score != null ? (cand.total_score <= 1.0 ? cand.total_score * 100 : cand.total_score).toFixed(1) : "--";
-
-      const card = document.createElement("button");
-      card.type = "button";
-      card.className = `cand-pick-card ${isAdopted ? "adopted" : "rejected"} ${isInspecting ? "inspecting" : ""}`;
-      card.setAttribute("data-candidate-id", cid);
+      const pct = cand && cand.total_score != null ? (cand.total_score <= 1.0 ? cand.total_score * 100 : cand.total_score).toFixed(1) : "--";
       const reasonText = formatCandReason(cand);
 
-      card.innerHTML = `
-        <div class="cand-pick-head">
-          <span class="cand-pick-id">案${cid}${isAdopted ? " · 採用" : " · 棄却"}</span>
-          <span class="cand-pick-score">${pct}%</span>
-        </div>
-        <div class="mono-sub">${cand.pitch_range_str || "--"} (${(cand.events || []).length}音)</div>
-        <div class="cand-pick-reason">${reasonText}</div>
-      `;
+      card.classList.toggle("adopted", isAdopted);
+      card.classList.toggle("rejected", !isAdopted);
+      card.classList.toggle("inspecting", isInspecting);
+      card.setAttribute("data-candidate-id", cid);
 
-      card.addEventListener("click", () => {
-        state.inspectedCand[modeKey] = cid;
-        renderCandidateCards(modeKey, containerId, staffCanvasId, labelId);
-      });
-      container.appendChild(card);
+      const idEl = card.querySelector(".cand-pick-id");
+      const scEl = card.querySelector(".cand-pick-score");
+      const rngEl = card.querySelector(".cand-range");
+      const rsnEl = card.querySelector(".cand-pick-reason");
+      if (idEl) idEl.textContent = `案${cid}${isAdopted ? " · 採用" : " · 棄却"}`;
+      if (scEl) scEl.textContent = `${pct}%`;
+      if (rngEl) rngEl.textContent = cand ? `${cand.pitch_range_str || "--"} (${(cand.events || []).length}音)` : "--";
+      if (rsnEl) rsnEl.textContent = reasonText;
+
+      if (!card.dataset.slotBound) {
+        card.dataset.slotBound = "1";
+        card.addEventListener("click", () => {
+          const clickedCid = card.getAttribute("data-candidate-id") || slotCid;
+          state.inspectedCand[modeKey] = clickedCid;
+          renderCandidateCards(modeKey, containerId, staffCanvasId, labelId);
+        });
+      }
     });
 
     const shown = candidates.find((c) => c.candidate_id === selectedId) || adopted;
@@ -927,14 +961,14 @@
     const primaryChord = chords[0] || intent.tonal_center || "Dm";
     const actNum = Number(intent.act_number || 1);
     const turnId = Number(s.turn_id || 0);
-    if (turnId !== state.lastRenderedTurnId) {
+    if (state.lastRenderedTurnId < 0) {
       const adoptedNew = (s.candidates || []).find((c) => c.adopted);
       if (adoptedNew) {
-        state.inspectedCand.cello = adoptedNew.candidate_id;
-        state.inspectedCand.piano = adoptedNew.candidate_id;
+        if (!state.inspectedCand.cello) state.inspectedCand.cello = adoptedNew.candidate_id;
+        if (!state.inspectedCand.piano) state.inspectedCand.piano = adoptedNew.candidate_id;
       }
-      state.lastRenderedTurnId = turnId;
     }
+    state.lastRenderedTurnId = turnId;
 
     // Sync top connection button state in LIVE_MODE
     if (LIVE_MODE) {
@@ -1397,12 +1431,36 @@
     }
     const grid = $("delib-grid");
     if (!grid) return;
-    grid.innerHTML = "";
 
     const list = [];
     if (delib.adopted) list.push({ ...delib.adopted, isAdopted: true });
     (delib.rejected || []).forEach((r) => list.push({ ...r, isAdopted: false }));
 
+    const slots = Array.from(grid.querySelectorAll(".cand-card"));
+    if (slots.length >= 4) {
+      slots.forEach((card, idx) => {
+        const cand = list[idx];
+        const isAdopted = Boolean(cand?.isAdopted);
+        card.className = `cand-card ${isAdopted ? "adopted" : "rejected"}`;
+        const titleEl = card.querySelector(".cand-title");
+        const tagEl = card.querySelector(".cand-tag");
+        const mc = card.querySelector("canvas");
+        if (cand) {
+          if (titleEl) titleEl.textContent = cand.label_ja || `案${cand.id || idx + 1}`;
+          if (tagEl) {
+            tagEl.className = `cand-tag ${isAdopted ? "ok" : ""}`;
+            tagEl.textContent = `${Number(cand.score || 0).toFixed(1)}点 · ${isAdopted ? "採用" : cand.tag_ja || "棄却"}`;
+          }
+          if (mc) requestAnimationFrame(() => renderGrandStaff(mc, cand.notes || []));
+        } else {
+          if (titleEl) titleEl.textContent = `案${["A", "B", "C", "D"][idx]}`;
+          if (tagEl) tagEl.textContent = "比較データなし";
+        }
+      });
+      return;
+    }
+
+    grid.innerHTML = "";
     list.forEach((cand) => {
       const card = document.createElement("div");
       card.className = `cand-card ${cand.isAdopted ? "adopted" : "rejected"}`;
@@ -1660,6 +1718,22 @@
   // ===========================================================================
   // Top-Level 4-Mode View Switching
   // ===========================================================================
+  function syncMobileAccordions() {
+    const isMobile = window.innerWidth <= 768;
+    if (state._lastMobileLayout === isMobile) return;
+    state._lastMobileLayout = isMobile;
+    document.querySelectorAll(".mobile-accordion").forEach((det) => {
+      if (isMobile) det.removeAttribute("open");
+      else det.setAttribute("open", "");
+    });
+    if ($("diag-hud-bar") && $("btn-diag-toggle")) {
+      state.diagVisible = !isMobile;
+      $("diag-hud-bar").hidden = isMobile;
+      $("btn-diag-toggle").classList.toggle("active", !isMobile);
+      $("btn-diag-toggle").setAttribute("aria-pressed", isMobile ? "false" : "true");
+    }
+  }
+
   function switchModeView(targetView) {
     state.activeView = targetView;
     const views = ["cello", "piano", "notagen", "library"];
@@ -1669,6 +1743,9 @@
       const active = v === targetView;
       if (tab) tab.setAttribute("aria-selected", active ? "true" : "false");
       if (panel) panel.hidden = !active;
+    });
+    document.querySelectorAll(".mobile-nav-btn[data-mode-view]").forEach((btn) => {
+      btn.setAttribute("aria-selected", btn.dataset.modeView === targetView ? "true" : "false");
     });
 
     if (LIVE_MODE && (targetView === "cello" || targetView === "piano")) {
@@ -1743,8 +1820,8 @@
   // Wire All DOM Event Handlers
   // ===========================================================================
   function bindEvents() {
-    // 4-Mode Tabs
-    document.querySelectorAll(".mode-tab[data-mode-view]").forEach((btn) => {
+    // 4-Mode Tabs (Desktop + Mobile Bottom Navigation)
+    document.querySelectorAll(".mode-tab[data-mode-view], .mobile-nav-btn[data-mode-view]").forEach((btn) => {
       btn.addEventListener("click", () => switchModeView(btn.dataset.modeView));
     });
 
@@ -2084,6 +2161,7 @@
     });
 
     window.addEventListener("resize", () => {
+      syncMobileAccordions();
       renderStageViews();
       if (state.activeView === "library") renderLibraryFrame(state.libCursorSec);
       if (state.activeView === "piano") renderPianoKeyboard();
@@ -2094,6 +2172,7 @@
   // Bootstrap
   // ===========================================================================
   document.addEventListener("DOMContentLoaded", () => {
+    syncMobileAccordions();
     bindEvents();
     initLibraryCatalog();
     renderStageViews();
