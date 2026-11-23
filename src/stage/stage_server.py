@@ -1850,7 +1850,7 @@ def build_stage_router(orch: StageOrchestrator, broadcaster: StageWSBroadcaster)
     @router.get("/studio-static/{filename:path}", include_in_schema=False)
     async def serve_studio_static(filename: str) -> Response:
         safe_name = Path(filename).name
-        if safe_name not in ("style.css", "app.js") or safe_name != filename or ".." in filename:
+        if safe_name not in ("style.css", "app.js", "vexflow-bravura.js", "score_engraver.js") or safe_name != filename or ".." in filename:
             return JSONResponse({"ok": False, "error": "Invalid asset"}, status_code=400)
         target = (WEB_DEMO_DIR / safe_name).resolve()
         if not target.exists() or target.parent != WEB_DEMO_DIR.resolve():

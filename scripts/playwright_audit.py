@@ -78,39 +78,84 @@ class _QuietStaticHandler(SimpleHTTPRequestHandler):
 
 def _check_layout_geometry(page: Page, label: str) -> Dict[str, Any]:
     return page.evaluate(
-        """(lbl) => {
+        r"""(lbl) => {
             const vw = window.innerWidth;
+            const vh = window.innerHeight;
             const sw = document.documentElement.scrollWidth;
+            const sh = document.documentElement.scrollHeight;
             const overflowPx = Math.max(0, sw - vw);
 
+            const openModalDialog = document.querySelector('.modal-backdrop:not([hidden]) .modal-dialog');
+            const scanRoot = openModalDialog || document.body;
+
             const isActuallyVisible = (el) => {
-                if (!el) return false;
-                if (el.closest('[hidden]')) return false;
+                if (!el || !el.isConnected) return false;
+                if (el.closest('[hidden], .sr-only, .hero-watermark')) return false;
+                if (el.classList.contains('skip-link') && document.activeElement !== el) return false;
+                const closedDet = el.closest('details:not([open])');
+                if (closedDet && !el.closest('summary')) return false;
                 const st = window.getComputedStyle(el);
-                if (st.display === 'none' || st.visibility === 'hidden' || Number(st.opacity) === 0) return false;
+                if (st.display === 'none' || st.visibility === 'hidden' || Number(st.opacity) <= 0.01) return false;
                 const r = el.getBoundingClientRect();
                 return r.width > 0.5 && r.height > 0.5;
             };
 
-            const controls = Array.from(document.querySelectorAll('button, a.btn, input, select'))
+            const isScrolledOut = (el, r) => {
+                let cur = el.parentElement;
+                while (cur && cur !== document.body && cur !== document.documentElement) {
+                    if (cur.classList && cur.classList.contains('studio-shell')) break;
+                    const cst = window.getComputedStyle(cur);
+                    if (cst.overflowY === 'auto' || cst.overflowY === 'scroll' || cst.overflowY === 'hidden') {
+                        const cr = cur.getBoundingClientRect();
+                        if (r.bottom <= cr.top + 1 || r.top >= cr.bottom - 1) return true;
+                    }
+                    if (cst.overflowX === 'auto' || cst.overflowX === 'scroll' || cst.overflowX === 'hidden') {
+                        const cr = cur.getBoundingClientRect();
+                        if (r.right <= cr.left + 1 || r.left >= cr.right - 1) return true;
+                    }
+                    cur = cur.parentElement;
+                }
+                return false;
+            };
+
+            const clipToScrollAncestors = (el, raw) => {
+                let left = raw.left, top = raw.top, right = raw.right, bottom = raw.bottom;
+                let cur = el.parentElement;
+                while (cur && cur !== document.body && cur !== document.documentElement) {
+                    if (cur.classList && cur.classList.contains('studio-shell')) break;
+                    const cst = window.getComputedStyle(cur);
+                    if (['auto', 'scroll', 'hidden', 'clip'].includes(cst.overflowY)) {
+                        const cr = cur.getBoundingClientRect();
+                        top = Math.max(top, cr.top);
+                        bottom = Math.min(bottom, cr.bottom);
+                    }
+                    if (['auto', 'scroll', 'hidden', 'clip'].includes(cst.overflowX)) {
+                        const cr = cur.getBoundingClientRect();
+                        left = Math.max(left, cr.left);
+                        right = Math.min(right, cr.right);
+                    }
+                    cur = cur.parentElement;
+                }
+                return { left, top, right, bottom };
+            };
+
+            const controls = Array.from(scanRoot.querySelectorAll('button, a.btn, input, select, textarea'))
                 .filter((el) => {
+                    if (el.classList.contains('skip-link')) return false;
                     if (!isActuallyVisible(el)) return false;
                     const r = el.getBoundingClientRect();
-                    let cur = el.parentElement;
-                    while (cur && cur !== document.body) {
-                        const cst = window.getComputedStyle(cur);
-                        if (cst.overflowY === 'auto' || cst.overflowY === 'scroll') {
-                            const cr = cur.getBoundingClientRect();
-                            if (r.bottom <= cr.top + 1 || r.top >= cr.bottom - 1) return false;
-                        }
-                        cur = cur.parentElement;
-                    }
-                    return true;
+                    return !isScrolledOut(el, r);
                 });
 
             const clipped = [];
             const rects = [];
             const smallPrimaryBtns = [];
+
+            const inFixedNav = (el) => Boolean(el.closest('.mobile-bottom-nav'));
+            const shellEl = document.querySelector('.studio-shell');
+            const shellClipRect = (shellEl && ['auto', 'scroll', 'hidden', 'clip'].includes(window.getComputedStyle(shellEl).overflowY))
+                ? shellEl.getBoundingClientRect()
+                : null;
 
             for (const el of controls) {
                 const raw = el.getBoundingClientRect();
@@ -118,29 +163,25 @@ def _check_layout_geometry(page: Page, label: str) -> Dict[str, Any]:
                     smallPrimaryBtns.push({ id: el.id || el.textContent.trim().slice(0, 20), height: Math.round(raw.height) });
                 }
 
-                let left = raw.left, top = raw.top, right = raw.right, bottom = raw.bottom;
-                let cur = el.parentElement;
-                while (cur && cur !== document.body) {
-                    const cst = window.getComputedStyle(cur);
-                    if (cst.overflowY === 'auto' || cst.overflowY === 'scroll' || cst.overflowX === 'auto' || cst.overflowX === 'scroll') {
-                        const cr = cur.getBoundingClientRect();
-                        left = Math.max(left, cr.left);
-                        top = Math.max(top, cr.top);
-                        right = Math.min(right, cr.right);
-                        bottom = Math.min(bottom, cr.bottom);
-                    }
-                    cur = cur.parentElement;
-                }
-                if (right - left <= 1 || bottom - top <= 1) continue;
+                const cbox = clipToScrollAncestors(el, raw);
+                if (cbox.right - cbox.left <= 1 || cbox.bottom - cbox.top <= 1) continue;
                 if (raw.right > vw + 2 || raw.left < -2) {
                     clipped.push({ id: el.id || el.textContent.trim().slice(0, 20), left: Math.round(raw.left), right: Math.round(raw.right), vw });
                 }
-                rects.push({ id: el.id || el.className || el.tagName, r: { left, top, right, bottom } });
+                rects.push({ el, id: el.id || el.className || el.tagName, fixedNav: inFixedNav(el), r: cbox });
             }
 
             const overlaps = [];
             for (let i = 0; i < rects.length; i++) {
                 for (let j = i + 1; j < rects.length; j++) {
+                    if (rects[i].el.contains(rects[j].el) || rects[j].el.contains(rects[i].el)) continue;
+                    // Elements inside overflowing .studio-shell are clipped above fixed bottom nav; check against shellClipRect instead
+                    if (rects[i].fixedNav !== rects[j].fixedNav && shellClipRect) {
+                        const navR = rects[i].fixedNav ? rects[i].r : rects[j].r;
+                        const nix = Math.max(0, Math.min(navR.right, shellClipRect.right) - Math.max(navR.left, shellClipRect.left));
+                        const niy = Math.max(0, Math.min(navR.bottom, shellClipRect.bottom) - Math.max(navR.top, shellClipRect.top));
+                        if (nix <= 2 || niy <= 2) continue;
+                    }
                     const a = rects[i].r;
                     const b = rects[j].r;
                     const ix = Math.max(0, Math.min(a.right, b.right) - Math.max(a.left, b.left));
@@ -151,12 +192,77 @@ def _check_layout_geometry(page: Page, label: str) -> Dict[str, Any]:
                 }
             }
 
+            // Comprehensive DOM pairwise non-ancestor overlap audit (controls + text nodes + scores + keyboards)
+            const inToast = (el) => Boolean(el.closest('.export-toast'));
+            const domItems = [];
+            const seenDom = new Set();
+            const addDomBox = (el, kind) => {
+                if (!el || seenDom.has(el) || el.classList.contains('skip-link')) return;
+                if (!isActuallyVisible(el)) return;
+                const raw = el.getBoundingClientRect();
+                if (isScrolledOut(el, raw)) return;
+                const cbox = clipToScrollAncestors(el, raw);
+                if (cbox.right - cbox.left <= 2 || cbox.bottom - cbox.top <= 2) return;
+                seenDom.add(el);
+                domItems.push({
+                    el,
+                    kind,
+                    id: (el.id ? '#' + el.id : el.className ? String(el.className).split(/\s+/)[0] : el.tagName) + ':' + el.textContent.trim().slice(0, 18),
+                    display: window.getComputedStyle(el).display,
+                    parent: el.parentElement,
+                    parentDisplay: el.parentElement ? window.getComputedStyle(el.parentElement).display : 'block',
+                    fixedNav: inFixedNav(el),
+                    toast: inToast(el),
+                    r: cbox,
+                });
+            };
+            for (const c of controls) addDomBox(c, 'ctrl');
+            for (const media of scanRoot.querySelectorAll('svg.grand-staff-svg, canvas')) addDomBox(media, 'media');
+            for (const el of scanRoot.querySelectorAll('*')) {
+                if (['SCRIPT', 'STYLE', 'OPTION', 'AUDIO', 'CANVAS', 'SVG'].includes(el.tagName) || el.closest('svg')) continue;
+                const hasDirectText = Array.from(el.childNodes).some(
+                    (n) => n.nodeType === Node.TEXT_NODE && n.textContent && n.textContent.trim().length > 0
+                );
+                if (hasDirectText) addDomBox(el, 'text');
+            }
+
+            const scrollHost = document.querySelector('.studio-shell');
+            const shEffective = scrollHost ? Math.max(sh, scrollHost.scrollHeight) : sh;
+            const vhEffective = scrollHost ? scrollHost.clientHeight : vh;
+            const atDocBottom = (scrollHost && scrollHost.scrollHeight > scrollHost.clientHeight + 4)
+                ? (scrollHost.scrollTop + scrollHost.clientHeight >= scrollHost.scrollHeight - 2)
+                : ((window.scrollY + vh) >= (sh - 2));
+            const domOverlaps = [];
+            for (let i = 0; i < domItems.length; i++) {
+                const A = domItems[i];
+                for (let j = i + 1; j < domItems.length; j++) {
+                    const B = domItems[j];
+                    if (A.el.contains(B.el) || B.el.contains(A.el)) continue;
+                    // On a vertically scrolling page, fixed bottom bar intentionally floats over mid-page scroll region until bottom
+                    if (A.fixedNav !== B.fixedNav && shEffective > vhEffective + 4 && !atDocBottom) continue;
+                    if (A.toast !== B.toast && (A.fixedNav || B.fixedNav)) continue;
+                    if (
+                        A.parent === B.parent &&
+                        ['block', 'list-item'].includes(A.parentDisplay) &&
+                        A.display === 'inline' &&
+                        B.display === 'inline'
+                    ) {
+                        continue;
+                    }
+                    const ix = Math.max(0, Math.min(A.r.right, B.r.right) - Math.max(A.r.left, B.r.left));
+                    const iy = Math.max(0, Math.min(A.r.bottom, B.r.bottom) - Math.max(A.r.top, B.r.top));
+                    if (ix > 2.0 && iy > 2.0) {
+                        domOverlaps.push({ a: A.id, b: B.id, ix: Number(ix.toFixed(1)), iy: Number(iy.toFixed(1)) });
+                    }
+                }
+            }
+
             // Font size audit on visible text nodes (Rule 5: strictly >= 13.0px)
             let minVisibleFontPx = 999;
             const smallFontEls = [];
-            const allTextContainers = Array.from(document.querySelectorAll('body *'));
+            const allTextContainers = Array.from(scanRoot.querySelectorAll('*'));
             for (const el of allTextContainers) {
-                if (['SCRIPT', 'STYLE', 'OPTION', 'AUDIO', 'CANVAS'].includes(el.tagName)) continue;
+                if (['SCRIPT', 'STYLE', 'OPTION', 'AUDIO', 'CANVAS'].includes(el.tagName) || el.closest('svg')) continue;
                 if (!isActuallyVisible(el)) continue;
                 const hasDirectText = Array.from(el.childNodes).some(
                     (n) => n.nodeType === Node.TEXT_NODE && n.textContent && n.textContent.trim().length > 0
@@ -166,6 +272,294 @@ def _check_layout_geometry(page: Page, label: str) -> Dict[str, Any]:
                 if (fs < minVisibleFontPx) minVisibleFontPx = fs;
                 if (fs < 13.0) {
                     smallFontEls.push({ tag: el.tagName, id: el.id || el.className, fs, text: el.textContent.trim().slice(0, 24) });
+                }
+            }
+
+            // SVG Grand Staff internal geometry & collision audit
+            const svgAudit = {
+                svgCount: 0,
+                brokenSvgs: [],
+                svgSmallFonts: [],
+                svgTextClipped: [],
+                svgTextOverlaps: [],
+                svgTextNoteOverlaps: [],
+                svgClefNoteOverlaps: [],
+            };
+            const rectOverlap = (a, b, pad = 0) => {
+                const ix = Math.max(0, Math.min(a.right, b.right) - Math.max(a.left, b.left));
+                const iy = Math.max(0, Math.min(a.bottom, b.bottom) - Math.max(a.top, b.top));
+                return { ix, iy, hit: ix > pad && iy > pad };
+            };
+            for (const svg of scanRoot.querySelectorAll('svg.grand-staff-svg')) {
+                if (!isActuallyVisible(svg)) continue;
+                const sr = svg.getBoundingClientRect();
+                if (isScrolledOut(svg, sr)) continue;
+                svgAudit.svgCount += 1;
+                const hostId = svg.parentElement?.id || svg.parentElement?.className || 'grand-staff';
+                const hasEmpty = Boolean(svg.querySelector('.score-empty-text'));
+                const staves = Array.from(svg.querySelectorAll('.vf-stave'));
+                const clefs = Array.from(svg.querySelectorAll('.vf-clef'));
+                const notes = Array.from(svg.querySelectorAll('.vf-notehead, .vf-stavenote'));
+                if (sr.width < 50 || sr.height < 80 || staves.length < 2 || clefs.length < 2 || (!hasEmpty && notes.length < 1)) {
+                    svgAudit.brokenSvgs.push({
+                        hostId,
+                        w: Math.round(sr.width),
+                        h: Math.round(sr.height),
+                        staves: staves.length,
+                        clefs: clefs.length,
+                        notes: notes.length,
+                    });
+                }
+
+                // Collect literal horizontal staff lines + notation primitives
+                const staffLineBoxes = [];
+                for (const st of staves) {
+                    for (const shape of st.querySelectorAll('path, rect, line')) {
+                        const br = shape.getBoundingClientRect();
+                        if (br.height <= 4.5 && br.width > 18) staffLineBoxes.push(br);
+                    }
+                }
+                const notationBoxes = [];
+                for (const nEl of svg.querySelectorAll('.vf-notehead, .vf-accidental, .vf-stem, .vf-beam, .vf-clef, .vf-keysig, .vf-timesig, rect.ledger-line, line.ledger-line')) {
+                    const br = nEl.getBoundingClientRect();
+                    if (br.width > 0.5 && br.height > 0.5) notationBoxes.push({ tag: nEl.getAttribute('class') || nEl.tagName, r: br });
+                }
+
+                const svgTexts = Array.from(svg.querySelectorAll('text')).filter((t) => {
+                    const st = window.getComputedStyle(t);
+                    if (st.display === 'none' || st.visibility === 'hidden') return false;
+                    const tr = t.getBoundingClientRect();
+                    return t.textContent.trim().length > 0 && tr.width > 0.5 && tr.height > 0.5;
+                });
+
+                const tBoxes = svgTexts.map((t) => ({
+                    el: t,
+                    cls: t.getAttribute('class') || '',
+                    text: t.textContent.trim().slice(0, 28),
+                    fs: parseFloat(window.getComputedStyle(t).fontSize || '0'),
+                    r: t.getBoundingClientRect(),
+                }));
+
+                for (const tb of tBoxes) {
+                    if (tb.fs < 13.0) {
+                        svgAudit.svgSmallFonts.push({ hostId, fs: tb.fs, text: tb.text, cls: tb.cls });
+                    }
+                    if (tb.r.left < sr.left - 1.5 || tb.r.right > sr.right + 1.5 || tb.r.top < sr.top - 1.5 || tb.r.bottom > sr.bottom + 1.5) {
+                        svgAudit.svgTextClipped.push({
+                            hostId,
+                            text: tb.text,
+                            tr: { l: Math.round(tb.r.left), r: Math.round(tb.r.right), t: Math.round(tb.r.top), b: Math.round(tb.r.bottom) },
+                            sr: { l: Math.round(sr.left), r: Math.round(sr.right), t: Math.round(sr.top), b: Math.round(sr.bottom) },
+                        });
+                    }
+                    if (!tb.el.classList.contains('score-empty-text')) {
+                        for (const sline of staffLineBoxes) {
+                            const ov = rectOverlap(tb.r, sline, 0.8);
+                            if (ov.hit) {
+                                svgAudit.svgTextNoteOverlaps.push({ hostId, text: tb.text, target: 'staff-line', ix: Math.round(ov.ix), iy: Math.round(ov.iy) });
+                                break;
+                            }
+                        }
+                        for (const nb of notationBoxes) {
+                            const ov = rectOverlap(tb.r, nb.r, 1.0);
+                            if (ov.hit) {
+                                svgAudit.svgTextNoteOverlaps.push({ hostId, text: tb.text, target: nb.tag, ix: Math.round(ov.ix), iy: Math.round(ov.iy) });
+                                break;
+                            }
+                        }
+                    }
+                }
+
+                for (let i = 0; i < tBoxes.length; i++) {
+                    for (let j = i + 1; j < tBoxes.length; j++) {
+                        const ov = rectOverlap(tBoxes[i].r, tBoxes[j].r, 1.0);
+                        if (ov.hit) {
+                            svgAudit.svgTextOverlaps.push({ hostId, a: tBoxes[i].text, b: tBoxes[j].text, ix: Math.round(ov.ix), iy: Math.round(ov.iy) });
+                        }
+                    }
+                }
+
+                // Clef / KeySig / TimeSig separation from notes & accidentals
+                const headerMods = Array.from(svg.querySelectorAll('.vf-clef, .vf-keysig, .vf-timesig')).map((m) => m.getBoundingClientRect());
+                const firstNotesAndAcc = Array.from(svg.querySelectorAll('.vf-notehead, .vf-accidental')).map((n) => n.getBoundingClientRect());
+                for (const hm of headerMods) {
+                    if (hm.width < 1 || hm.height < 1) continue;
+                    for (const fn of firstNotesAndAcc) {
+                        const ov = rectOverlap(hm, fn, 0.5);
+                        if (ov.hit) {
+                            svgAudit.svgClefNoteOverlaps.push({ hostId, ix: Math.round(ov.ix), iy: Math.round(ov.iy) });
+                        }
+                    }
+                }
+            }
+
+            // Text truncation & container clipping detection
+            const truncationIssues = [];
+            for (const el of scanRoot.querySelectorAll('*')) {
+                if (['SCRIPT', 'STYLE', 'OPTION', 'AUDIO', 'CANVAS', 'PRE', 'INPUT', 'SELECT', 'TEXTAREA'].includes(el.tagName) || el.closest('svg')) continue;
+                if (!isActuallyVisible(el)) continue;
+                const hasDirectText = Array.from(el.childNodes).some(
+                    (n) => n.nodeType === Node.TEXT_NODE && n.textContent && n.textContent.trim().length > 0
+                );
+                if (!hasDirectText) continue;
+                const st = window.getComputedStyle(el);
+                if ((st.overflowX === 'hidden' || st.overflowX === 'clip' || st.textOverflow === 'ellipsis') && el.clientWidth > 0 && el.scrollWidth > el.clientWidth + 3) {
+                    truncationIssues.push({
+                        id: el.id || el.className || el.tagName,
+                        scrollW: el.scrollWidth,
+                        clientW: el.clientWidth,
+                        text: el.textContent.trim().slice(0, 28),
+                    });
+                } else if ((st.overflowY === 'hidden' || st.overflowY === 'clip') && el.clientHeight > 0 && el.scrollHeight > el.clientHeight + 4) {
+                    truncationIssues.push({
+                        id: el.id || el.className || el.tagName,
+                        scrollH: el.scrollHeight,
+                        clientH: el.clientHeight,
+                        text: el.textContent.trim().slice(0, 28),
+                    });
+                }
+            }
+
+            // WCAG AA Contrast audit for visible HTML text
+            const parseRgba = (str) => {
+                const m = String(str || '').match(/rgba?\((\d+(?:\.\d+)?),\s*(\d+(?:\.\d+)?),\s*(\d+(?:\.\d+)?)(?:,\s*(\d+(?:\.\d+)?))?\)/);
+                if (!m) return null;
+                return { r: Number(m[1]), g: Number(m[2]), b: Number(m[3]), a: m[4] != null ? Number(m[4]) : 1.0 };
+            };
+            const blend = (bg, fg) => ({
+                r: fg.r * fg.a + bg.r * (1 - fg.a),
+                g: fg.g * fg.a + bg.g * (1 - fg.a),
+                b: fg.b * fg.a + bg.b * (1 - fg.a),
+                a: 1.0,
+            });
+            const effectiveBg = (el) => {
+                const chain = [];
+                let cur = el;
+                while (cur && cur.nodeType === 1) {
+                    const c = parseRgba(window.getComputedStyle(cur).backgroundColor);
+                    if (c && c.a > 0.01) chain.push(c);
+                    cur = cur.parentElement;
+                }
+                let col = { r: 28, g: 29, b: 32, a: 1.0 };
+                for (let k = chain.length - 1; k >= 0; k--) col = blend(col, chain[k]);
+                return col;
+            };
+            const relLum = (c) => {
+                const f = (v) => {
+                    const s = v / 255.0;
+                    return s <= 0.03928 ? s / 12.92 : Math.pow((s + 0.055) / 1.055, 2.4);
+                };
+                return 0.2126 * f(c.r) + 0.7152 * f(c.g) + 0.0722 * f(c.b);
+            };
+            const contrastIssues = [];
+            for (const el of scanRoot.querySelectorAll('*')) {
+                if (['SCRIPT', 'STYLE', 'OPTION', 'AUDIO', 'CANVAS'].includes(el.tagName) || el.closest('svg') || el.disabled) continue;
+                if (!isActuallyVisible(el) || el.getAttribute('aria-hidden') === 'true') continue;
+                const hasDirectText = Array.from(el.childNodes).some(
+                    (n) => n.nodeType === Node.TEXT_NODE && n.textContent && n.textContent.trim().length > 0
+                );
+                if (!hasDirectText) continue;
+                const st = window.getComputedStyle(el);
+                if (Number(st.opacity) < 0.2) continue;
+                const fg = parseRgba(st.color);
+                if (!fg) continue;
+                const bg = effectiveBg(el);
+                const fgComp = blend(bg, fg);
+                const l1 = relLum(fgComp);
+                const l2 = relLum(bg);
+                const ratio = (Math.max(l1, l2) + 0.05) / (Math.min(l1, l2) + 0.05);
+                const fs = parseFloat(st.fontSize || '15');
+                const fw = Number(st.fontWeight || 400);
+                const minRatio = (fs >= 24 || (fs >= 18.66 && fw >= 700)) ? 3.0 : 4.5;
+                if (ratio < minRatio) {
+                    contrastIssues.push({
+                        id: el.id || el.className || el.tagName,
+                        ratio: Number(ratio.toFixed(2)),
+                        minRatio,
+                        color: st.color,
+                        bg: `rgb(${Math.round(bg.r)},${Math.round(bg.g)},${Math.round(bg.b)})`,
+                        text: el.textContent.trim().slice(0, 22),
+                    });
+                }
+            }
+
+            // Raw variable / enum / garbled text leak audit (excluding raw ABC pre console)
+            const rawLeakIssues = [];
+            const leakPatterns = [
+                '\\bundefined\\b',
+                '\\bNaN\\b',
+                '\\[object Object\\]',
+                'monologue_ja',
+                'step2_audition_reject',
+                'question_half_cadence',
+                'answer_authentic_cadence',
+                'tension_deceptive',
+                'climax_dominant_pedal',
+                'coda_plagal_fade',
+                'D_dorian',
+                'D_minor',
+                'F_major',
+                'G_minor',
+                'A_minor',
+                'notagen_small',
+                'L1_PERCEPTION',
+                'TOKEN_ECON',
+                'L2_LOGIC_CHAIN',
+                'L3_CANDIDATES',
+                'REALIZER_DIFF',
+                'TIMING_BUDGET',
+                'broken_chord_barcarolle',
+                'cantabile_polyphony',
+                'impressionist_pedal',
+                'dramatic_octave_chorale',
+                'minimalist_pulse',
+                'countermelody_tenor',
+                'open_arpeggio_10th',
+                'chorale_voicing',
+                'alberti_lyrical',
+                'webaudio_demo',
+                'mac_local',
+                'browser_abc_demo',
+                'LH_open5th',
+                'RH_cantabile',
+                'half_clear',
+                '\\(#A8C8E8\\)',
+                '\\(#EAE6DF\\)',
+                '\\biv66\\b',
+                '\\bii66\\b',
+                '大調',
+                '小調',
+                '嘆き',
+                '叫び',
+                '黒箱',
+                '事実記述',
+                '事実のみ記す',
+                '-inf dB',
+                'Mode B:',
+                'Mode A:',
+                'Turn #',
+                '\\uFFFD',
+                '□',
+            ];
+            const leakRegex = new RegExp('(' + leakPatterns.join('|') + ')', 'g');
+            const asciiAccRegex = /(?:^|[\s(/\-\–\→\[,])([A-G](?:#|b)(?:m7|maj7|dim7|sus4|m|7|9|6|[0-8])?)(?=$|[\s)/,\-\–\→\]・])/g;
+            const textHolders = Array.from(scanRoot.querySelectorAll('*'));
+            for (const el of textHolders) {
+                if (['SCRIPT', 'STYLE', 'OPTION', 'AUDIO', 'CANVAS'].includes(el.tagName)) continue;
+                if (el.id === 'ng-abc-console' || el.closest('#ng-abc-console')) continue;
+                if (!isActuallyVisible(el)) continue;
+                const hasDirectText = Array.from(el.childNodes).some(
+                    (n) => n.nodeType === Node.TEXT_NODE && n.textContent && n.textContent.trim().length > 0
+                );
+                if (!hasDirectText) continue;
+                const txt = el.textContent.trim();
+                const m1 = txt.match(leakRegex);
+                if (m1) {
+                    rawLeakIssues.push({ id: el.id || el.className || el.tagName, token: m1[0], snippet: txt.slice(0, 40) });
+                }
+                const m2 = txt.match(asciiAccRegex);
+                if (m2) {
+                    rawLeakIssues.push({ id: el.id || el.className || el.tagName, token: m2[0].trim(), snippet: txt.slice(0, 40) });
                 }
             }
 
@@ -187,7 +581,7 @@ def _check_layout_geometry(page: Page, label: str) -> Dict[str, Any]:
                 if (bt > 0.1 || bl > 0.1 || br > 0.1) {
                     cardBorderShadowViolations.push({ el: el.className || el.id, issue: `4-sided border T=${bt} L=${bl} R=${br}` });
                 }
-                if (st.backgroundImage && /gradient\\(/i.test(st.backgroundImage)) {
+                if (st.backgroundImage && /gradient\(/i.test(st.backgroundImage)) {
                     gradientViolations.push({ el: el.className || el.id, bg: st.backgroundImage.slice(0, 60) });
                 }
                 const bef = window.getComputedStyle(el, '::before');
@@ -206,7 +600,7 @@ def _check_layout_geometry(page: Page, label: str) -> Dict[str, Any]:
             for (const ss of Array.from(document.styleSheets)) {
                 try {
                     for (const rule of Array.from(ss.cssRules || [])) {
-                        if (rule.cssText && /gradient\\(/i.test(rule.cssText)) {
+                        if (rule.cssText && /gradient\(/i.test(rule.cssText)) {
                             gradientViolations.push({ stylesheet: ss.href || 'inline', snippet: rule.cssText.slice(0, 60) });
                         }
                     }
@@ -254,9 +648,14 @@ def _check_layout_geometry(page: Page, label: str) -> Dict[str, Any]:
                 visibleControlCount: controls.length,
                 clipped,
                 overlaps,
+                domOverlaps,
                 minVisibleFontPx: minVisibleFontPx === 999 ? 15 : minVisibleFontPx,
                 smallFontEls,
                 smallPrimaryBtns,
+                svgAudit,
+                truncationIssues,
+                contrastIssues,
+                rawLeakIssues,
                 cardBorderShadowViolations,
                 gradientViolations,
                 bodyBg,
@@ -344,10 +743,22 @@ def _record_geometry_violations(geometry_reports: List[Dict[str, Any]], violatio
             violations.append(f"{g['label']}: clipped controls {g['clipped'][:3]}")
         if g["overlaps"]:
             violations.append(f"{g['label']}: overlapping controls {g['overlaps'][:3]}")
+        if g.get("domOverlaps"):
+            violations.append(f"{g['label']}: DOM element overlaps ({len(g['domOverlaps'])}) {g['domOverlaps'][:3]}")
         if g["minVisibleFontPx"] < 13.0 or g["smallFontEls"]:
             violations.append(f"{g['label']}: font < 13px ({g['smallFontEls'][:3]})")
         if g["smallPrimaryBtns"]:
             violations.append(f"{g['label']}: small primary buttons < 40px ({g['smallPrimaryBtns'][:3]})")
+        svg_aud = g.get("svgAudit") or {}
+        for svg_key in ("brokenSvgs", "svgSmallFonts", "svgTextClipped", "svgTextOverlaps", "svgTextNoteOverlaps", "svgClefNoteOverlaps"):
+            if svg_aud.get(svg_key):
+                violations.append(f"{g['label']}: SVG {svg_key} ({svg_aud[svg_key][:3]})")
+        if g.get("truncationIssues"):
+            violations.append(f"{g['label']}: text truncation/clipping {g['truncationIssues'][:3]}")
+        if g.get("contrastIssues"):
+            violations.append(f"{g['label']}: contrast < AA ({g['contrastIssues'][:3]})")
+        if g.get("rawLeakIssues"):
+            violations.append(f"{g['label']}: raw token/notation leak {g['rawLeakIssues'][:3]}")
         if g.get("cardBorderShadowViolations"):
             violations.append(f"{g['label']}: Rule 1 card border/shadow violation ({g['cardBorderShadowViolations'][:3]})")
         if not g.get("bodyBgOk", True):
@@ -544,11 +955,13 @@ def run_audit(round_num: int = 1, update_docs_images: bool = False, quick: bool 
             if not skip_link_ok:
                 violations.append("Skip-link or #main-content missing on /studio")
 
+            # Help Modal a11y + geometry + Escape check
             page.click("#btn-help")
-            time.sleep(0.15)
+            time.sleep(0.18)
             modal_opened_focus = page.evaluate(
                 "() => ({ open: !document.getElementById('help-modal')?.hidden, activeId: document.activeElement?.id || '' })"
             )
+            geometry_reports.append(_check_layout_geometry(page, "studio_help_modal_1920x1080"))
             page.keyboard.press("Escape")
             time.sleep(0.15)
             modal_closed_focus = page.evaluate(
@@ -580,9 +993,13 @@ def run_audit(round_num: int = 1, update_docs_images: bool = False, quick: bool 
             if not rm_ok:
                 violations.append(f"prefers-reduced-motion check failed: transitionDuration={rm_dur}s")
 
-            # Mode 1: Cello Dialogue + 5s Card Stability Check (Rule 4) + Logic Trace Inspector
+            # Mode 1: Cello Dialogue + 5s Card Stability Check (Rule 4) + Rejected Candidate + Export Toast + Logic Trace
+            init_cand_lbl = page.locator("#cello-hero-cand-label").inner_text()
+            functional_checks["initial_adopted_selected"] = "採用候補" in init_cand_lbl
+            if not functional_checks["initial_adopted_selected"]:
+                violations.append(f"/studio initial load did not select adopted candidate: {init_cand_lbl}")
             geometry_reports.append(_check_layout_geometry(page, "studio_mode1_cello_1920x1080"))
-            stability_report = _check_card_stability(page, "studio_mode1_cello", "#cello-cand-cards", wait_s=5.0)
+            stability_report = _check_card_stability(page, "studio_mode1_cello", "#cello-cand-cards", wait_s=1.2 if quick else 5.0)
             functional_checks["card_stability"] = stability_report
             if stability_report["swaps"] > 0 or stability_report["recreated"] > 0 or stability_report["cls"] >= 0.01:
                 violations.append(f"Rule 4 card stability violation: {stability_report}")
@@ -590,6 +1007,22 @@ def run_audit(round_num: int = 1, update_docs_images: bool = False, quick: bool 
             page.screenshot(path=str(p_m1))
             screenshots["studio_mode1_cello"] = str(p_m1)
             screenshots["desktop_mode1_cello"] = str(p_m1)
+
+            if page.locator("#cello-cand-cards .cand-pick-card.rejected").count() > 0:
+                page.locator("#cello-cand-cards .cand-pick-card.rejected").first.click()
+                time.sleep(0.22)
+                geometry_reports.append(_check_layout_geometry(page, "studio_mode1_rejected_1920x1080"))
+                if page.locator("#cello-cand-cards .cand-pick-card.adopted").count() > 0:
+                    page.locator("#cello-cand-cards .cand-pick-card.adopted").first.click()
+                    time.sleep(0.18)
+
+            page.click("#btn-cello-save")
+            page.wait_for_function("!document.getElementById('cello-export-toast')?.hidden", timeout=15000)
+            time.sleep(0.15)
+            geometry_reports.append(_check_layout_geometry(page, "studio_toast_state_1920x1080"))
+            if page.locator("#cello-export-toast-close").count() > 0:
+                page.click("#cello-export-toast-close")
+                time.sleep(0.1)
 
             page.click("#tab-cello-trace")
             time.sleep(0.2)
@@ -645,7 +1078,7 @@ def run_audit(round_num: int = 1, update_docs_images: bool = False, quick: bool 
             screenshots["studio_mode3_notagen"] = str(p_m3)
             screenshots["desktop_mode3_notagen"] = str(p_m3)
 
-            # Mode 4: Library Archive
+            # Mode 4: Library Archive (initial + active playback + deliberation tab)
             page.click("#mode-tab-library")
             page.wait_for_function("document.querySelectorAll('#piece-list .piece-item').length === 100", timeout=10000)
             time.sleep(0.25)
@@ -654,6 +1087,17 @@ def run_audit(round_num: int = 1, update_docs_images: bool = False, quick: bool 
             page.screenshot(path=str(p_m4))
             screenshots["studio_mode4_library"] = str(p_m4)
             screenshots["desktop_mode4_library"] = str(p_m4)
+
+            page.click("#btn-play")
+            time.sleep(0.35)
+            geometry_reports.append(_check_layout_geometry(page, "studio_mode4_playing_1920x1080"))
+            page.click("#btn-stop")
+            page.click("#tab-delib")
+            page.wait_for_selector("#delib-grid .cand-card svg.grand-staff-svg", timeout=8000)
+            time.sleep(0.25)
+            geometry_reports.append(_check_layout_geometry(page, "studio_mode4_delib_1920x1080"))
+            page.click("#tab-score")
+            time.sleep(0.2)
 
             # Check Studio Modes 1, 2, 3, 4 at 1366x768 laptop resolution
             page.set_viewport_size({"width": 1366, "height": 768})
@@ -664,13 +1108,17 @@ def run_audit(round_num: int = 1, update_docs_images: bool = False, quick: bool 
                 ("#mode-tab-library", "studio_mode4_library_1366x768"),
             ):
                 page.click(mtab)
-                time.sleep(0.22)
+                time.sleep(0.25)
                 geometry_reports.append(_check_layout_geometry(page, gname))
+                if mtab == "#mode-tab-cello":
+                    p_1366 = out_dir / "studio_mode1_cello_1366x768.png"
+                    page.screenshot(path=str(p_1366))
+                    screenshots["studio_mode1_cello_1366x768"] = str(p_1366)
 
             # ===== C. Live /stage Projection HUD Audit + F10 Toggle =====
             page.set_viewport_size({"width": 1920, "height": 1080})
             page.goto(f"{stage_url}/stage", wait_until="domcontentloaded")
-            page.wait_for_function("document.getElementById('turn-meta').textContent.includes('Turn #')", timeout=10000)
+            page.wait_for_function("document.getElementById('turn-meta').textContent.includes('ターン')", timeout=10000)
             time.sleep(0.25)
 
             geometry_reports.append(_check_layout_geometry(page, "stage_hud_1920x1080"))
@@ -718,6 +1166,26 @@ def run_audit(round_num: int = 1, update_docs_images: bool = False, quick: bool 
             page.goto("about:blank")
             context.close()
 
+            # ===== C2. HiDPI 2x Close-Up Grand Staff Inspection (Adopted & Rejected) =====
+            hi_ctx = browser.new_context(viewport={"width": 1440, "height": 900}, device_scale_factor=2)
+            hi_page = hi_ctx.new_page()
+            _attach_error_listeners(hi_page, errors)
+            hi_page.goto(f"{stage_url}/studio", wait_until="domcontentloaded")
+            hi_page.wait_for_function("document.querySelectorAll('#cello-cand-cards .cand-pick-card').length === 4", timeout=12000)
+            hi_page.wait_for_selector("#canvas-cello-hero-staff svg.grand-staff-svg", timeout=8000)
+            time.sleep(0.3)
+            p_gs_ok = out_dir / "audit_grand_staff_closeup.png"
+            hi_page.locator("#canvas-cello-hero-staff").screenshot(path=str(p_gs_ok))
+            screenshots["audit_grand_staff_closeup"] = str(p_gs_ok)
+
+            if hi_page.locator("#cello-cand-cards .cand-pick-card.rejected").count() > 0:
+                hi_page.locator("#cello-cand-cards .cand-pick-card.rejected").first.click()
+                time.sleep(0.25)
+                p_gs_rej = out_dir / "audit_grand_staff_rejected_closeup.png"
+                hi_page.locator("#canvas-cello-hero-staff").screenshot(path=str(p_gs_rej))
+                screenshots["audit_grand_staff_rejected_closeup"] = str(p_gs_rej)
+            hi_ctx.close()
+
             # ===== D. Smartphone Dedicated UI Audit (390x844, Touch, 0px Overflow) =====
             mob_ctx = browser.new_context(
                 viewport={"width": 390, "height": 844},
@@ -755,9 +1223,29 @@ def run_audit(round_num: int = 1, update_docs_images: bool = False, quick: bool 
                 mob_page.screenshot(path=str(p_mob))
                 screenshots[sc_key] = str(p_mob)
 
-            # Mobile Logic Trace Inspector (390x844)
+            # Mobile Logic Trace Inspector + Help Modal + Rejected Candidate + Grand Staff closeup (390x844)
             mob_page.click(".mobile-nav-btn[data-mode-view='cello']")
             time.sleep(0.22)
+            if mob_page.locator("#canvas-cello-hero-staff").count() > 0:
+                mob_page.locator("#canvas-cello-hero-staff").scroll_into_view_if_needed()
+                time.sleep(0.2)
+                p_mgs = out_dir / "mobile_grand_staff_390x844.png"
+                mob_page.locator("#canvas-cello-hero-staff").screenshot(path=str(p_mgs))
+                screenshots["mobile_grand_staff_390x844"] = str(p_mgs)
+            if mob_page.locator("#cello-cand-cards .cand-pick-card.rejected").count() > 0:
+                mob_page.locator("#cello-cand-cards .cand-pick-card.rejected").first.click()
+                time.sleep(0.22)
+                geometry_reports.append(_check_layout_geometry(mob_page, "mobile_mode1_rejected_390x844"))
+                if mob_page.locator("#cello-cand-cards .cand-pick-card.adopted").count() > 0:
+                    mob_page.locator("#cello-cand-cards .cand-pick-card.adopted").first.click()
+                    time.sleep(0.18)
+
+            mob_page.click("#btn-help")
+            time.sleep(0.18)
+            geometry_reports.append(_check_layout_geometry(mob_page, "mobile_help_modal_390x844"))
+            mob_page.keyboard.press("Escape")
+            time.sleep(0.15)
+
             mob_page.click("#tab-cello-trace")
             time.sleep(0.22)
             geometry_reports.append(_check_layout_geometry(mob_page, "mobile_logic_trace_390x844"))
@@ -809,6 +1297,8 @@ def run_audit(round_num: int = 1, update_docs_images: bool = False, quick: bool 
 
     if update_docs_images:
         for key in (
+            "audit_grand_staff_closeup",
+            "audit_grand_staff_rejected_closeup",
             "studio_mode1_cello",
             "studio_mode2_piano",
             "studio_mode3_notagen",
@@ -859,10 +1349,17 @@ def main() -> int:
     print(f"Errors: console={len(rep['errors']['console'])}, pageerror={len(rep['errors']['pageerror'])}, http={len(rep['errors']['http'])}")
     print(f"Functional: {rep['functional_checks']}")
     for g in rep["geometry_reports"]:
+        sa = g.get("svgAudit") or {}
+        svg_errs = sum(
+            len(sa.get(k, []))
+            for k in ("brokenSvgs", "svgSmallFonts", "svgTextClipped", "svgTextOverlaps", "svgTextNoteOverlaps", "svgClefNoteOverlaps")
+        )
         print(
             f" - {g['label']}: overflow={g['overflowPx']}px clipped={len(g['clipped'])} "
-            f"overlaps={len(g['overlaps'])} minFont={g['minVisibleFontPx']}px "
-            f"smallBtns={len(g['smallPrimaryBtns'])} pedalOrderOk={g['pedalOrderOk']}"
+            f"overlaps={len(g['overlaps'])} domOv={len(g.get('domOverlaps', []))} "
+            f"svg={sa.get('svgCount', 0)}/err={svg_errs} trunc={len(g.get('truncationIssues', []))} "
+            f"contrast={len(g.get('contrastIssues', []))} rawLeak={len(g.get('rawLeakIssues', []))} "
+            f"minFont={g['minVisibleFontPx']}px smallBtns={len(g['smallPrimaryBtns'])} pedalOrderOk={g['pedalOrderOk']}"
         )
     if rep["violations"]:
         print("VIOLATIONS:")

@@ -47,13 +47,16 @@ class _CIImportBlocker(importlib.abc.MetaPathFinder):
 
 def _verify_web_demo_bundle() -> None:
     root = ROOT / "web-demo"
-    for req in ("index.html", "app.js", "style.css", "favicon.ico", "data/catalog_100.json"):
+    for req in ("index.html", "app.js", "style.css", "vexflow-bravura.js", "score_engraver.js", "VEXFLOW_LICENSE.txt", "favicon.ico", "data/catalog_100.json"):
         assert (root / req).exists(), f"Missing {req}"
     html = (root / "index.html").read_text(encoding="utf-8")
     assert "./app.js" in html and "./style.css" in html and "./favicon.ico" in html
+    assert "./vexflow-bravura.js" in html and "./score_engraver.js" in html
     assert "/studio-static/" not in html, "Static web-demo must use relative ./ paths"
     (root / "app.js").read_text(encoding="utf-8")
     (root / "style.css").read_text(encoding="utf-8")
+    (root / "vexflow-bravura.js").read_text(encoding="utf-8")
+    (root / "score_engraver.js").read_text(encoding="utf-8")
     cat = json.loads((root / "data" / "catalog_100.json").read_text(encoding="utf-8"))
     assert len(cat["pieces"]) == 100
     for e in cat["pieces"]:

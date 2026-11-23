@@ -10,6 +10,9 @@
     dramatic_octave_chorale: "重厚コラール・オクターヴ",
     minimalist_pulse: "静謐反復アルペジオ",
     countermelody_tenor: "内声テノール対旋律",
+    open_arpeggio_10th: "開離アルペジオ",
+    chorale_voicing: "コラール四声和音",
+    alberti_lyrical: "叙情アルベルティ伴奏",
   };
 
   const MODE_LABELS = {
@@ -235,7 +238,13 @@
       cello: null,
       piano: null,
     },
+    userPinnedCand: {
+      cello: null,
+      piano: null,
+    },
+    hasLiveSync: false,
     lastRenderedTurnId: -1,
+    lastTurnRevision: -1,
     auditionTimer: null,
     browserHumanKeys: new Map(), // pitch -> expiryTs
     notagen: {
@@ -289,6 +298,7 @@
       human_active_pitches: [],
       active_preset: "晩年ロマン派・静的Cantabile",
       turn_id: 1,
+      turn_revision: -1,
       hybrid: {
         mode: LIVE_MODE ? "MAC_LOCAL_ONLY" : "MAC_LOCAL_ONLY",
         active_backend: LIVE_MODE ? "mac_local" : "webaudio_demo",
@@ -434,7 +444,8 @@
           act_number: 1,
           act_label_ja: "第1幕",
           phrase_function: "question_half_cadence",
-          hypothesis_ja: "第1幕の問いかけとして半終止(V)を開き、D3-F3-A3動機に対し右手F4-A4で余白を残して応答する（調性=Dm, スタンス=counterpoint, ボイシング=LH_open5th + RH_cantabile, ペダル=half_clear）",
+          hypothesis_ja:
+            "第1幕の問いかけとして半終止（V）を開き、D3–F3–A3 動機に対し右手 F4–A4 で余白を残して応答する（調性: ニ短調 / 対位法応答 / 左手開離5度＋右手カンタービレ / ペダル: 半踏みクリア）",
           interaction_stance: "counterpoint",
           tonal_center: "Dm",
           voicing_structure: "LH_open5th + RH_cantabile",
@@ -508,6 +519,18 @@
   // Helpers for API & Safe DOM access
   // ===========================================================================
   const $ = (id) => document.getElementById(id);
+  const Eng = () => window.DisklavierScoreEngraver || {};
+  const fmtChord = (s) => (Eng().formatChordSymbol ? Eng().formatChordSymbol(s) : String(s || "--"));
+  const fmtNote = (s) => (Eng().formatNoteName ? Eng().formatNoteName(s) : String(s || "--"));
+  const fmtMusic = (s) => (Eng().formatMusicText ? Eng().formatMusicText(s) : String(s || ""));
+  const fmtTonal = (s) => (Eng().formatTonalityJa ? Eng().formatTonalityJa(s) : String(s || ""));
+  const fmtFunc = (s) => (Eng().formatPhraseFunctionJa ? Eng().formatPhraseFunctionJa(s) : String(s || ""));
+  const fmtEngine = (s) => (Eng().formatEngineJa ? Eng().formatEngineJa(s) : String(s || ""));
+  const fmtArt = (s) => (Eng().formatArticulationJa ? Eng().formatArticulationJa(s) : String(s || ""));
+  const fmtTurnReason = (s) => (Eng().formatTurnReasonJa ? Eng().formatTurnReasonJa(s) : String(s || ""));
+  const fmtPedal = (s) => (Eng().formatPedalStrategyJa ? Eng().formatPedalStrategyJa(s) : String(s || ""));
+  const fmtTexture = (s) => (Eng().formatTextureJa ? Eng().formatTextureJa(s) : STYLE_LABELS[s] || String(s || ""));
+  const fmtCompact = (s) => (Eng().formatCompactContextJa ? Eng().formatCompactContextJa(s) : String(s || ""));
 
   async function postJson(url, body = {}) {
     if (!LIVE_MODE) return null;
@@ -560,253 +583,18 @@
   }
 
   // ===========================================================================
-  // Canvas Engraving Renderer: Hero Grand Staff & Mode 4 Timeline Score
+  // VexFlow 4.2.5 Bravura Engraving Delegate: Hero Grand Staff & Mode 4 Score
   // ===========================================================================
-  function pitchToDiatonicStep(midi) {
-    const stepInOct = [0, 0, 1, 1, 2, 3, 3, 4, 4, 5, 5, 6];
-    const isSharp = [false, true, false, true, false, false, true, false, true, false, true, false];
-    const m = Math.round(midi);
-    const oct = Math.floor(m / 12) - 1;
-    const pc = ((m % 12) + 12) % 12;
-    return { diatonic: oct * 7 + stepInOct[pc], sharp: isSharp[pc] };
-  }
-
-  function drawTrebleClef(ctx, x, bottomLineY, stepPx) {
-    ctx.save();
-    ctx.strokeStyle = "#8C857A";
-    ctx.fillStyle = "#8C857A";
-    ctx.lineWidth = 1.5;
-    const gLineY = bottomLineY - 2 * stepPx; // G4 = 2nd line from bottom (treble)
-    ctx.beginPath();
-    ctx.arc(x, gLineY, stepPx * 1.45, 0, Math.PI * 1.65);
-    ctx.stroke();
-    ctx.beginPath();
-    ctx.moveTo(x + stepPx * 0.4, bottomLineY + stepPx * 1.8);
-    ctx.bezierCurveTo(
-      x + stepPx * 1.6,
-      bottomLineY - stepPx * 9.5,
-      x - stepPx * 1.4,
-      bottomLineY - stepPx * 9.8,
-      x + stepPx * 0.1,
-      bottomLineY - stepPx * 3.8
-    );
-    ctx.stroke();
-    ctx.font = `600 ${Math.max(13, Math.round(stepPx * 2.2))}px serif`;
-    ctx.fillText("G", x - stepPx * 2.3, gLineY + stepPx * 0.7);
-    ctx.restore();
-  }
-
-  function drawBassClef(ctx, x, bottomLineY, stepPx) {
-    ctx.save();
-    ctx.strokeStyle = "#8C857A";
-    ctx.fillStyle = "#8C857A";
-    ctx.lineWidth = 1.6;
-    const fLineY = bottomLineY - 6 * stepPx; // F3 = 4th line from bottom (bass)
-    ctx.beginPath();
-    ctx.arc(x - stepPx * 0.3, fLineY, stepPx * 0.75, 0, Math.PI * 2);
-    ctx.fill();
-    ctx.beginPath();
-    ctx.arc(x - stepPx * 0.1, fLineY + stepPx * 0.8, stepPx * 2.1, -Math.PI * 0.62, Math.PI * 0.42);
-    ctx.stroke();
-    ctx.beginPath();
-    ctx.arc(x + stepPx * 2.4, fLineY - stepPx * 0.7, 2.1, 0, Math.PI * 2);
-    ctx.arc(x + stepPx * 2.4, fLineY + stepPx * 0.9, 2.1, 0, Math.PI * 2);
-    ctx.fill();
-    ctx.restore();
-  }
-
-  // Offscreen cache for static grand staff lines & clefs (60fps optimization)
-  const _staffBgCache = new WeakMap();
-
-  function _getCachedStaffBg(canvas, width, height, dpr, numBars, bgHex) {
-    const key = `${width}x${height}x${dpr}x${numBars}x${bgHex}`;
-    const existing = _staffBgCache.get(canvas);
-    if (existing && existing.key === key) {
-      return existing.offscreen;
-    }
-    const off = document.createElement("canvas");
-    off.width = Math.floor(width * dpr);
-    off.height = Math.floor(height * dpr);
-    const octx = off.getContext("2d");
-    octx.setTransform(dpr, 0, 0, dpr, 0, 0);
-
-    octx.fillStyle = bgHex;
-    octx.fillRect(0, 0, width, height);
-
-    const padLeft = 58;
-    const padRight = 22;
-    const usableW = Math.max(80, width - padLeft - padRight);
-    const trebleBaseY = Math.round(height * 0.46);
-    const bassBaseY = Math.round(height * 0.85);
-    const stepPx = Math.max(4.4, Math.min(6.0, height / 50));
-
-    octx.strokeStyle = "#484B53";
-    octx.lineWidth = 1;
-    for (let i = 0; i < 5; i++) {
-      const yt = trebleBaseY - i * 2 * stepPx;
-      octx.beginPath();
-      octx.moveTo(padLeft - 14, yt);
-      octx.lineTo(width - padRight, yt);
-      octx.stroke();
-
-      const yb = bassBaseY - i * 2 * stepPx;
-      octx.beginPath();
-      octx.moveTo(padLeft - 14, yb);
-      octx.lineTo(width - padRight, yb);
-      octx.stroke();
-    }
-
-    octx.strokeStyle = "#6C707A";
-    octx.lineWidth = 2;
-    octx.beginPath();
-    octx.moveTo(padLeft - 14, trebleBaseY - 8 * stepPx);
-    octx.lineTo(padLeft - 14, bassBaseY);
-    octx.stroke();
-
-    drawTrebleClef(octx, 26, trebleBaseY, stepPx);
-    drawBassClef(octx, 26, bassBaseY, stepPx);
-
-    octx.strokeStyle = "#34373E";
-    octx.lineWidth = 1;
-    for (let b = 1; b <= numBars; b++) {
-      const bx = padLeft + (b / numBars) * usableW;
-      octx.beginPath();
-      octx.moveTo(bx, trebleBaseY - 8 * stepPx);
-      octx.lineTo(bx, bassBaseY);
-      octx.stroke();
-    }
-
-    _staffBgCache.set(canvas, { key, offscreen: off });
-    return off;
-  }
-
-  function renderGrandStaff(canvas, rawNotes, opts = {}) {
-    if (!canvas) return;
-    const rect = canvas.getBoundingClientRect();
-    if (rect.width < 20 || rect.height < 20) return;
-    const dpr = Math.min(window.devicePixelRatio || 1, 2);
-    const w = Math.floor(rect.width * dpr);
-    const h = Math.floor(rect.height * dpr);
-    if (canvas.width !== w || canvas.height !== h) {
-      canvas.width = w;
-      canvas.height = h;
-    }
-
-    const width = rect.width;
-    const height = rect.height;
-    const padLeft = 58;
-    const padRight = 22;
-    const usableW = Math.max(80, width - padLeft - padRight);
-    const trebleBaseY = Math.round(height * 0.46); // E4 line
-    const bassBaseY = Math.round(height * 0.85); // G2 line
-    const stepPx = Math.max(4.4, Math.min(6.0, height / 50));
-
-    const notes = (rawNotes || []).map(normNote).filter(Boolean);
-    let minT = opts.winStart ?? 0;
-    let maxT = opts.winEnd ?? 4.0;
-    if (opts.winStart == null && notes.length > 0) {
-      minT = Math.min(...notes.map((n) => n.t));
-      maxT = Math.max(minT + 3.2, ...notes.map((n) => n.t + n.d));
-    }
-    const span = Math.max(1.2, maxT - minT);
-    const numBars = Math.max(2, Math.min(8, Math.round(span / 1.5)));
-    const bgHex = state.projectionClean ? "#141517" : "#1C1D20";
-
-    const ctx = canvas.getContext("2d");
-    const cachedBg = _getCachedStaffBg(canvas, width, height, dpr, numBars, bgHex);
-    ctx.setTransform(1, 0, 0, 1, 0, 0);
-    ctx.drawImage(cachedBg, 0, 0);
-    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
-
-    // Optional chords along top
-    if (Array.isArray(opts.chords) && opts.chords.length > 0) {
-      ctx.font = '600 13.5px "Cascadia Mono", monospace';
-      ctx.fillStyle = "#B4AEA3";
-      opts.chords.forEach((ch, idx) => {
-        const cx =
-          ch.start_s != null
-            ? padLeft + ((ch.start_s - minT) / span) * usableW
-            : padLeft + (idx / Math.max(1, opts.chords.length)) * usableW;
-        if (cx >= padLeft - 10 && cx <= width - padRight - 24) {
-          ctx.fillText(String(ch.chord || ch), cx + 4, 16);
-        }
+  function renderGrandStaff(container, rawNotes, opts = {}) {
+    if (!container) return;
+    if (window.DisklavierScoreEngraver && typeof window.DisklavierScoreEngraver.renderGrandStaff === "function") {
+      window.DisklavierScoreEngraver.renderGrandStaff(container, rawNotes, {
+        ...opts,
+        projectionClean: state.projectionClean,
       });
+      return;
     }
-
-    // Playhead cursor if provided
-    if (opts.playheadSec != null && opts.playheadSec >= minT && opts.playheadSec <= maxT) {
-      const px = padLeft + ((opts.playheadSec - minT) / span) * usableW;
-      ctx.strokeStyle = "#C83E2B";
-      ctx.lineWidth = 1.6;
-      ctx.beginPath();
-      ctx.moveTo(px, trebleBaseY - 9 * stepPx);
-      ctx.lineTo(px, bassBaseY + 2 * stepPx);
-      ctx.stroke();
-    }
-
-    // Render note durations & heads
-    for (const n of notes) {
-      if (n.t + n.d < minT || n.t > maxT) continue;
-      const x = padLeft + ((Math.max(minT, n.t) - minT) / span) * usableW;
-      const endX = padLeft + ((Math.min(maxT, n.t + n.d) - minT) / span) * usableW;
-      const tailW = Math.max(8, endX - x);
-
-      const useTreble = n.h === "rh" || (n.h !== "lh" && n.p >= 60);
-      const { diatonic, sharp } = pitchToDiatonicStep(n.p);
-      // Treble E4 = diatonic step 4*7+2 = 30; Bass G2 = 2*7+4 = 18
-      const refDiatonic = useTreble ? 30 : 18;
-      const baseLineY = useTreble ? trebleBaseY : bassBaseY;
-      const delta = clamp(diatonic - refDiatonic, -7, 13);
-      const y = baseLineY - delta * stepPx;
-
-      const isActive = opts.playheadSec != null && opts.playheadSec >= n.t && opts.playheadSec <= n.t + n.d;
-      let fill = "#EAE6DF";
-      if (n.h === "human") fill = "#A8C8E8";
-      else if (n.h === "lh") fill = "#C4BDB0";
-      if (isActive) fill = "#C83E2B";
-
-      // Ledger lines if outside staff
-      ctx.strokeStyle = "#4A463E";
-      ctx.lineWidth = 1;
-      if (delta < 0) {
-        for (let ld = -2; ld >= delta; ld -= 2) {
-          const ly = baseLineY - ld * stepPx;
-          ctx.beginPath();
-          ctx.moveTo(x - 7, ly);
-          ctx.lineTo(x + 7, ly);
-          ctx.stroke();
-        }
-      } else if (delta > 8) {
-        for (let ld = 10; ld <= delta; ld += 2) {
-          const ly = baseLineY - ld * stepPx;
-          ctx.beginPath();
-          ctx.moveTo(x - 7, ly);
-          ctx.lineTo(x + 7, ly);
-          ctx.stroke();
-        }
-      }
-
-      // Sustain ribbon
-      ctx.fillStyle = isActive ? "rgba(200, 62, 43, 0.38)" : fill === "#A8C8E8" ? "rgba(168, 200, 232, 0.25)" : "rgba(234, 230, 223, 0.16)";
-      ctx.fillRect(x, y - stepPx * 0.45, tailW, stepPx * 0.9);
-
-      // Note head
-      ctx.fillStyle = fill;
-      ctx.beginPath();
-      ctx.ellipse(x + 4, y, stepPx * 0.95, stepPx * 0.68, -0.22, 0, Math.PI * 2);
-      ctx.fill();
-
-      if (sharp) {
-        ctx.font = '600 13px "Cascadia Mono", monospace';
-        ctx.fillText("#", x - 9, y + 4);
-      }
-    }
-
-    if (notes.length === 0) {
-      ctx.fillStyle = "#8B867C";
-      ctx.font = '14px "Yu Gothic UI", sans-serif';
-      ctx.fillText(opts.emptyText || "音符・フレーズの生成を待機しています...", padLeft + 16, trebleBaseY - 2 * stepPx);
-    }
+    container.textContent = opts.emptyText || "楽譜彫刻モジュールを読み込んでいます...";
   }
 
   // ===========================================================================
@@ -944,15 +732,15 @@
     if (cand.adopted) {
       const bs = cand.beauty_summary;
       if (bs && typeof bs === "object") {
-        if (bs.summary_ja) return String(bs.summary_ja);
+        if (bs.summary_ja) return fmtMusic(bs.summary_ja);
         const cons = Math.round(Number(bs.consonance_score ?? 0));
         const poly = Number(bs.avg_polyphony ?? 0).toFixed(1);
         const mono = Number(bs.mono_ratio_pct ?? 0).toFixed(1);
         return `採用: 協和 ${cons}% / 平均${poly}声 / 単音${mono}%`;
       }
-      return String(bs || "採用（全監査項目パス・両手声部確定）");
+      return fmtMusic(bs || "採用（全監査項目通過・両手声部確定）");
     }
-    return String(cand.rejection_tag_ja || cand.rejection_detail || "スコア基準未達により棄却");
+    return fmtMusic(cand.rejection_tag_ja || cand.rejection_detail || "監査基準未達により棄却");
   }
 
   function renderCandidateCards(modeKey, containerId, staffCanvasId, labelId) {
@@ -960,11 +748,11 @@
     if (!container || !state.stage) return;
     const candidates = state.stage.candidates || [];
     const adopted = candidates.find((c) => c.adopted) || candidates[0];
-    let selectedId = state.inspectedCand[modeKey];
-    if (!selectedId || !candidates.some((c) => c.candidate_id === selectedId)) {
-      selectedId = adopted ? adopted.candidate_id : "A";
-      state.inspectedCand[modeKey] = selectedId;
-    }
+    const pinnedId = state.userPinnedCand[modeKey];
+    let selectedId = pinnedId && candidates.some((c) => c.candidate_id === pinnedId)
+      ? pinnedId
+      : (adopted ? adopted.candidate_id : "A");
+    state.inspectedCand[modeKey] = selectedId;
 
     // Rule 4: Update fixed candidate DOM slots in place (never destroy/recreate cards)
     const slots = Array.from(container.querySelectorAll(".cand-pick-card"));
@@ -990,13 +778,14 @@
       const rsnEl = card.querySelector(".cand-pick-reason");
       if (idEl) idEl.textContent = `案${cid}${isAdopted ? " · 採用" : " · 棄却"}`;
       if (scEl) scEl.textContent = `${pct}%`;
-      if (rngEl) rngEl.textContent = cand ? `${cand.pitch_range_str || "--"} (${(cand.events || []).length}音)` : "--";
+      if (rngEl) rngEl.textContent = cand ? `${fmtMusic(cand.pitch_range_str || "--")} (${(cand.events || []).length}音)` : "--";
       if (rsnEl) rsnEl.textContent = reasonText;
 
       if (!card.dataset.slotBound) {
         card.dataset.slotBound = "1";
         card.addEventListener("click", () => {
           const clickedCid = card.getAttribute("data-candidate-id") || slotCid;
+          state.userPinnedCand[modeKey] = clickedCid;
           state.inspectedCand[modeKey] = clickedCid;
           renderCandidateCards(modeKey, containerId, staffCanvasId, labelId);
         });
@@ -1011,8 +800,18 @@
         : `表示中: 案${shown.candidate_id}（棄却案を比較確認中）`;
     }
     const chords = (state.stage.intent?.chord_progression || []).map((c) => ({ chord: c }));
+    const out = state.stage.output || {};
     renderGrandStaff($(staffCanvasId), shown?.events || [], {
       chords,
+      tonality: state.stage.intent?.tonal_center || "D_minor",
+      bpm: 72,
+      cc64Curve: shown?.pedal_cc64_curve || out.pedal_cc64_curve || [],
+      cc67Curve: shown?.pedal_cc67_curve || out.pedal_cc67_curve || [],
+      pedalCc64: out.pedal_cc64,
+      pedalCc67: out.pedal_cc67,
+      rejected: Boolean(shown && !shown.adopted),
+      rejectionReason: shown && !shown.adopted ? formatCandReason(shown) : "",
+      problemNoteIndices: shown?.problem_note_indices || [],
       emptyText: "ターンを実行するとAIと人間の四声スコアがここに描画されます",
     });
   }
@@ -1039,29 +838,32 @@
       if (el && val != null) el.textContent = String(val);
     };
 
-    setTxt(`${prefix}-tr-l1-meta`, `${l1.note_name || "--"} (${Number(l1.f0_hz || 0).toFixed(1)} Hz) · ${l1.detected_chord || "--"}`);
-    const hNotes = Array.isArray(l1.human_notes_pitches) && l1.human_notes_pitches.length ? l1.human_notes_pitches.join("→") : "--";
+    setTxt(`${prefix}-tr-l1-meta`, `${fmtNote(l1.note_name || "--")} (${Number(l1.f0_hz || 0).toFixed(1)} Hz) · ${fmtChord(l1.detected_chord || "--")}`);
+    const hNotes =
+      Array.isArray(l1.human_notes_pitches) && l1.human_notes_pitches.length
+        ? l1.human_notes_pitches.map((n) => fmtNote(n)).join("→")
+        : "--";
     setTxt(
       `${prefix}-tr-l1-body`,
-      `検出動機: ${hNotes} / 奏法: ${l1.articulation || "--"} (Vib ${Math.round(l1.vibrato_cents || 0)} ct) / 呼吸: ${Math.round(Number(l1.breath_gauge || 0) * 100)}% (${l1.turn_reason || "--"})`
+      `検出動機: ${hNotes} / 奏法: ${fmtArt(l1.articulation || "Cantabile")} (ヴィブラート ${Math.round(l1.vibrato_cents || 0)} ct) / 呼吸: ${Math.round(Number(l1.breath_gauge || 0) * 100)}% (${fmtTurnReason(l1.turn_reason || "--")})`
     );
     setTxt(
       `${prefix}-tr-l1-sub`,
-      `NLMS ERLE: +${Number(l1.nlms_erle_db || 0).toFixed(1)} dB / 自己打鍵抑制: ${l1.echo_suppressed_count || 0}件`
+      `NLMS エコー抑圧: +${Number(l1.nlms_erle_db || 0).toFixed(1)} dB / 自己打鍵抑制: ${l1.echo_suppressed_count || 0}件`
     );
 
     const rawTok = Number(tok.raw_tokens_est || 0);
     const compTok = Number(tok.compressed_tokens_est || 0);
     const ratioPct = Number(tok.compression_ratio_pct || 0).toFixed(1);
     setTxt(`${prefix}-tr-tok-meta`, `${rawTok} → ${compTok} tok`);
-    setTxt(`${prefix}-tr-tok-body`, tok.compact_context_preview || "圧縮文脈なし");
+    setTxt(`${prefix}-tr-tok-body`, fmtCompact(tok.compact_context_preview) || "圧縮文脈なし");
     setTxt(`${prefix}-tr-tok-sub`, `節約トークン: ${tok.tokens_saved || Math.max(0, rawTok - compTok)} tok (${ratioPct}% 削減)`);
 
-    setTxt(`${prefix}-tr-l2-meta`, `${l2.act_label_ja || `第${l2.act_number || 1}幕`} / ${l2.tonal_center || "--"} (${l2.llm_source || "rule"})`);
-    setTxt(`${prefix}-tr-l2-body`, l2.hypothesis_ja || l2.monologue_ja || "仮説生成待機中");
+    setTxt(`${prefix}-tr-l2-meta`, `${l2.act_label_ja || `第${l2.act_number || 1}幕`} / ${fmtTonal(l2.tonal_center || "Dm")} (${fmtEngine(l2.llm_source || "rule")})`);
+    setTxt(`${prefix}-tr-l2-body`, fmtMusic(l2.hypothesis_ja || l2.monologue_ja || "仮説生成待機中"));
     const cc64 = Array.isArray(l2.damper_cc64_plan) && l2.damper_cc64_plan.length ? l2.damper_cc64_plan.join("/") : "--";
     const cc67 = Array.isArray(l2.una_corda_cc67_plan) && l2.una_corda_cc67_plan.length ? l2.una_corda_cc67_plan.join("/") : "--";
-    setTxt(`${prefix}-tr-l2-sub`, `方針: ${l2.pedal_strategy || "--"} · CC#67=[${cc67}] · CC#64=[${cc64}]`);
+    setTxt(`${prefix}-tr-l2-sub`, `方針: ${fmtPedal(l2.pedal_strategy || "--")} · 左ペダル(67)=[${cc67}] · 右ペダル(64)=[${cc64}]`);
 
     const adoptedCand = cands.find((c) => c.adopted) || cands[0];
     setTxt(
@@ -1079,7 +881,7 @@
       }
       const sc = item.scores || {};
       row.classList.toggle("adopted", Boolean(item.adopted));
-      row.textContent = `案${cid} (${Number(item.total_score_pct || 0).toFixed(1)}%) [協和${sc.consonance_pct ?? "--"} / 多声${sc.polyphony_pct ?? "--"} / 歌唱${sc.cantabile_pct ?? "--"} / ペダル${sc.pedal_sync_pct ?? "--"}] — ${item.rejection_reason_ja || ""}`;
+      row.textContent = `案${cid} (${Number(item.total_score_pct || 0).toFixed(1)}%) [協和${sc.consonance_pct ?? "--"} / 多声${sc.polyphony_pct ?? "--"} / 歌唱${sc.cantabile_pct ?? "--"} / ペダル${sc.pedal_sync_pct ?? "--"}] — ${fmtMusic(item.rejection_reason_ja || "")}`;
     });
 
     const fixedPct = Number(rz.mono_gaps_fixed_pct || 0).toFixed(1);
@@ -1087,7 +889,7 @@
       `${prefix}-tr-rz-meta`,
       `単音補正 ${fixedPct}% · 衝突解除 ${rz.dissonances_resolved || 0}件`
     );
-    setTxt(`${prefix}-tr-rz-body`, rz.summary_ja || "単音抜け・不協和音 0件");
+    setTxt(`${prefix}-tr-rz-body`, fmtMusic(rz.summary_ja || "単音抜け・不協和音 0件"));
     setTxt(
       `${prefix}-tr-rz-sub`,
       `音符 ${rz.raw_note_count || 0}→${rz.realized_note_count || 0} / 単音率 ${Number(rz.monophonic_gaps_before_pct || 0).toFixed(1)}%→${Number(rz.monophonic_gaps_after_pct || 0).toFixed(1)}% / ペダル補完 +${rz.pedal_events_added || 0}点`
@@ -1096,7 +898,7 @@
     setTxt(`${prefix}-tr-tm-meta`, `合計 ${Number(tm.total_response_ms || 0).toFixed(1)} ms`);
     setTxt(
       `${prefix}-tr-tm-body`,
-      `L1知覚 ${Number(tm.perception_ms || 0).toFixed(1)} ms / RTT ${Number(tm.network_rtt_ms || 0).toFixed(1)} ms / GPU推論 ${Number(tm.gpu_infer_ms || 0).toFixed(1)} ms / 先読み ${Number(tm.lookahead_ms || 0).toFixed(1)} ms`
+      `音響知覚 ${Number(tm.perception_ms || 0).toFixed(1)} ms / 通信RTT ${Number(tm.network_rtt_ms || 0).toFixed(1)} ms / 推論 ${Number(tm.gpu_infer_ms || 0).toFixed(1)} ms / 先読み ${Number(tm.lookahead_ms || 0).toFixed(1)} ms`
     );
     setTxt(`${prefix}-tr-tm-sub`, `実行バックエンド: ${formatBackendLabel(tm.backend_source)}`);
   }
@@ -1165,13 +967,17 @@
     const primaryChord = chords[0] || intent.tonal_center || "Dm";
     const actNum = Number(intent.act_number || 1);
     const turnId = Number(s.turn_id || 0);
-    if (state.lastRenderedTurnId < 0) {
+    const turnRev = Number(s.turn_revision ?? turnId);
+    if (state.lastRenderedTurnId < 0 || turnRev !== state.lastTurnRevision) {
+      state.userPinnedCand.cello = null;
+      state.userPinnedCand.piano = null;
       const adoptedNew = (s.candidates || []).find((c) => c.adopted);
       if (adoptedNew) {
-        if (!state.inspectedCand.cello) state.inspectedCand.cello = adoptedNew.candidate_id;
-        if (!state.inspectedCand.piano) state.inspectedCand.piano = adoptedNew.candidate_id;
+        state.inspectedCand.cello = adoptedNew.candidate_id;
+        state.inspectedCand.piano = adoptedNew.candidate_id;
       }
     }
+    state.lastTurnRevision = turnRev;
     state.lastRenderedTurnId = turnId;
 
     // Sync top connection button state in LIVE_MODE
@@ -1180,7 +986,7 @@
       const connBtn = $("btn-conn-mode");
       if (connBtn) {
         connBtn.classList.toggle("production", state.connProduction);
-        connBtn.textContent = state.connProduction ? "接続: 本番実機 (Disklavier/UR22)" : "接続: デモ（仮想演奏）";
+        connBtn.textContent = state.connProduction ? "接続: 実機本番 (Disklavier/UR22)" : "接続: デモ（仮想演奏）";
       }
       const demoBtn = $("btn-cello-demo");
       if (demoBtn) {
@@ -1211,23 +1017,23 @@
         const recActive = Boolean(s.field_recorder?.active);
         recBtn.classList.toggle("vermilion", recActive);
         recBtn.setAttribute("aria-pressed", recActive ? "true" : "false");
-        recBtn.textContent = recActive ? "黒箱記録: ON (保存中)" : "黒箱記録: OFF";
+        recBtn.textContent = recActive ? "セッション記録: ON (保存中)" : "セッション記録: OFF";
       }
     }
 
     // Mode [1] Cello View
     if (state.activeView === "cello") {
       updateActPills("cello-act-arc", actNum);
-      if ($("cello-chord-val")) $("cello-chord-val").textContent = primaryChord;
-      if ($("cello-chord-roman")) $("cello-chord-roman").textContent = intent.phrase_function || "i";
-      if ($("cello-key-tonal")) $("cello-key-tonal").textContent = `${intent.tonal_center || "Dm"} / Turn #${turnId}`;
-      if ($("cello-monologue") && intent.monologue_ja) $("cello-monologue").textContent = intent.monologue_ja;
+      if ($("cello-chord-val")) $("cello-chord-val").textContent = fmtChord(primaryChord);
+      if ($("cello-chord-roman")) $("cello-chord-roman").textContent = fmtFunc(intent.phrase_function || "i");
+      if ($("cello-key-tonal")) $("cello-key-tonal").textContent = `${fmtTonal(intent.tonal_center || "Dm")} / 第${turnId}ターン`;
+      if ($("cello-monologue") && intent.monologue_ja) $("cello-monologue").textContent = fmtMusic(intent.monologue_ja);
       if ($("cello-f0-val")) {
         const hz = p.f0_hz ? `${Number(p.f0_hz).toFixed(1)} Hz` : "-- Hz";
-        $("cello-f0-val").textContent = `${p.note_name || "--"} (${hz})`;
+        $("cello-f0-val").textContent = `${fmtNote(p.note_name || "--")} (${hz})`;
       }
       if ($("cello-art-val")) {
-        $("cello-art-val").textContent = `${p.articulation || "Cantabile"} / ${Math.round(p.vibrato_cents || 0)} ct`;
+        $("cello-art-val").textContent = `${fmtArt(p.articulation || "Cantabile")} / ${Math.round(p.vibrato_cents || 0)} ct`;
       }
       if ($("cello-erle-val")) {
         const erle = Number(p.nlms_erle_db || 0).toFixed(1);
@@ -1247,10 +1053,10 @@
     // Mode [2] Piano View
     if (state.activeView === "piano") {
       updateActPills("piano-act-arc", actNum);
-      if ($("piano-chord-val")) $("piano-chord-val").textContent = primaryChord;
-      if ($("piano-chord-roman")) $("piano-chord-roman").textContent = intent.phrase_function || "i";
-      if ($("piano-key-tonal")) $("piano-key-tonal").textContent = `${intent.tonal_center || "Dm"} / Turn #${turnId}`;
-      if ($("piano-monologue") && intent.monologue_ja) $("piano-monologue").textContent = intent.monologue_ja;
+      if ($("piano-chord-val")) $("piano-chord-val").textContent = fmtChord(primaryChord);
+      if ($("piano-chord-roman")) $("piano-chord-roman").textContent = fmtFunc(intent.phrase_function || "i");
+      if ($("piano-key-tonal")) $("piano-key-tonal").textContent = `${fmtTonal(intent.tonal_center || "Dm")} / 第${turnId}ターン`;
+      if ($("piano-monologue") && intent.monologue_ja) $("piano-monologue").textContent = fmtMusic(intent.monologue_ja);
       if ($("piano-echo-val")) $("piano-echo-val").textContent = `${p.echo_suppressed_count || 0} 音`;
       if ($("piano-voices-val")) $("piano-voices-val").textContent = `${out.active_voices || 0} / ${out.hard_limit || 30} 音`;
       if ($("piano-spec-val")) {
@@ -1288,12 +1094,13 @@
       error: "エラー発生",
     };
     const statusText = statusMap[ng.status] || ng.status || "待機中";
+    const engineLabel = fmtEngine(ng.active_backend || "auto");
     if ($("ng-status-pill")) {
-      $("ng-status-pill").textContent = `${statusText} / エンジン: ${ng.active_backend || "auto"}`;
+      $("ng-status-pill").textContent = `${statusText} / エンジン: ${engineLabel}`;
     }
     if ($("ng-metrics-sub")) {
       const ttft = ng.ttft_ms ? `${Math.round(ng.ttft_ms)} ms` : "-- ms";
-      $("ng-metrics-sub").textContent = `TTFT: ${ttft} / ${ng.bars_completed || 0} / ${ng.target_bars || 8} 小節`;
+      $("ng-metrics-sub").textContent = `初回応答: ${ttft} / ${ng.bars_completed || 0} / ${ng.target_bars || 8} 小節`;
     }
     const abcText = ng.abc_stream_text || ng.abc_text || ng.stream_text || "";
     if ($("ng-abc-console") && abcText) {
@@ -1306,26 +1113,34 @@
       if (Number(aud.beauty_score || 0) > 0) {
         $("ng-guard-summary").textContent = `音楽性監査 ${Number(aud.beauty_score).toFixed(1)}点 / 協和 ${Number(aud.consonance_score || 0).toFixed(0)}% / 平均${Number(aud.avg_polyphony || 0).toFixed(1)}声`;
       } else if (ng.guard_summary) {
-        $("ng-guard-summary").textContent = ng.guard_summary;
+        $("ng-guard-summary").textContent = fmtMusic(ng.guard_summary);
       }
     }
     if ($("ng-commentary")) {
       if (ng.commentary_ja) {
-        $("ng-commentary").textContent = ng.commentary_ja;
+        $("ng-commentary").textContent = fmtMusic(ng.commentary_ja);
       } else if (ng.status === "completed") {
-        $("ng-commentary").textContent = `${ng.bars_completed || 0}小節の一からの生成が完了（${ng.active_backend || "engine"} / 平均${Number(aud.avg_polyphony || 0).toFixed(1)}声部 / 監査 ${Number(aud.beauty_score || 0).toFixed(1)}点）。`;
+        $("ng-commentary").textContent = `${ng.bars_completed || 0}小節の一からの生成が完了（${engineLabel} / 平均${Number(aud.avg_polyphony || 0).toFixed(1)}声部 / 監査 ${Number(aud.beauty_score || 0).toFixed(1)}点）。`;
       } else if (ng.last_error) {
-        $("ng-commentary").textContent = `生成警告: ${ng.last_error}`;
+        $("ng-commentary").textContent = `生成警告: ${fmtMusic(ng.last_error)}`;
       }
     }
     const lastCurve = (arr, fallback) =>
       Array.isArray(arr) && arr.length > 0 ? Number(arr[arr.length - 1].val ?? arr[arr.length - 1].value ?? fallback) : Number(fallback ?? 0);
-    setPedalVisual("ng", lastCurve(ng.cc67_curve, ng.pedal_cc67), lastCurve(ng.cc64_curve, ng.pedal_cc64));
+    const p67 = lastCurve(ng.cc67_curve, ng.pedal_cc67);
+    const p64 = lastCurve(ng.cc64_curve, ng.pedal_cc64);
+    setPedalVisual("ng", p67, p64);
 
     const ngNotes = ng.events || ng.notes || [];
     if (state.activeView === "notagen") {
       renderGrandStaff($("canvas-notagen-hero"), ngNotes, {
         chords: ng.chord_timeline || [],
+        tonality: ng.tonality || ng.key_sig || "D_minor",
+        bpm: ng.bpm || 76,
+        cc64Curve: ng.cc64_curve || [],
+        cc67Curve: ng.cc67_curve || [],
+        pedalCc64: p64,
+        pedalCc67: p67,
         emptyText: "生成を開始すると、和声ガード済みの両手楽譜が1小節ずつリアルタイムに描画されます",
       });
     }
@@ -1354,12 +1169,13 @@
     const rootName = NOTE_NAMES[((root % 12) + 12) % 12] + "m";
     const nextTurn = (state.stage?.turn_id || 0) + 1;
     const nextAct = ((state.stage?.turn_id || 0) % 4) + 1;
-    const hNames = pitches.map(midiToName);
-    const monoMsg = `人間の入力モチーフ (${hNames.join("–")}) を検出し、${midiToName(bass)} バス支えと上声部 ${midiToName(third + 12)}–${midiToName(root + 14)} で応答。`;
+    const hNames = pitches.map((p) => fmtNote(midiToName(p)));
+    const monoMsg = `人間の入力モチーフ (${hNames.join("–")}) を検出し、${fmtNote(midiToName(bass))} バス支えと上声部 ${fmtNote(midiToName(third + 12))}–${fmtNote(midiToName(root + 14))} で応答。`;
     state.stage = {
       ...state.stage,
       mode: modeKey,
       turn_id: nextTurn,
+      turn_revision: nextTurn,
       perception: {
         ...state.stage?.perception,
         f0_hz: midiToFreq(pitches[pitches.length - 1]),
@@ -1388,7 +1204,7 @@
           label_ja: "案A — 4声和声応答",
           total_score: 0.954,
           adopted: true,
-          pitch_range_str: `${midiToName(bass)}–${midiToName(root + 14)}`,
+          pitch_range_str: `${fmtNote(midiToName(bass))}–${fmtNote(midiToName(root + 14))}`,
           beauty_summary: `採用: 入力モチーフの共通音を保持しつつ両手ポリフォニーで応答 (95.4%)`,
           events,
         },
@@ -1470,7 +1286,7 @@
       audio.playNote(midi, velocity, 0.7, { human: true, cc64: 64 });
     }
     if ($("piano-last-input")) {
-      $("piano-last-input").textContent = `人間の打鍵: ${midiToName(midi)} (vel ${velocity})`;
+      $("piano-last-input").textContent = `人間の打鍵: ${fmtNote(midiToName(midi))} (音量 ${velocity})`;
     }
     renderPianoKeyboard();
 
@@ -1627,10 +1443,10 @@
     const list = $("mixer-list");
     if (!list) return;
     const meta = [
-      { key: "human", name: "人間・主役動機", desc: "Human / Cello Motif (#A8C8E8)" },
-      { key: "melody", name: "AI 右手主旋律", desc: "Cantabile RH Soprano (#EAE6DF)" },
-      { key: "harmony", name: "AI 右手内声和音", desc: "Harmonic Voicing" },
-      { key: "bass", name: "AI 左手バス・対位", desc: "LH Bass / Arpeggio" },
+      { key: "human", name: "人間・主役動機", desc: "チェロ・人間演奏パート", swatch: "#A8C8E8" },
+      { key: "melody", name: "AI 右手主旋律", desc: "右手 カンタービレ主旋律", swatch: "#EAE6DF" },
+      { key: "harmony", name: "AI 右手内声和音", desc: "右手 内声ハーモニー", swatch: "#D8D3CA" },
+      { key: "bass", name: "AI 左手バス・対位", desc: "左手 バス・分散和音", swatch: "#B4AEA3" },
     ];
     list.innerHTML = "";
     meta.forEach((m) => {
@@ -1639,7 +1455,7 @@
       row.className = "mixer-row";
       row.innerHTML = `
         <div class="mixer-label">
-          <span class="mixer-name">${m.name}</span>
+          <span class="mixer-name"><span class="mixer-swatch" style="background:${m.swatch}" aria-hidden="true"></span>${m.name}</span>
           <span class="mixer-desc">${m.desc}</span>
         </div>
         <div class="mixer-btns">
@@ -1687,13 +1503,13 @@
       btn.setAttribute("data-piece-id", p.id);
       btn.innerHTML = `
         <div class="piece-item-top">
-          <span class="piece-id-tag">#${String(p.index).padStart(3, "0")} · ${p.mode === "cello" ? "チェロ" : "ピアノ"} · ${p.tonality_ja || p.tonality}</span>
+          <span class="piece-id-tag">#${String(p.index).padStart(3, "0")} · ${p.mode === "cello" ? "チェロ" : "ピアノ"} · ${p.tonality_ja || fmtTonal(p.tonality)}</span>
           ${p.showcase_mp3 ? '<span class="mp3-tag">MP3</span>' : ""}
         </div>
-        <div class="piece-title">${p.title_ja || p.title_en}</div>
+        <div class="piece-title">${fmtMusic(p.title_ja || p.title_en)}</div>
         <div class="piece-meta">
           <span>監査 ${Number(p.beauty_score || 0).toFixed(1)}点 / ${Number(p.avg_polyphony || 0).toFixed(1)}声</span>
-          <span>${Math.round(p.duration_s || 0)}s</span>
+          <span>${Math.round(p.duration_s || 0)}秒</span>
         </div>
       `;
       btn.addEventListener("click", () => selectLibraryPiece(p));
@@ -1704,7 +1520,7 @@
   function renderLibraryDeliberation(piece) {
     const delib = piece?.deliberation || {};
     if ($("delib-memo")) {
-      $("delib-memo").textContent = delib.monologue_ja || piece?.composer_note_ja || "監査メモはありません。";
+      $("delib-memo").textContent = fmtMusic(delib.monologue_ja || piece?.composer_note_ja || "監査メモはありません。");
     }
     const grid = $("delib-grid");
     if (!grid) return;
@@ -1712,6 +1528,15 @@
     const list = [];
     if (delib.adopted) list.push({ ...delib.adopted, isAdopted: true });
     (delib.rejected || []).forEach((r) => list.push({ ...r, isAdopted: false }));
+
+    const miniOpts = (cand, isAdopted) => ({
+      compact: true,
+      tonality: piece?.tonality || "D_minor",
+      bpm: piece?.bpm || 72,
+      chords: (piece?.chord_timeline || []).slice(0, 2),
+      rejected: !isAdopted,
+      rejectionReason: !isAdopted ? fmtMusic(cand?.tag_ja || "監査基準未達により棄却") : "",
+    });
 
     const slots = Array.from(grid.querySelectorAll(".cand-card"));
     if (slots.length >= 4) {
@@ -1721,14 +1546,14 @@
         card.className = `cand-card ${isAdopted ? "adopted" : "rejected"}`;
         const titleEl = card.querySelector(".cand-title");
         const tagEl = card.querySelector(".cand-tag");
-        const mc = card.querySelector("canvas");
+        const mc = card.querySelector(".mini-score-host") || card.querySelector(".mini-canvas");
         if (cand) {
-          if (titleEl) titleEl.textContent = cand.label_ja || `案${cand.id || idx + 1}`;
+          if (titleEl) titleEl.textContent = fmtMusic(fmtTexture(cand.label_ja || `案${cand.id || idx + 1}`));
           if (tagEl) {
             tagEl.className = `cand-tag ${isAdopted ? "ok" : ""}`;
-            tagEl.textContent = `${Number(cand.score || 0).toFixed(1)}点 · ${isAdopted ? "採用" : cand.tag_ja || "棄却"}`;
+            tagEl.textContent = `${Number(cand.score || 0).toFixed(1)}点 · ${isAdopted ? "採用" : fmtMusic(cand.tag_ja || "棄却")}`;
           }
-          if (mc) requestAnimationFrame(() => renderGrandStaff(mc, cand.notes || []));
+          if (mc) requestAnimationFrame(() => renderGrandStaff(mc, cand.notes || [], miniOpts(cand, isAdopted)));
         } else {
           if (titleEl) titleEl.textContent = `案${["A", "B", "C", "D"][idx]}`;
           if (tagEl) tagEl.textContent = "比較データなし";
@@ -1743,14 +1568,14 @@
       card.className = `cand-card ${cand.isAdopted ? "adopted" : "rejected"}`;
       card.innerHTML = `
         <div class="cand-head">
-          <span class="cand-title">${cand.label_ja || `案${cand.id}`}</span>
-          <span class="cand-tag ${cand.isAdopted ? "ok" : ""}">${Number(cand.score || 0).toFixed(1)}点 · ${cand.isAdopted ? "採用" : cand.tag_ja || "棄却"}</span>
+          <span class="cand-title">${fmtMusic(fmtTexture(cand.label_ja || `案${cand.id}`))}</span>
+          <span class="cand-tag ${cand.isAdopted ? "ok" : ""}">${Number(cand.score || 0).toFixed(1)}点 · ${cand.isAdopted ? "採用" : fmtMusic(cand.tag_ja || "棄却")}</span>
         </div>
-        <canvas class="mini-canvas"></canvas>
+        <div class="mini-canvas mini-score-host" role="img" aria-label="候補案の大譜表ミニプレビュー"></div>
       `;
       grid.appendChild(card);
-      const mc = card.querySelector("canvas");
-      requestAnimationFrame(() => renderGrandStaff(mc, cand.notes || []));
+      const mc = card.querySelector(".mini-score-host") || card.querySelector(".mini-canvas");
+      requestAnimationFrame(() => renderGrandStaff(mc, cand.notes || [], miniOpts(cand, cand.isAdopted)));
     });
   }
 
@@ -1764,9 +1589,9 @@
     const cur = tl[curIdx] || tl[0];
     const nxt = tl[curIdx + 1];
 
-    if ($("xray-chord")) $("xray-chord").textContent = cur ? cur.chord : "--";
-    if ($("xray-roman")) $("xray-roman").textContent = cur ? cur.roman : "";
-    if ($("xray-next")) $("xray-next").textContent = nxt ? `次: ${nxt.chord}` : "終止";
+    if ($("xray-chord")) $("xray-chord").textContent = cur ? fmtChord(cur.chord) : "--";
+    if ($("xray-roman")) $("xray-roman").textContent = cur ? fmtMusic(cur.roman) : "";
+    if ($("xray-next")) $("xray-next").textContent = nxt ? `次: ${fmtChord(nxt.chord)}` : "終止";
 
     const getValAt = (arr, t) => {
       let val = 0;
@@ -1778,7 +1603,7 @@
     };
     const p67 = getValAt(piece.cc67, sec);
     const p64 = getValAt(piece.cc64, sec);
-    if ($("xray-pedal")) $("xray-pedal").textContent = `左L(67)=${p67} · 右R(64)=${p64}`;
+    if ($("xray-pedal")) $("xray-pedal").textContent = `左ペダル(67)=${p67} · 右ペダル(64)=${p64}`;
     if ($("xray-pedals")) $("xray-pedals").textContent = `${p67} / ${p64}`;
 
     const activeNow = (piece.notes || []).filter((n) => sec >= n.t && sec <= n.t + n.d).length;
@@ -1789,13 +1614,15 @@
 
     const strip = $("chord-strip");
     if (strip && tl.length) {
-      if (strip.children.length !== Math.min(16, tl.length)) {
+      const pid = String(piece.id || "");
+      if (strip.dataset.pieceId !== pid || strip.children.length !== Math.min(16, tl.length)) {
+        strip.dataset.pieceId = pid;
         strip.innerHTML = "";
         tl.slice(0, 16).forEach((ch, idx) => {
           const chip = document.createElement("button");
           chip.type = "button";
           chip.className = "chord-chip";
-          chip.textContent = ch.chord;
+          chip.textContent = fmtChord(ch.chord);
           chip.dataset.idx = String(idx);
           chip.addEventListener("click", () => seekLibraryTo(ch.start_s));
           strip.appendChild(chip);
@@ -1840,7 +1667,7 @@
     audio.lastLevelDb = Math.max(-58, audio.lastLevelDb - 1.2);
     const vuPct = clamp(((audio.lastLevelDb + 58) / 58) * 100, 0, 100);
     if ($("vu-fill")) $("vu-fill").style.width = `${vuPct}%`;
-    if ($("vu-db")) $("vu-db").textContent = audio.lastLevelDb <= -55 ? "-inf dB" : `${audio.lastLevelDb.toFixed(0)} dB`;
+    if ($("vu-db")) $("vu-db").textContent = audio.lastLevelDb <= -55 ? "無音" : `${audio.lastLevelDb.toFixed(0)} dB`;
 
     const winStart = Math.max(0, clamped - 3.0);
     const winEnd = Math.min(dur, winStart + 9.5);
@@ -1848,6 +1675,10 @@
       winStart,
       winEnd,
       playheadSec: clamped,
+      tonality: piece.tonality || "D_minor",
+      bpm: piece.bpm || 72,
+      cc64Curve: piece.cc64 || [],
+      cc67Curve: piece.cc67 || [],
       chords: piece.chord_timeline || [],
     });
     renderLibraryXray(piece, clamped);
@@ -1948,11 +1779,11 @@
     state.libCursorSec = 0;
     if ($("audit-bars")) delete $("audit-bars").dataset.renderedForId;
 
-    if ($("work-title")) $("work-title").textContent = piece.title_ja || piece.title_en || meta.id;
+    if ($("work-title")) $("work-title").textContent = fmtMusic(piece.title_ja || piece.title_en || meta.id);
     if ($("work-subtitle")) {
-      $("work-subtitle").textContent = `#${meta.id} · ${piece.mode_label_ja || piece.mode} · BPM ${piece.bpm || 72} · ${piece.tonality_ja || piece.tonality}`;
+      $("work-subtitle").textContent = `第${meta.index || piece.index || ""}番 · ${piece.mode_label_ja || (piece.mode === "cello" ? "チェロ × ピアノ共演" : "ピアノ × ピアノ共演")} · テンポ ${piece.bpm || 72} · ${piece.tonality_ja || fmtTonal(piece.tonality)}`;
     }
-    if ($("composer-note")) $("composer-note").textContent = piece.composer_note_ja || "";
+    if ($("composer-note")) $("composer-note").textContent = fmtMusic(piece.composer_note_ja || "");
 
     const mp3Name = String(piece.showcase_mp3 || meta.showcase_mp3 || "").replace(/^.*[/\\]/, "");
     const mp3El = $("mp3-player");
@@ -1988,7 +1819,7 @@
       styles.forEach((st) => {
         const opt = document.createElement("option");
         opt.value = st;
-        opt.textContent = STYLE_LABELS[st] || st;
+        opt.textContent = STYLE_LABELS[st] || fmtTexture(st);
         styleSel.appendChild(opt);
       });
     }
@@ -2076,6 +1907,12 @@
       ws.onmessage = (ev) => {
         try {
           const data = JSON.parse(ev.data);
+          if (!state.hasLiveSync) {
+            state.hasLiveSync = true;
+            state.lastTurnRevision = -999;
+            state.userPinnedCand.cello = null;
+            state.userPinnedCand.piano = null;
+          }
           state.stage = data;
           renderStageViews();
         } catch (_) {}
@@ -2095,6 +1932,12 @@
 
     fetchJson("/api/stage/state").then((data) => {
       if (data) {
+        if (!state.hasLiveSync) {
+          state.hasLiveSync = true;
+          state.lastTurnRevision = -999;
+          state.userPinnedCand.cello = null;
+          state.userPinnedCand.piano = null;
+        }
         state.stage = data;
         renderStageViews();
       }
@@ -2445,7 +2288,12 @@
 
     $("score-canvas")?.addEventListener("click", (e) => {
       if (!state.pieceData) return;
-      const rect = e.target.getBoundingClientRect();
+      const mapped = window.DisklavierScoreEngraver?.xToTime?.($("score-canvas"), e.clientX);
+      if (mapped != null && Number.isFinite(mapped)) {
+        seekLibraryTo(mapped);
+        return;
+      }
+      const rect = $("score-canvas").getBoundingClientRect();
       const dur = Number(state.pieceData.duration_s || 45);
       const winStart = Math.max(0, state.libCursorSec - 3.0);
       const winEnd = Math.min(dur, winStart + 9.5);
@@ -2526,11 +2374,15 @@
       }
     });
 
+    let resizeTimer = null;
     window.addEventListener("resize", () => {
       syncMobileAccordions();
-      renderStageViews();
-      if (state.activeView === "library") renderLibraryFrame(state.libCursorSec);
-      if (state.activeView === "piano") renderPianoKeyboard();
+      clearTimeout(resizeTimer);
+      resizeTimer = setTimeout(() => {
+        renderStageViews();
+        if (state.activeView === "library") renderLibraryFrame(state.libCursorSec);
+        if (state.activeView === "piano") renderPianoKeyboard();
+      }, 120);
     });
   }
 

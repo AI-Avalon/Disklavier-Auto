@@ -477,15 +477,29 @@
     /* Zone C: Hero Grand Staff + 4 Summary/Rejection Cards */
     .hero-staff-box {
       width: 100%;
-      height: 310px;
+      min-height: 300px;
       border: none;
       border-bottom: 1px solid var(--rule-strong);
       background-color: var(--bg-stage);
+      overflow: hidden;
     }
-    .hero-staff-box canvas {
+    .stage-shell.projection-clean .hero-staff-box {
+      background-color: var(--bg-projection);
+    }
+    .vex-score-host,
+    .vex-score-host svg {
       width: 100%;
-      height: 100%;
       display: block;
+    }
+    .stage-brand,
+    .act-pill,
+    .monologue-box,
+    .panel-title,
+    .cand-top,
+    .cand-card,
+    .chord-val {
+      font-variant-numeric: lining-nums tabular-nums;
+      font-feature-settings: "lnum" 1, "tnum" 1;
     }
 
     .cand-summary-grid {
@@ -634,8 +648,10 @@
 
     @media (max-width: 768px) {
       .stage-shell { padding: 10px 12px 24px; gap: 14px; }
+      .stage-shell.projection-clean { padding-top: 64px; }
+      .stage-shell.projection-clean .zone-a-top { padding-right: 0; }
       .metric-tiles, .cand-summary-grid, .trace-grid { grid-template-columns: 1fr; }
-      .hero-staff-box { height: 220px; }
+      .hero-staff-box { min-height: 260px; }
       .monologue-box { font-size: 18px; }
       .ctrl-group .btn, .ctrl-group .field { width: 100%; }
     }
@@ -650,17 +666,17 @@
     <header class="control-bar" id="control-bar">
       <div class="ctrl-group">
         <span class="stage-brand">DISKLAVIER STAGE HUD</span>
-        <a class="btn compact" href="/studio">Studio 4モード画面へ</a>
-        <button class="btn compact active" id="btn-mode-cello" type="button">[B] チェロ対話</button>
-        <button class="btn compact" id="btn-mode-piano" type="button">[A] ピアノ対話</button>
+        <a class="btn compact" href="/studio">スタジオ画面へ</a>
+        <button class="btn compact active" id="btn-mode-cello" type="button">[1] チェロ対話</button>
+        <button class="btn compact" id="btn-mode-piano" type="button">[2] ピアノ対話</button>
       </div>
       <div class="ctrl-group">
         <button class="btn primary-fill" id="btn-demo-toggle" type="button">デモ開始</button>
         <button class="btn compact active" id="btn-audio-toggle" type="button">PC音声: ON</button>
         <button class="btn compact" id="btn-turn-now" type="button">今すぐ応答生成</button>
-        <button class="btn compact" id="btn-retake" type="button">別解釈 (Retake)</button>
-        <button class="btn compact" id="btn-calibrate" type="button">較正</button>
-        <button class="btn compact" id="btn-reset" type="button">第1幕へ</button>
+        <button class="btn compact" id="btn-retake" type="button">別解釈で再生成</button>
+        <button class="btn compact" id="btn-calibrate" type="button">エコー較正</button>
+        <button class="btn compact" id="btn-reset" type="button">第1幕へ戻る</button>
         <button class="btn compact" id="btn-f10-toggle" type="button">舞台投影モード (F10)</button>
         <button class="btn compact vermilion" id="btn-panic" type="button">PANIC 全消音</button>
       </div>
@@ -678,8 +694,8 @@
         </div>
         <div class="chord-readout">
           <span class="chord-val" id="chord-val">Dm</span>
-          <span class="chord-roman" id="chord-roman">i</span>
-          <span class="turn-meta" id="turn-meta">Turn #0 · 6並列稼働</span>
+          <span class="chord-roman" id="chord-roman">半終止（問いかけ）</span>
+          <span class="turn-meta" id="turn-meta">第0ターン · 6並列稼働</span>
         </div>
       </div>
       <div class="monologue-box" id="monologue-text">舞台待機中。デモ開始またはチェロ・ピアノの実演奏入力を検知すると、作曲根拠メモと四声大譜表が即時更新されます。</div>
@@ -717,7 +733,7 @@
         <div class="pedal-pair" aria-label="物理ペダル配置: 左 UNA CORDA / 右 DAMPER">
           <div class="pedal-card">
             <div class="pedal-head">
-              <span>UNA CORDA (L / CC#67)</span>
+              <span>左ペダル UNA CORDA (CC#67)</span>
               <strong id="hud-p67-val">0</strong>
             </div>
             <div class="pedal-track">
@@ -727,7 +743,7 @@
           </div>
           <div class="pedal-card">
             <div class="pedal-head">
-              <span>DAMPER (R / CC#64)</span>
+              <span>右ペダル DAMPER (CC#64)</span>
               <strong id="hud-p64-val">0</strong>
             </div>
             <div class="pedal-track">
@@ -751,7 +767,7 @@
 
         <div id="panel-hud-arena" role="tabpanel" aria-labelledby="tab-hud-arena">
           <div class="hero-staff-box">
-            <canvas id="staff-hero"></canvas>
+            <div class="vex-score-host" id="staff-hero" aria-label="リアルタイム大譜表"></div>
           </div>
 
           <div class="cand-summary-grid">
@@ -778,15 +794,15 @@
           <div class="trace-grid">
             <div class="trace-stage">
               <div class="trace-stage-head">
-                <span class="trace-stage-code">1. L1_PERCEPTION</span>
+                <span class="trace-stage-code">1. 音響・打鍵知覚</span>
                 <span class="trace-stage-meta" id="hud-tr-l1-meta">待機中</span>
               </div>
               <div class="trace-stage-body" id="hud-tr-l1-body">音名・F0・コード・奏法・呼吸検知を待機しています。</div>
-              <div class="trace-stage-sub" id="hud-tr-l1-sub">NLMS ERLE: -- dB</div>
+              <div class="trace-stage-sub" id="hud-tr-l1-sub">NLMS エコー抑圧: -- dB</div>
             </div>
             <div class="trace-stage">
               <div class="trace-stage-head">
-                <span class="trace-stage-code">2. TOKEN_ECON</span>
+                <span class="trace-stage-code">2. 文脈トークン圧縮</span>
                 <span class="trace-stage-meta" id="hud-tr-tok-meta">-- → -- tok</span>
               </div>
               <div class="trace-stage-body" id="hud-tr-tok-body">圧縮文脈はターン実行後に表示されます。</div>
@@ -794,7 +810,7 @@
             </div>
             <div class="trace-stage full-span">
               <div class="trace-stage-head">
-                <span class="trace-stage-code">3. L2_LOGIC_CHAIN</span>
+                <span class="trace-stage-code">3. 和声・声部設計</span>
                 <span class="trace-stage-meta" id="hud-tr-l2-meta">第1幕 / --</span>
               </div>
               <div class="trace-stage-body" id="hud-tr-l2-body">音楽的仮説（声部・和声機能・ペダル方針）はターン後に記録されます。</div>
@@ -802,7 +818,7 @@
             </div>
             <div class="trace-stage full-span">
               <div class="trace-stage-head">
-                <span class="trace-stage-code">4. L3_CANDIDATES</span>
+                <span class="trace-stage-code">4. 4候補並列採点</span>
                 <span class="trace-stage-meta" id="hud-tr-l3-meta">4候補並列比較</span>
               </div>
               <div class="trace-cand-list">
@@ -814,7 +830,7 @@
             </div>
             <div class="trace-stage">
               <div class="trace-stage-head">
-                <span class="trace-stage-code">5. REALIZER_DIFF</span>
+                <span class="trace-stage-code">5. 和声リアライザー補正</span>
                 <span class="trace-stage-meta" id="hud-tr-rz-meta">単音・不協和音補正</span>
               </div>
               <div class="trace-stage-body" id="hud-tr-rz-body">和声リアライザー差分を待機しています。</div>
@@ -822,7 +838,7 @@
             </div>
             <div class="trace-stage">
               <div class="trace-stage-head">
-                <span class="trace-stage-code">6. TIMING_BUDGET</span>
+                <span class="trace-stage-code">6. 応答レイテンシ内訳</span>
                 <span class="trace-stage-meta" id="hud-tr-tm-meta">合計 -- ms</span>
               </div>
               <div class="trace-stage-body" id="hud-tr-tm-body">知覚 / RTT / GPU推論 / 先読み補正の内訳</div>
@@ -839,28 +855,28 @@
         <label class="sr-only" for="sel-preset">演奏解釈プリセット</label>
         <span class="sub-mono" aria-hidden="true">演奏解釈プリセット:</span>
         <select class="field" id="sel-preset" aria-label="演奏解釈プリセット">
-          <option value="cello_low_legato">チェロ低音レガート・静的Cantabile</option>
+          <option value="cello_low_legato">チェロ低音レガート・静的カンタービレ</option>
           <option value="cello_leap_spiccato">チェロ跳躍スピッカート・対位法</option>
           <option value="piano_chromatic_cadence">ピアノ半音階終止・半ペダル</option>
           <option value="overtone_mud_clearance">中音域倍音クリアランス・透明声部</option>
         </select>
         <label class="sr-only" for="sel-hud-hybrid">推論接続モード</label>
         <select class="field" id="sel-hud-hybrid" aria-label="推論接続モード">
-          <option value="AUTO">AUTO: RTX優先→Mac退避</option>
-          <option value="REMOTE_RTX_ONLY">REMOTE RTX のみ</option>
-          <option value="MAC_LOCAL_ONLY">MAC LOCAL のみ</option>
+          <option value="AUTO">自動切替（自宅RTX優先 → Mac退避）</option>
+          <option value="REMOTE_RTX_ONLY">自宅RTX 3070 のみ</option>
+          <option value="MAC_LOCAL_ONLY">会場Macローカルのみ</option>
         </select>
-        <button class="btn compact" id="btn-save-work" type="button">作品を保存 (WAV/MP3/XML)</button>
+        <button class="btn compact" id="btn-save-work" type="button">作品を保存 (MP3/MIDI/XML)</button>
       </div>
-      <span class="sub-mono" id="hud-hybrid-status">推論: Macローカル · RTT 0.0 ms</span>
-      <span class="sub-mono" id="hud-save-status">Obsidian / 楽譜出力対応</span>
+      <span class="sub-mono" id="hud-hybrid-status">推論: 会場Macローカル · RTT 0.0 ms</span>
+      <span class="sub-mono" id="hud-save-status">自動演奏譜・音声保存対応</span>
     </section>
 
     <!-- Zone D2: Live Japanese Directive & VRAM Telemetry Arena -->
     <section class="meta-arena" id="meta-arena">
       <div class="ctrl-group" style="flex:1;min-width:260px;">
-        <label class="sr-only" for="inp-directive">口頭・テキスト演奏指示</label>
-        <input class="field" id="inp-directive" type="text" placeholder="口頭/テキスト演奏指示（例：左手をもっと静かに、左ペダルを深めに）" style="flex:1;min-width:220px;" />
+        <label class="sr-only" for="inp-directive">演奏への指示</label>
+        <input class="field" id="inp-directive" type="text" placeholder="演奏への指示（例：左手をもっと静かに、左ペダルを深めに）" style="flex:1;min-width:220px;" />
         <button class="btn" id="btn-directive-send" type="button">指示を反映</button>
       </div>
       <span class="sub-mono" id="hud-vram">RTX 3070 VRAM: -- / 8.0 GB · 同時発音: 0 / 30 音</span>
@@ -868,12 +884,16 @@
     </main>
   </div>
 
+  <script src="/studio-static/vexflow-bravura.js"></script>
+  <script src="/studio-static/score_engraver.js"></script>
   <script>
     (() => {
       "use strict";
       const $ = (id) => document.getElementById(id);
+      const Eng = () => window.DisklavierScoreEngraver;
       let latestState = null;
       let inspectedCid = null;
+      let lastTurnRevision = -1;
       let projClean = false;
 
       function postJson(url, body = {}) {
@@ -884,152 +904,53 @@
         }).catch(() => null);
       }
 
-      function pitchToDiatonic(midi) {
-        const steps = [0, 0, 1, 1, 2, 3, 3, 4, 4, 5, 5, 6];
-        const m = Math.round(midi);
-        return (Math.floor(m / 12) - 1) * 7 + steps[((m % 12) + 12) % 12];
-      }
-
-      const _bgCache = new WeakMap();
-      function getStaffBg(canvas, width, height, dpr, bgHex) {
-        const key = `${width}x${height}x${dpr}x${bgHex}`;
-        const prev = _bgCache.get(canvas);
-        if (prev && prev.key === key) return prev.off;
-        const off = document.createElement("canvas");
-        off.width = Math.floor(width * dpr);
-        off.height = Math.floor(height * dpr);
-        const octx = off.getContext("2d");
-        octx.setTransform(dpr, 0, 0, dpr, 0, 0);
-        octx.fillStyle = bgHex;
-        octx.fillRect(0, 0, width, height);
-
-        const padLeft = 56;
-        const padRight = 24;
-        const trebleBaseY = Math.round(height * 0.46);
-        const bassBaseY = Math.round(height * 0.85);
-        const stepPx = Math.max(4.4, Math.min(6.0, height / 50));
-
-        octx.strokeStyle = "#484B53";
-        octx.lineWidth = 1;
-        for (let i = 0; i < 5; i++) {
-          const yt = trebleBaseY - i * 2 * stepPx;
-          octx.beginPath();
-          octx.moveTo(padLeft - 12, yt);
-          octx.lineTo(width - padRight, yt);
-          octx.stroke();
-
-          const yb = bassBaseY - i * 2 * stepPx;
-          octx.beginPath();
-          octx.moveTo(padLeft - 12, yb);
-          octx.lineTo(width - padRight, yb);
-          octx.stroke();
-        }
-        octx.strokeStyle = "#6C707A";
-        octx.lineWidth = 2;
-        octx.beginPath();
-        octx.moveTo(padLeft - 12, trebleBaseY - 8 * stepPx);
-        octx.lineTo(padLeft - 12, bassBaseY);
-        octx.stroke();
-
-        octx.fillStyle = "#B0ACA4";
-        octx.font = "600 14px serif";
-        octx.fillText("G", 20, trebleBaseY - stepPx);
-        octx.fillText("F", 20, bassBaseY - 5 * stepPx);
-        _bgCache.set(canvas, { key, off });
-        return off;
-      }
-
-      function drawHeroStaff(events, chords) {
-        const canvas = $("staff-hero");
-        if (!canvas) return;
-        const rect = canvas.getBoundingClientRect();
-        if (rect.width < 20 || rect.height < 20) return;
-        const dpr = Math.min(window.devicePixelRatio || 1, 2);
-        const w = Math.floor(rect.width * dpr);
-        const h = Math.floor(rect.height * dpr);
-        if (canvas.width !== w || canvas.height !== h) {
-          canvas.width = w;
-          canvas.height = h;
-        }
-        const width = rect.width;
-        const height = rect.height;
-        const bgHex = projClean ? "#141517" : "#1C1D20";
-        const ctx = canvas.getContext("2d");
-        const bg = getStaffBg(canvas, width, height, dpr, bgHex);
-        ctx.setTransform(1, 0, 0, 1, 0, 0);
-        ctx.drawImage(bg, 0, 0);
-        ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
-
-        const padLeft = 56;
-        const padRight = 24;
-        const usableW = Math.max(80, width - padLeft - padRight);
-        const trebleBaseY = Math.round(height * 0.46);
-        const bassBaseY = Math.round(height * 0.85);
-        const stepPx = Math.max(4.4, Math.min(6.0, height / 50));
-
-        const notes = (events || []).map((e) => ({
-          p: Number(e.pitch ?? e.p ?? 60),
-          t: Number(e.onset_s ?? e.t ?? 0),
-          d: Math.max(0.1, Number(e.duration_s ?? e.d ?? 0.5)),
-          h: String(e.hand ?? e.h ?? "rh"),
-        }));
-        const minT = notes.length ? Math.min(...notes.map((n) => n.t)) : 0;
-        const maxT = notes.length ? Math.max(minT + 3.2, ...notes.map((n) => n.t + n.d)) : 4;
-        const span = Math.max(1.2, maxT - minT);
-
-        if (Array.isArray(chords) && chords.length) {
-          ctx.fillStyle = "#C6C1B8";
-          ctx.font = '600 14px "Cascadia Mono", monospace';
-          chords.slice(0, 6).forEach((ch, idx) => {
-            const cx = padLeft + (idx / Math.max(1, Math.min(6, chords.length))) * usableW;
-            ctx.fillText(String(ch), cx + 4, 16);
-          });
-        }
-
-        notes.forEach((n) => {
-          const x = padLeft + ((n.t - minT) / span) * usableW;
-          const tail = Math.max(8, (n.d / span) * usableW);
-          const treble = n.h === "rh" || (n.h !== "lh" && n.p >= 60);
-          const ref = treble ? 30 : 18;
-          const baseY = treble ? trebleBaseY : bassBaseY;
-          const delta = Math.max(-7, Math.min(13, pitchToDiatonic(n.p) - ref));
-          const y = baseY - delta * stepPx;
-
-          const color = n.h === "human" ? "#A8C8E8" : n.h === "lh" ? "#D0CBC2" : "#EAE6DF";
-          ctx.fillStyle = n.h === "human" ? "rgba(168, 200, 232, 0.25)" : "rgba(234, 230, 223, 0.16)";
-          ctx.fillRect(x, y - stepPx * 0.4, tail, stepPx * 0.8);
-          ctx.fillStyle = color;
-          ctx.beginPath();
-          ctx.ellipse(x + 4, y, stepPx * 0.95, stepPx * 0.7, -0.22, 0, Math.PI * 2);
-          ctx.fill();
+      function drawHeroStaff(shown, intent, out) {
+        const host = $("staff-hero");
+        if (!host || !Eng()) return;
+        const chords = (intent?.chord_progression || []).map((c) => ({ chord: c }));
+        Eng().renderGrandStaff(host, shown?.events || [], {
+          tonality: intent?.tonal_center || "D_minor",
+          chords,
+          cc64Curve: shown?.pedal_cc64_curve || out?.pedal_cc64_curve || [],
+          cc67Curve: shown?.pedal_cc67_curve || out?.pedal_cc67_curve || [],
+          pedalCc64: out?.pedal_cc64,
+          pedalCc67: out?.pedal_cc67,
+          rejected: Boolean(shown && !shown.adopted),
+          rejectionReason: shown && !shown.adopted ? formatCandReason(shown) : "",
+          problemNoteIndices: shown?.problem_note_indices || [],
+          projectionClean: projClean,
+          emptyText: "音符・フレーズの生成を待機しています...",
         });
       }
 
       function formatCandReason(cand) {
+        const E = Eng();
         if (!cand) return "比較待機中";
         if (cand.adopted) {
           const bs = cand.beauty_summary;
           if (bs && typeof bs === "object") {
-            if (bs.summary_ja) return String(bs.summary_ja);
+            if (bs.summary_ja) return E ? E.formatMusicText(String(bs.summary_ja)) : String(bs.summary_ja);
             const cons = Math.round(Number(bs.consonance_score ?? 0));
             const poly = Number(bs.avg_polyphony ?? 0).toFixed(1);
             const mono = Number(bs.mono_ratio_pct ?? 0).toFixed(1);
             return `採用: 協和 ${cons}% / 平均${poly}声 / 単音${mono}%`;
           }
-          return String(bs || "採用（両手声部連結・ペダル監査通過）");
+          return E ? E.formatMusicText(String(bs || "採用（両手声部連結・ペダル監査通過）")) : String(bs || "採用（両手声部連結・ペダル監査通過）");
         }
-        return String(cand.rejection_tag_ja || cand.rejection_detail || "スコア基準未達により棄却");
+        const raw = String(cand.rejection_tag_ja || cand.rejection_detail || "スコア基準未達により棄却");
+        return E ? E.formatMusicText(raw) : raw;
       }
 
       function formatBackendLabel(backend, failoverActive = false) {
         const b = String(backend || "mac_local");
         if (b === "remote_rtx") return "自宅RTX 3070 (外部)";
-        if (b === "mac_local_failover" || failoverActive) return "Macローカル退避中";
-        return "Macローカル";
+        if (b === "mac_local_failover" || failoverActive) return "会場Mac退避中";
+        return "会場Macローカル";
       }
 
       function renderHudLogicTrace(trace) {
         if (!trace || typeof trace !== "object") return;
+        const E = Eng();
         const l1 = trace.L1_PERCEPTION || {};
         const tok = trace.TOKEN_ECON || {};
         const l2 = trace.L2_LOGIC_CHAIN || {};
@@ -1042,25 +963,42 @@
           if (el && val != null) el.textContent = String(val);
         };
 
-        setTxt("hud-tr-l1-meta", `${l1.note_name || "--"} (${Number(l1.f0_hz || 0).toFixed(1)} Hz) · ${l1.detected_chord || "--"}`);
-        const hNotes = Array.isArray(l1.human_notes_pitches) && l1.human_notes_pitches.length ? l1.human_notes_pitches.join("→") : "--";
+        const noteTxt = E ? E.formatNoteName(l1.note_name || "--") : (l1.note_name || "--");
+        const detChord = E ? E.formatChordSymbol(l1.detected_chord || "--") : (l1.detected_chord || "--");
+        setTxt("hud-tr-l1-meta", `${noteTxt} (${Number(l1.f0_hz || 0).toFixed(1)} Hz) · ${detChord}`);
+        const hNotes = Array.isArray(l1.human_notes_pitches) && l1.human_notes_pitches.length
+          ? l1.human_notes_pitches.map((n) => (E ? E.formatNoteName(n) : n)).join("→")
+          : "--";
+        const artJa = E ? E.formatArticulationJa(l1.articulation) : (l1.articulation || "--");
+        const reasonJa = E ? E.formatTurnReasonJa(l1.turn_reason) : (l1.turn_reason || "--");
         setTxt(
           "hud-tr-l1-body",
-          `検出動機: ${hNotes} / 奏法: ${l1.articulation || "--"} (Vib ${Math.round(l1.vibrato_cents || 0)} ct) / 呼吸: ${Math.round(Number(l1.breath_gauge || 0) * 100)}% (${l1.turn_reason || "--"})`
+          `検出動機: ${hNotes} / 奏法: ${artJa} (ビブラート ${Math.round(l1.vibrato_cents || 0)} ct) / 呼吸: ${Math.round(Number(l1.breath_gauge || 0) * 100)}% (${reasonJa})`
         );
-        setTxt("hud-tr-l1-sub", `NLMS ERLE: +${Number(l1.nlms_erle_db || 0).toFixed(1)} dB / 自己打鍵抑制: ${l1.echo_suppressed_count || 0}件`);
+        setTxt("hud-tr-l1-sub", `NLMS エコー抑圧: +${Number(l1.nlms_erle_db || 0).toFixed(1)} dB / 自己打鍵抑制: ${l1.echo_suppressed_count || 0}件`);
 
         const rawTok = Number(tok.raw_tokens_est || 0);
         const compTok = Number(tok.compressed_tokens_est || 0);
         setTxt("hud-tr-tok-meta", `${rawTok} → ${compTok} tok`);
-        setTxt("hud-tr-tok-body", tok.compact_context_preview || "圧縮文脈なし");
+        setTxt("hud-tr-tok-body", E ? E.formatCompactContextJa(tok.compact_context_preview) : (tok.compact_context_preview || "圧縮文脈なし"));
         setTxt("hud-tr-tok-sub", `節約トークン: ${tok.tokens_saved || Math.max(0, rawTok - compTok)} tok (${Number(tok.compression_ratio_pct || 0).toFixed(1)}% 削減)`);
 
-        setTxt("hud-tr-l2-meta", `${l2.act_label_ja || `第${l2.act_number || 1}幕`} / ${l2.tonal_center || "--"} (${l2.llm_source || "rule"})`);
-        setTxt("hud-tr-l2-body", l2.hypothesis_ja || l2.monologue_ja || "仮説生成待機中");
+        const tonJa = E ? E.formatTonalityJa(l2.tonal_center) : (l2.tonal_center || "--");
+        const engJa = E ? E.formatEngineJa(l2.llm_source || "rule_fallback") : (l2.llm_source || "規則");
+        setTxt("hud-tr-l2-meta", `${l2.act_label_ja || `第${l2.act_number || 1}幕`} / ${tonJa} (${engJa})`);
+        const hypRaw = l2.hypothesis_ja || l2.monologue_ja || "仮説生成待機中";
+        const hypClean = E
+          ? E.formatMusicText(hypRaw)
+              .replace(String(l2.tonal_center || ""), tonJa)
+              .replace(String(l2.interaction_stance || ""), E.formatStanceJa(l2.interaction_stance))
+              .replace(String(l2.voicing_structure || ""), E.formatVoicingJa(l2.voicing_structure))
+              .replace(String(l2.pedal_strategy || ""), E.formatPedalStrategyJa(l2.pedal_strategy))
+          : hypRaw;
+        setTxt("hud-tr-l2-body", hypClean);
         const cc64 = Array.isArray(l2.damper_cc64_plan) && l2.damper_cc64_plan.length ? l2.damper_cc64_plan.join("/") : "--";
         const cc67 = Array.isArray(l2.una_corda_cc67_plan) && l2.una_corda_cc67_plan.length ? l2.una_corda_cc67_plan.join("/") : "--";
-        setTxt("hud-tr-l2-sub", `方針: ${l2.pedal_strategy || "--"} · CC#67=[${cc67}] · CC#64=[${cc64}]`);
+        const pedStratJa = E ? E.formatPedalStrategyJa(l2.pedal_strategy) : (l2.pedal_strategy || "--");
+        setTxt("hud-tr-l2-sub", `方針: ${pedStratJa} · CC#67=[${cc67}] · CC#64=[${cc64}]`);
 
         const adoptedCand = cands.find((c) => c.adopted) || cands[0];
         setTxt(
@@ -1078,11 +1016,12 @@
           }
           const sc = item.scores || {};
           row.classList.toggle("adopted", Boolean(item.adopted));
-          row.textContent = `案${cid} (${Number(item.total_score_pct || 0).toFixed(1)}%) [協和${sc.consonance_pct ?? "--"} / 多声${sc.polyphony_pct ?? "--"} / 歌唱${sc.cantabile_pct ?? "--"} / ペダル${sc.pedal_sync_pct ?? "--"}] — ${item.rejection_reason_ja || ""}`;
+          const rTxt = E ? E.formatMusicText(item.rejection_reason_ja || "") : (item.rejection_reason_ja || "");
+          row.textContent = `案${cid} (${Number(item.total_score_pct || 0).toFixed(1)}%) [協和${sc.consonance_pct ?? "--"} / 多声${sc.polyphony_pct ?? "--"} / 歌唱${sc.cantabile_pct ?? "--"} / ペダル${sc.pedal_sync_pct ?? "--"}] — ${rTxt}`;
         });
 
         setTxt("hud-tr-rz-meta", `単音補正 ${Number(rz.mono_gaps_fixed_pct || 0).toFixed(1)}% · 衝突解除 ${rz.dissonances_resolved || 0}件`);
-        setTxt("hud-tr-rz-body", rz.summary_ja || "単音抜け・不協和音 0件");
+        setTxt("hud-tr-rz-body", E ? E.formatMusicText(rz.summary_ja || "単音抜け・不協和音 0件") : (rz.summary_ja || "単音抜け・不協和音 0件"));
         setTxt("hud-tr-rz-sub", `音符 ${rz.raw_note_count || 0}→${rz.realized_note_count || 0} / 単音率 ${Number(rz.monophonic_gaps_before_pct || 0).toFixed(1)}%→${Number(rz.monophonic_gaps_after_pct || 0).toFixed(1)}% / ペダル補完 +${rz.pedal_events_added || 0}点`);
 
         setTxt("hud-tr-tm-meta", `合計 ${Number(tm.total_response_ms || 0).toFixed(1)} ms`);
@@ -1095,6 +1034,7 @@
 
       function renderState(s) {
         if (!s) return;
+        const E = Eng();
         latestState = s;
         const intent = s.intent || {};
         const p = s.perception || {};
@@ -1108,10 +1048,13 @@
         });
 
         const chords = intent.chord_progression || [];
-        if ($("chord-val")) $("chord-val").textContent = chords[0] || intent.tonal_center || "Dm";
-        if ($("chord-roman")) $("chord-roman").textContent = intent.phrase_function || "i";
-        if ($("turn-meta")) $("turn-meta").textContent = `Turn #${s.turn_id || 0} · ${th.active_workers || 6}/${th.total_workers || 6} 並列稼働`;
-        if ($("monologue-text") && intent.monologue_ja) $("monologue-text").textContent = intent.monologue_ja;
+        const mainChord = chords[0] || intent.tonal_center || "Dm";
+        if ($("chord-val")) $("chord-val").textContent = E ? E.formatChordSymbol(mainChord) : mainChord;
+        if ($("chord-roman")) $("chord-roman").textContent = E ? E.formatPhraseFunctionJa(intent.phrase_function) : (intent.phrase_function || "半終止");
+        if ($("turn-meta")) $("turn-meta").textContent = `第${s.turn_id || 0}ターン · ${th.active_workers || 6}/${th.total_workers || 6} 並列稼働`;
+        if ($("monologue-text") && intent.monologue_ja) {
+          $("monologue-text").textContent = E ? E.formatMusicText(intent.monologue_ja) : intent.monologue_ja;
+        }
 
         const isCello = s.mode !== "piano";
         $("btn-mode-cello")?.classList.toggle("active", isCello);
@@ -1123,7 +1066,8 @@
 
         if ($("hud-f0")) {
           const hz = p.f0_hz ? `${Number(p.f0_hz).toFixed(1)} Hz` : "-- Hz";
-          $("hud-f0").textContent = `${p.note_name || "--"} (${hz})`;
+          const nn = E ? E.formatNoteName(p.note_name || "--") : (p.note_name || "--");
+          $("hud-f0").textContent = `${nn} (${hz})`;
         }
         if ($("hud-erle")) $("hud-erle").textContent = `+${Number(p.nlms_erle_db || 0).toFixed(1)} dB`;
         if ($("hud-latency")) {
@@ -1157,7 +1101,9 @@
 
         const cands = s.candidates || [];
         const adopted = cands.find((c) => c.adopted) || cands[0];
-        if (!inspectedCid || !cands.some((c) => c.candidate_id === inspectedCid)) {
+        const rev = Number(s.turn_revision ?? s.turn_id ?? 0);
+        if (rev !== lastTurnRevision || !inspectedCid || !cands.some((c) => c.candidate_id === inspectedCid)) {
+          lastTurnRevision = rev;
           inspectedCid = adopted ? adopted.candidate_id : "A";
         }
 
@@ -1170,6 +1116,8 @@
           card.classList.toggle("adopted", Boolean(cand?.adopted));
           card.classList.toggle("inspecting", cid === inspectedCid);
           if (cand) {
+            const titleEl = card.querySelector(".cand-top span:first-child");
+            if (titleEl) titleEl.textContent = `案${cid}${cand.adopted ? " · 採用" : " · 棄却"}`;
             const pct = cand.total_score <= 1.0 ? cand.total_score * 100 : cand.total_score;
             scEl.textContent = `${Number(pct || 0).toFixed(1)}%`;
             rsEl.textContent = formatCandReason(cand);
@@ -1180,7 +1128,7 @@
         if ($("hero-cand-label") && shown) {
           $("hero-cand-label").textContent = shown.adopted ? `表示中: 案${shown.candidate_id}（採用候補）` : `表示中: 案${shown.candidate_id}（棄却案確認中）`;
         }
-        drawHeroStaff(shown?.events || [], chords);
+        drawHeroStaff(shown, intent, out);
         renderHudLogicTrace(s.latest_logic_trace);
       }
 

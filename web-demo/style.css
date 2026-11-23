@@ -99,6 +99,10 @@ html, body {
   display: none !important;
 }
 
+.studio-shell.projection-clean .hero-top-row {
+  padding-right: 230px;
+}
+
 .projection-exit-fab,
 .btn.projection-exit-fab {
   display: none;
@@ -307,6 +311,28 @@ summary:focus-visible {
 
 .field::placeholder {
   color: var(--ink-rejected);
+}
+
+.field-textarea {
+  resize: vertical;
+  min-height: 56px;
+  line-height: 1.5;
+}
+
+/* Lining numerals across serif display fonts so digits never drop below baseline */
+.brand,
+.panel-heading,
+.monologue-hero,
+.work-title,
+.piece-title,
+.act-pill,
+.cand-pick-id,
+.cand-title,
+.tab-btn,
+.delib-memo,
+.modal-title {
+  font-variant-numeric: lining-nums tabular-nums;
+  font-feature-settings: "lnum" 1, "tnum" 1;
 }
 
 /* 3-Step Onboarding Strip */
@@ -823,11 +849,26 @@ summary:focus-visible {
 /* Hero Grand Staff Container (underline only, zero surrounding frame) */
 .hero-staff-wrap {
   width: 100%;
-  height: 290px;
+  min-height: 300px;
+  height: auto;
   border: none;
   border-bottom: 1px solid var(--rule-strong);
   background-color: var(--bg-stage);
   position: relative;
+  overflow: hidden;
+}
+
+.studio-shell.projection-clean .hero-staff-wrap,
+.studio-shell.projection-clean .score-canvas-wrap {
+  background-color: var(--bg-projection);
+}
+
+.vex-score-host,
+.vex-score-host svg,
+.mini-score-host,
+.mini-score-host svg {
+  width: 100%;
+  display: block;
 }
 
 .hero-staff-wrap canvas {
@@ -1123,9 +1164,9 @@ summary:focus-visible {
   font-size: 15.5px;
   font-weight: 600;
   color: var(--ink-adopted);
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
+  line-height: 1.4;
+  white-space: normal;
+  overflow-wrap: anywhere;
 }
 
 .piece-meta {
@@ -1291,6 +1332,16 @@ summary:focus-visible {
   font-size: 15px;
   font-weight: 600;
   color: var(--ink-adopted);
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+}
+
+.mixer-swatch {
+  display: inline-block;
+  width: 11px;
+  height: 11px;
+  flex: none;
 }
 
 .mixer-desc {
@@ -1345,7 +1396,7 @@ summary:focus-visible {
 
 .chord-strip {
   display: grid;
-  grid-template-columns: repeat(8, minmax(0, 1fr));
+  grid-template-columns: repeat(auto-fit, minmax(76px, 1fr));
   gap: 6px;
   margin-bottom: 12px;
 }
@@ -1353,15 +1404,13 @@ summary:focus-visible {
 .chord-chip {
   font-family: var(--font-mono);
   font-size: 13px;
-  padding: 5px 4px;
+  padding: 5px 3px;
   border: none;
   border-bottom: 1px solid var(--rule-hairline);
   background-color: var(--bg-stage);
   color: var(--ink-secondary);
   text-align: center;
   white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
   cursor: pointer;
 }
 
@@ -1426,17 +1475,17 @@ summary:focus-visible {
 
 .score-canvas-wrap {
   width: 100%;
-  height: 300px;
+  min-height: 300px;
+  height: auto;
   position: relative;
   border: none;
   border-bottom: 1px solid var(--rule-strong);
   background-color: var(--bg-stage);
+  overflow: hidden;
 }
 
-.score-canvas-wrap canvas {
+.score-canvas-wrap .vex-score-host {
   width: 100%;
-  height: 100%;
-  display: block;
   cursor: pointer;
 }
 
@@ -1531,7 +1580,8 @@ summary:focus-visible {
 
 .mini-canvas {
   width: 100%;
-  height: 82px;
+  min-height: 210px;
+  height: auto;
   display: block;
 }
 
@@ -1695,10 +1745,21 @@ summary:focus-visible {
     min-width: 0;
   }
 
-  .topbar-right #btn-help,
   .topbar-right #btn-proj-f10,
   .topbar-right #link-stage-hud {
     display: none;
+  }
+
+  .topbar-right #btn-panic {
+    grid-column: 1 / -1;
+  }
+
+  .studio-shell.projection-clean {
+    padding-top: 56px;
+  }
+
+  .studio-shell.projection-clean .hero-top-row {
+    padding-right: 0;
   }
 
   .onboarding-bar,
@@ -1777,7 +1838,8 @@ summary:focus-visible {
 
   .hero-staff-wrap,
   .score-canvas-wrap {
-    height: 220px;
+    min-height: 260px;
+    height: auto;
   }
 
   .piano-keys-wrap {
@@ -1799,15 +1861,15 @@ summary:focus-visible {
   }
 
   .sidebar {
-    max-height: 295px;
-    overflow-y: auto;
+    max-height: none;
+    overflow: visible;
     border-bottom: 1px solid var(--rule-strong);
     padding-bottom: 8px;
   }
 
   .piece-list {
-    min-height: 120px;
-    max-height: 155px;
+    min-height: 140px;
+    max-height: 225px;
   }
 
   .seek-wrap {

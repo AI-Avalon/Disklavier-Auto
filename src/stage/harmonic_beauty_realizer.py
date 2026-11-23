@@ -149,20 +149,25 @@ def _roman_and_function(root_pc: int, quality: str, bass_pc: int, tonality: str)
     inv = ""
     if bass_pc != root_pc:
         rel_b = (bass_pc - root_pc) % 12
-        is_seventh_or_ext = ext in ("7", "9", "maj7", "maj9", "ø7", "7sus4") or "7" in quality or "9" in quality or "13" in quality
+        is_seventh_or_ext = (
+            ext in ("6", "7", "9", "maj7", "maj9", "ø7", "7sus4")
+            or "7" in quality
+            or "9" in quality
+            or "13" in quality
+        )
         if is_seventh_or_ext:
-            # Classical figured-bass inversions for 7th/9th chords (strip redundant 7/9 before 65/43/42)
+            # Classical figured-bass inversions for 6th/7th/9th chords (strip redundant 6/7/9 before 65/43/42)
             base_prefix = ext
-            for suffix in ("maj9", "maj7", "7sus4", "ø7", "9", "7"):
+            for suffix in ("maj9", "maj7", "7sus4", "ø7", "9", "7", "6"):
                 if ext.endswith(suffix):
-                    prefix_map = {"maj9": "maj", "maj7": "maj", "ø7": "ø", "7sus4": "sus4", "9": "", "7": ""}
+                    prefix_map = {"maj9": "maj", "maj7": "maj", "ø7": "ø", "7sus4": "sus4", "9": "", "7": "", "6": ""}
                     base_prefix = prefix_map[suffix]
                     break
             if rel_b in (3, 4):
                 ext, inv = base_prefix, "65"
             elif rel_b == 7:
                 ext, inv = base_prefix, "43"
-            elif rel_b in (10, 11):
+            elif rel_b in (9, 10, 11):
                 ext, inv = base_prefix, "42"
         else:
             if rel_b in (3, 4):
@@ -238,7 +243,11 @@ def sanitize_chamber_title_ja(title_ja: str, tonality_ja: str, mode: str, piece_
 def sanitize_composer_note_ja(note_ja: str, tonality_ja: str, chords: Sequence[str]) -> str:
     """Removes prompt-echo artifacts ('事実記述のみ', typos, exclamation marks) from score notes."""
     s = (note_ja or "").replace("\n", " ").replace("！", "。").replace("!", "。").strip()
-    s = re.sub(r"(を?事実記述する1文とする|を?事実記述のみ|事実記述のみ|事実記述)[。.]*", "", s)
+    s = re.sub(
+        r"(コード名と終止構造のみを|コード進行と終止構造を)?(事実のみ記す|事実として記述する|事実を記述する一連の和声進行|事実を記述する|事実記述する1文とする|を?事実記述のみ|事実記述のみ|事実記述)[。.]*",
+        "",
+        s,
+    )
     s = s.replace("破片和弦バールコレー", "分散和音バルカローレ")
     s = re.sub(r"破片和[弦声]", "分散和音", s)
     s = re.sub(r"\s+", " ", s).strip()
@@ -247,8 +256,9 @@ def sanitize_composer_note_ja(note_ja: str, tonality_ja: str, chords: Sequence[s
     c_start = chords[0] if chords else "Dm9"
     c_mid = chords[min(8, max(0, len(chords) - 1))] if chords else "Bbmaj7"
     c_end = chords[-1] if chords else "Dmadd9"
-    if not s or len(s) < 18 or "。" not in s[-2:]:
-        if s and len(s) >= 18 and not s.endswith("。"):
+    has_residual_echo = any(tok in s for tok in ("事実", "記す", "記述する", "第一幕から四幕へ、。"))
+    if not s or len(s) < 18 or "。" not in s[-2:] or has_residual_echo or s.endswith("で、。") or s.endswith("し、。"):
+        if s and len(s) >= 18 and not has_residual_echo and not s.endswith("。") and not s.endswith("、"):
             s = s.rstrip("、, ") + "。"
         else:
             s = f"{tonality_ja}の4幕構成。第1幕は{c_start}で提示し、第3幕{c_mid}で多声頂点を築き、第4幕でウナ・コルダを伴い{c_end}へ終止する。"

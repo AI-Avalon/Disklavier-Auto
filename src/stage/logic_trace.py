@@ -34,6 +34,52 @@ _PHRASE_FUNC_HYPOTHESIS_JA: Dict[str, str] = {
     "recapitulation_resolution": "第4幕の回想としてウナ・コルダで音色を抑制し、種子動機を再提示して完全終止する",
 }
 
+_TONAL_JA: Dict[str, str] = {
+    "D_minor": "ニ短調",
+    "Dm": "ニ短調",
+    "D_dorian": "ニ・ドリア旋法",
+    "C_major": "ハ長調",
+    "A_minor": "イ短調",
+    "F_major": "ヘ長調",
+    "G_minor": "ト短調",
+    "G_major": "ト長調",
+    "Bb_major": "変ロ長調",
+    "Eb_major": "変ホ長調",
+    "C_minor": "ハ短調",
+    "E_minor": "ホ短調",
+}
+
+_STANCE_JA: Dict[str, str] = {
+    "imitate": "模倣・追従",
+    "counterpoint": "対位法対話",
+    "cadence": "終止接続",
+    "provoke": "和声的展開",
+    "echo_support": "持続和声支え",
+    "resolve": "解決導出",
+}
+
+_PEDAL_JA: Dict[str, str] = {
+    "half_clear": "ハーフペダル清澄踏み替え",
+    "resonant": "豊かな共鳴保持",
+    "dry": "ドライ（ペダル抑制）",
+    "una_corda_veil": "ウナ・コルダ弱音ベール",
+    "repedal_sync": "和声境界同期踏み替え",
+}
+
+
+def _format_voicing_ja(voicing: str) -> str:
+    s = str(voicing or "LH_open5th_10th + RH_cantabile").strip()
+    repls = (
+        ("LH_root_5th_10th_arpeggio", "左手根音・5度・10度分散"),
+        ("LH_open5th_10th", "左手開離5度・10度"),
+        ("LH_open5th", "左手開離5度"),
+        ("RH_cantabile_9th_spread", "右手歌謡9度開離"),
+        ("RH_cantabile", "右手歌謡旋律"),
+    )
+    for src, dst in repls:
+        s = s.replace(src, dst)
+    return s.replace("_", " ")
+
 
 def _estimate_detected_chord(
     human_notes: List[Dict[str, Any]],
@@ -140,8 +186,12 @@ def build_logic_trace(
     act_num = int(_extract_attr(intent, "act_number", 1) or 1)
     act_label = str(_extract_attr(intent, "act_label_ja", f"第{act_num}幕"))
     hyp_base = _PHRASE_FUNC_HYPOTHESIS_JA.get(phrase_fn, "対位法的応答と両手開離ボイシングで接続する")
+    tonal_ja = _TONAL_JA.get(tonal, tonal.replace("_", " "))
+    stance_ja = _STANCE_JA.get(stance, stance.replace("_", " "))
+    voicing_ja = _format_voicing_ja(voicing)
+    pedal_ja = _PEDAL_JA.get(pedal_strat, pedal_strat.replace("_", " "))
     hypothesis_ja = (
-        f"{hyp_base}（調性={tonal}, スタンス={stance}, ボイシング={voicing}, ペダル={pedal_strat}）"
+        f"{hyp_base}（調性: {tonal_ja} / {stance_ja} / {voicing_ja} / ペダル: {pedal_ja}）"
     )
     l2_logic = {
         "act_number": act_num,

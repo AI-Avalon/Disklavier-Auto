@@ -58,6 +58,19 @@ CATALOG_PATH = WEB_DEMO_DIR / "data" / "catalog_100.json"
 WEB_AUDIO_DIR = WEB_DEMO_DIR / "audio"
 DOCS_DEMOS_DIR = ROOT / "docs" / "demos"
 
+TEXTURE_JA: Dict[str, str] = {
+    "open_arpeggio_10th": "開離アルペジオ",
+    "broken_chord_barcarolle": "分散和音・バルカローレ",
+    "chorale_voicing": "コラール四声和音",
+    "countermelody_tenor": "内声テノール対旋律",
+    "alberti_lyrical": "叙情アルベルティ伴奏",
+}
+
+MODE_LABEL_JA: Dict[str, str] = {
+    "cello": "チェロ × ピアノ共演",
+    "piano": "ピアノ × ピアノ共演",
+}
+
 # Curated ordering of 18 tonalities for rich stylistic variety across 100 works
 TONALITY_CYCLE: List[str] = [
     "D_minor", "F_major", "A_minor", "C_major", "G_minor", "Eb_major",
@@ -158,11 +171,13 @@ def _build_deliberation_replay(
         f"案Dは単調音階で和声を欠くため捨て、"
         f"案Aの両手和音{span_str}({first_chord}→{last_chord})を両ペダル同期で置く。"
     )
+    tex_raw = str(realized["acts"][0]["lh_texture"])
+    tex_ja = TEXTURE_JA.get(tex_raw, tex_raw)
     return {
         "monologue_ja": monologue,
         "adopted": {
             "id": "A",
-            "label_ja": f"案A — {realized['acts'][0]['lh_texture']}・4幕多声構成",
+            "label_ja": f"案A — {tex_ja}・4幕多声構成",
             "score": round(report.beauty_score, 1),
             "range": span_str,
             "notes": adopted_sample,
@@ -680,6 +695,7 @@ def polish_existing(count: int = 100, render_audio: bool = True) -> Dict[str, An
             clean_title = f"{clean_title} 第{idx}番"
         seen_titles.add(clean_title)
         pj["title_ja"] = clean_title
+        pj["mode_label_ja"] = MODE_LABEL_JA.get(mode, pj.get("mode_label_ja", ""))
         pj["composer_note_ja"] = sanitize_composer_note_ja(pj.get("composer_note_ja", ""), ton_ja, chords_all)
 
         # Also clean deliberation monologue/cards
@@ -689,6 +705,9 @@ def polish_existing(count: int = 100, render_audio: bool = True) -> Dict[str, An
             last_c = chords_all[-1] if chords_all else "Dmadd9"
             inst_ja = "チェロ" if mode == "cello" else "ピアノ"
             span_str = delib["adopted"].get("range", "D2-E5")
+            tex_raw = str(pj["acts"][0]["lh_texture"]) if pj.get("acts") else "open_arpeggio_10th"
+            tex_ja = TEXTURE_JA.get(tex_raw, tex_raw)
+            delib["adopted"]["label_ja"] = f"案A — {tex_ja}・4幕多声構成"
             delib["monologue_ja"] = (
                 f"{inst_ja}の{ton_ja}動機を検出。"
                 f"案Dは単調音階で和声を欠くため捨て、"

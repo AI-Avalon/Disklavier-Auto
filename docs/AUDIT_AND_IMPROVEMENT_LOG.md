@@ -79,3 +79,22 @@
   - `scripts/verify_catalog_and_demo.py`: `passed=True`、`100 / 100 曲` 合格（平均美しさ `97.75`、最小 `95.07`、協和率 `97.05`、不協和ペア `0.65%`、平均同時発音 `5.01音`、単音率 `1.12%`）、`10 MP3` 全デコード正常・クリップ 0・音圧 `-17.66 .. -17.89 dBFS`。
   - `scripts/playwright_audit.py --round 3 --update-docs-images`: **`passed=True`**、`console=0`, `pageerror=0`, `http=0`、全6画面条件（`web_demo` 1920×1080 & 1280×720、`studio` 1920×1080 & 1280×720、`stage` 1920×1080 & 1280×720）で `overflow=0px`, `clipped=0`, `overlaps=0`。
   - **1280×720 完全ワンビュー収納**: 上部再生デッキ、5ch ミキサー、和声 X 線、および同期大譜表＋ピアノロール＋両ペダル曲線が垂直スクロールなしで一画面に収まることを確認。
+
+---
+
+### Round 4（正規 VexFlow 4.2.5 大譜表完全移行 ＆ 全画面表記・衝突ゼロ徹底監査）
+- **実行コマンド**: `.venv\Scripts\python.exe scripts/playwright_audit.py --round 4 --update-docs-images` & `scripts/verify_catalog_and_demo.py`
+- **特定された具体的欠点と根本原因**:
+  1. **五線譜レンダリングの破綻**: 旧自作 Canvas リボン描画が、音部記号・調号との接触回避不足、2度音程・臨時記号衝突未対応、小節線／拍子の未量子化、および調号無視の `#` 固定異名同音テーブルにより正規楽譜の体裁を損ねていた。
+  2. **ローマ数字 `iv66` ＆ 生識別子露出**: `harmonic_beauty_realizer.py` の `_roman_and_function()` が `ext=="6"` を第1転回形 `inv="6"` と単純連結していた（19曲）。またフロントエンドおよび `logic_trace.py` で `D_dorian`, `notagen_small`, `question_half_cadence`, `broken_chord_barcarolle`, `LH_open5th + RH_cantabile`, `half_clear`, `(#A8C8E8)`, `黒箱記録`, `-inf dB`, `Turn #` が一部未翻訳・生文字列で露出していた。
+  3. **初期候補選択のズレ＆一部表記切れ・書体沈み込み**: `/studio` 読み込み直後にオフライン既定と本番第1ターンの `turn_id` が一致していたことで棄却案Aが初期表示される問題、Cormorant Garamond のオールドスタイル数字の沈み込み、作品リスト題名・設定欄の見切れ。
+- **実施した修正**:
+  - **MIT `VexFlow 4.2.5` (`web-demo/vexflow-bravura.js`) ローカルバンドル化 ＆ `web-demo/score_engraver.js` 新設**:
+    - `stage_hud.html`, `studio.html`, `web-demo/index.html`, `web-demo/app.js`, `src/stage/stage_server.py` の全大譜表および Mode 4 推敲ミニスコアを正規 VexFlow SVG 彫刻へ完全移行。
+    - 8つの正規記譜ルール（大括弧＋左右小節線接続、音部・調号・拍子記号右側の余白確保、C4基準MIDI座標・加線、Bravura楕円符頭・符尾方向・拍単位連桁・2度音程オフセット、`KEY_SPELLING_TABLE` による調性別異名同音と上下声部独立の `Accidental.applyAccidentals`、4/4 小節厳密量子化、幅別動的表示小節数、コード名・強弱記号・左右ペダル・赤ペン楕円＋棄却理由テキストの非重複専用Y軸レーン、HiDPI SVG ＋ コントラスト 4.5:1 以上）を厳密実装。
+  - **テキスト・和声表記修正**: `harmonic_beauty_realizer.py` の転回判定修正＆ `compose_100_pieces.py --polish-existing` による全100曲JSON再検証、`logic_trace.py` と `score_engraver.js` フォーマッタによる `♭`/`♯` 統一と日本語用語統一、`app.js` `userPinnedCand`/`hasLiveSync` による初期採用候補自動選択修正、`style.css` `font-variant-numeric: lining-nums tabular-nums` ＆ 2行テキストエリア・折り返し許可。
+  - **Playwright 幾何衝突ゼロ・SVG内部・コントラスト・露出自動監査の組込み (`scripts/playwright_audit.py`)**:
+    - 全30状態の解像度（`1920×1080`, `1366×768`, `390×844`, `320×640`）× 状態（初期表示・再生中・棄却候補表示・論理トレース・保存トースト・ヘルプモーダル・F10投影）で DOM 非祖先重なり・SVG `<text>` 間＆音符／五線間重なり・音部記号干渉・見切れ・WCAG AA コントラスト・生識別子・表記ミス・最小 13px を自動検査。
+- **Round 4 最終実測結果 ＆ 目視確認**:
+  - `scripts/playwright_audit.py --round 4 --update-docs-images`: **`passed=True`**（30状態すべて `overflow=0px`, `clipped=0`, `overlaps=0`, `domOv=0`, `svg>=1/err=0`, `trunc=0`, `contrast=0`, `rawLeak=0`, `minFont>=13.0px`, `pedalOrderOk=True`, `console=0`, `pageerror=0`, `http=0`）。
+  - 2x HiDPI 拡大画像（[audit_grand_staff_closeup.png](images/audit_grand_staff_closeup.png)・[audit_grand_staff_rejected_closeup.png](images/audit_grand_staff_rejected_closeup.png)）および PC・モバイル全スクリーンショットを目視検査し、記号・文字の重なりや不自然な表記がゼロであることを確認。

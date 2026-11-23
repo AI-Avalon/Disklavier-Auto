@@ -392,6 +392,8 @@ def test_5_dual_pedal_physics_favicon_ascii_bats_and_production_separation() -> 
             assert client.get("/stage").status_code == 200
             assert client.get("/studio-static/style.css").status_code == 200
             assert client.get("/studio-static/app.js").status_code == 200
+            assert client.get("/studio-static/vexflow-bravura.js").status_code == 200
+            assert client.get("/studio-static/score_engraver.js").status_code == 200
             assert client.get("/studio-static/../../pyproject.toml").status_code in (400, 404)
             assert client.get("/api/pieces/../../pyproject.toml").status_code in (400, 404)
             assert client.get("/audio/../../pyproject.toml").status_code in (400, 404)

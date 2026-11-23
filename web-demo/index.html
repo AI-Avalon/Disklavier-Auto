@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>DISKLAVIER STUDIO | 公開WebAudioショーケース ＆ 対話体験</title>
+  <title>DISKLAVIER STUDIO | WebAudioデモ ＆ リアルタイム対話</title>
   <link rel="icon" href="./favicon.ico" />
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
@@ -31,7 +31,7 @@
       <div class="topbar-left">
         <div class="brand-wrap">
           <div class="brand">DISKLAVIER STUDIO</div>
-          <div class="brand-sub" id="brand-sub">WebAudio公開ショーケース / 静的デモ</div>
+          <div class="brand-sub" id="brand-sub">WebAudioデモ / ブラウザ体験版</div>
         </div>
         <nav class="mode-nav" role="tablist" aria-label="演奏・作曲モード選択">
           <button class="mode-tab" id="mode-tab-cello" type="button" role="tab" aria-selected="false" aria-controls="view-cello" data-mode-view="cello">[1] チェロ対話</button>
@@ -42,7 +42,7 @@
       </div>
 
       <div class="topbar-right">
-        <button class="conn-switch" id="btn-conn-mode" type="button" title="Web公開版ではWebAudioシンセと収録MP3で再生します">接続: 公開WebAudioデモ</button>
+        <button class="conn-switch" id="btn-conn-mode" type="button" title="Web公開版ではWebAudioシンセと収録MP3で再生します">接続: WebAudioデモ</button>
         <button class="btn compact active" id="btn-audio-monitor" type="button" aria-pressed="true">PC音声: ON</button>
         <button class="btn compact active" id="btn-diag-toggle" type="button" aria-pressed="true">技術指標</button>
         <button class="btn compact" id="btn-help" type="button" aria-label="操作ガイドを開く">操作ガイド (?)</button>
@@ -63,14 +63,14 @@
 
     <div class="diag-hud-bar" id="diag-hud-bar" aria-label="WebAudio動作指標">
       <div class="diag-items">
-        <span class="diag-item">状態: <strong id="diag-conn-status">公開WebAudioモード</strong></span>
+        <span class="diag-item">状態: <strong id="diag-conn-status">WebAudioデモ</strong></span>
         <span class="diag-item">推論先: <strong id="diag-hybrid">ブラウザWebAudio</strong></span>
         <span class="diag-item">RTT: <strong id="diag-rtt">0 ms</strong></span>
         <span class="diag-item">4候補並列: <strong id="diag-parallel">32 ms (参考値)</strong></span>
         <span class="diag-item">LLM応答(TTFT): <strong id="diag-llm">282 ms (Ollama構成)</strong></span>
         <span class="diag-item">先読み命中: <strong id="diag-speculative">ローカル機稼働</strong></span>
         <span class="diag-item">L5ジッター: <strong id="diag-jitter">&lt; 2 ms</strong></span>
-        <span class="diag-item">稼働ワーカー: <strong id="diag-workers">WebAudio エンジン</strong></span>
+        <span class="diag-item">稼働ワーカー: <strong id="diag-workers">WebAudioシンセ</strong></span>
         <span class="diag-item">同時発音: <strong id="diag-voices">0 / 30 音</strong></span>
         <span class="diag-item">VRAM設計: <strong id="diag-vram">RTX 3070 8GB</strong></span>
       </div>
@@ -92,8 +92,8 @@
           </div>
           <div class="chord-hero-badge">
             <span class="chord-hero-val" id="cello-chord-val">Dm</span>
-            <span class="chord-hero-roman" id="cello-chord-roman">i</span>
-            <span class="mono-sub" id="cello-key-tonal">D minor / 静的体験</span>
+            <span class="chord-hero-roman" id="cello-chord-roman">半終止（問いかけ）</span>
+            <span class="mono-sub" id="cello-key-tonal">ニ短調 / WebAudioデモ</span>
           </div>
         </div>
 
@@ -102,12 +102,12 @@
         <div class="action-toolbar">
           <button class="btn primary-fill" id="btn-cello-demo" type="button">仮想チェロでデモ開始</button>
           <button class="btn" id="btn-cello-turn" type="button">今すぐ1ターン応答生成</button>
-          <button class="btn" id="btn-cello-retake" type="button">別解釈で再生成 (Retake)</button>
+          <button class="btn" id="btn-cello-retake" type="button">別解釈で再生成</button>
           <button class="btn" id="btn-cello-cal" type="button">2chエコー較正</button>
           <button class="btn" id="btn-cello-reset" type="button">第1幕へリセット</button>
           <label class="sr-only" for="sel-cello-preset">演奏解釈プリセット</label>
           <select class="field" id="sel-cello-preset" aria-label="演奏解釈プリセット" style="width:auto;min-width:220px;">
-            <option value="cello_low_legato">チェロ低音レガート・静的Cantabile</option>
+            <option value="cello_low_legato">チェロ低音レガート・静的カンタービレ</option>
             <option value="cello_leap_spiccato">チェロ跳躍スピッカート・対位法</option>
             <option value="piano_chromatic_cadence">ピアノ半音階終止・半ペダル</option>
             <option value="overtone_mud_clearance">中音域倍音クリアランス・透明声部</option>
@@ -177,8 +177,8 @@
           <div class="action-toolbar">
             <span class="mono-sub">チェロフレーズ送信:</span>
             <button class="btn compact" type="button" data-cello-phrase="question">静かな問い (D3-F3-A3)</button>
-            <button class="btn compact" type="button" data-cello-phrase="cantabile">叙情上昇 (A3-C#4-E4-G4)</button>
-            <button class="btn compact" type="button" data-cello-phrase="lament">頂点の嘆き (Bb3-A3-G3-F3)</button>
+            <button class="btn compact" type="button" data-cello-phrase="cantabile">叙情上昇 (A3-C♯4-E4-G4)</button>
+            <button class="btn compact" type="button" data-cello-phrase="lament">頂点の下行 (B♭3-A3-G3-F3)</button>
           </div>
         </div>
 
@@ -196,7 +196,7 @@
 
           <div id="panel-cello-score" role="tabpanel" aria-labelledby="tab-cello-score">
             <div class="hero-staff-wrap">
-              <canvas id="canvas-cello-hero-staff"></canvas>
+              <div class="vex-score-host" id="canvas-cello-hero-staff" aria-label="チェロ対話 リアルタイム大譜表"></div>
             </div>
 
             <div class="cand-cards-row" id="cello-cand-cards" style="margin-top:14px;">
@@ -227,15 +227,15 @@
             <div class="trace-grid">
               <div class="trace-stage" data-trace-slot="1">
                 <div class="trace-stage-head">
-                  <span class="trace-stage-code">1. L1_PERCEPTION</span>
+                  <span class="trace-stage-code">1. 音響・打鍵知覚</span>
                   <span class="trace-stage-meta" id="cello-tr-l1-meta">待機中</span>
                 </div>
                 <div class="trace-stage-body" id="cello-tr-l1-body">音名・F0・コード・奏法・呼吸検知を待機しています。</div>
-                <div class="trace-stage-sub" id="cello-tr-l1-sub">NLMS ERLE: -- dB</div>
+                <div class="trace-stage-sub" id="cello-tr-l1-sub">NLMS エコー抑圧: -- dB</div>
               </div>
               <div class="trace-stage" data-trace-slot="2">
                 <div class="trace-stage-head">
-                  <span class="trace-stage-code">2. TOKEN_ECON</span>
+                  <span class="trace-stage-code">2. 文脈トークン圧縮</span>
                   <span class="trace-stage-meta" id="cello-tr-tok-meta">-- → -- tok</span>
                 </div>
                 <div class="trace-stage-body" id="cello-tr-tok-body">圧縮文脈はターン実行後に表示されます。</div>
@@ -243,15 +243,15 @@
               </div>
               <div class="trace-stage full-span" data-trace-slot="3">
                 <div class="trace-stage-head">
-                  <span class="trace-stage-code">3. L2_LOGIC_CHAIN</span>
-                  <span class="trace-stage-meta" id="cello-tr-l2-meta">Act 1 / --</span>
+                  <span class="trace-stage-code">3. 和声・声部設計</span>
+                  <span class="trace-stage-meta" id="cello-tr-l2-meta">第1幕 / --</span>
                 </div>
                 <div class="trace-stage-body" id="cello-tr-l2-body">音楽的仮説（声部・和声機能・ペダル方針）はターン後に記録されます。</div>
-                <div class="trace-stage-sub" id="cello-tr-l2-sub">CC#64 / CC#67 方針待機</div>
+                <div class="trace-stage-sub" id="cello-tr-l2-sub">CC#67 / CC#64 方針待機</div>
               </div>
               <div class="trace-stage full-span" data-trace-slot="4">
                 <div class="trace-stage-head">
-                  <span class="trace-stage-code">4. L3_CANDIDATES</span>
+                  <span class="trace-stage-code">4. 4候補並列採点</span>
                   <span class="trace-stage-meta" id="cello-tr-l3-meta">4候補並列比較</span>
                 </div>
                 <div class="trace-cand-list">
@@ -263,7 +263,7 @@
               </div>
               <div class="trace-stage" data-trace-slot="5">
                 <div class="trace-stage-head">
-                  <span class="trace-stage-code">5. REALIZER_DIFF</span>
+                  <span class="trace-stage-code">5. 和声リアライザー補正</span>
                   <span class="trace-stage-meta" id="cello-tr-rz-meta">単音・不協和音補正</span>
                 </div>
                 <div class="trace-stage-body" id="cello-tr-rz-body">和声リアライザー差分を待機しています。</div>
@@ -271,7 +271,7 @@
               </div>
               <div class="trace-stage" data-trace-slot="6">
                 <div class="trace-stage-head">
-                  <span class="trace-stage-code">6. TIMING_BUDGET</span>
+                  <span class="trace-stage-code">6. 応答レイテンシ内訳</span>
                   <span class="trace-stage-meta" id="cello-tr-tm-meta">合計 -- ms</span>
                 </div>
                 <div class="trace-stage-body" id="cello-tr-tm-body">知覚 / RTT / GPU推論 / 先読み補正の内訳</div>
@@ -299,8 +299,8 @@
           </div>
           <div class="chord-hero-badge">
             <span class="chord-hero-val" id="piano-chord-val">Dm</span>
-            <span class="chord-hero-roman" id="piano-chord-roman">i</span>
-            <span class="mono-sub" id="piano-key-tonal">D minor / WebAudio対話</span>
+            <span class="chord-hero-roman" id="piano-chord-roman">半終止（問いかけ）</span>
+            <span class="mono-sub" id="piano-key-tonal">ニ短調 / WebAudioデモ</span>
           </div>
         </div>
 
@@ -311,7 +311,7 @@
           <button class="btn" id="btn-piano-demo-phrase" type="button">問いかけフレーズを弾く (Dm9)</button>
           <button class="btn" id="btn-piano-pedal-cue" type="button">左ペダル合図 (CC#67)</button>
           <button class="btn" id="btn-piano-turn" type="button">今すぐAIに応答させる</button>
-          <button class="btn" id="btn-piano-retake" type="button">別解釈 (Retake)</button>
+          <button class="btn" id="btn-piano-retake" type="button">別解釈で再生成</button>
         </div>
       </div>
 
@@ -320,8 +320,8 @@
           <h2 class="panel-heading">人間 ⇄ AI 鍵盤インタラクション（クリック / PCキーボード A〜K）</h2>
           <div class="legend-row">
             <span><span class="swatch" style="background:#A8C8E8;"></span>人間の打鍵</span>
-            <span><span class="swatch" style="background:#E5C88F;"></span>AI応答予定/先読み</span>
-            <span><span class="swatch" style="background:#E85E4B;"></span>L5 出力打鍵</span>
+            <span><span class="swatch" style="background:#E5C88F;"></span>AI応答予定（先読み）</span>
+            <span><span class="swatch" style="background:#E85E4B;"></span>実機出力打鍵</span>
           </div>
         </div>
 
@@ -337,7 +337,7 @@
           <select class="field" id="sel-piano-preset" aria-label="ピアノ対話プリセット" style="width:auto;min-width:210px;">
             <option value="piano_chromatic_cadence">ピアノ半音階終止・半ペダル</option>
             <option value="overtone_mud_clearance">中音域倍音クリアランス・透明声部</option>
-            <option value="cello_low_legato">チェロ低音レガート・静的Cantabile</option>
+            <option value="cello_low_legato">チェロ低音レガート・静的カンタービレ</option>
             <option value="cello_leap_spiccato">チェロ跳躍スピッカート・対位法</option>
           </select>
           <span class="mono-sub" id="piano-last-input">鍵盤待機中</span>
@@ -348,7 +348,7 @@
         <div class="card" style="display:flex;flex-direction:column;gap:14px;">
           <div class="card-head">
             <h2 class="panel-heading">自己打鍵分離・先読み待機 ＆ 左右ペダル</h2>
-            <span class="mono-sub" id="piano-perception-meta">Anticipatory Transformer 128M 常駐設計</span>
+            <span class="mono-sub" id="piano-perception-meta">自己打鍵分離フィルター有効</span>
           </div>
 
           <div class="pedal-gauges" aria-label="ピアノ物理ペダル配置：左UNA CORDA・右DAMPER">
@@ -412,7 +412,7 @@
 
           <div id="panel-piano-score" role="tabpanel" aria-labelledby="tab-piano-score">
             <div class="hero-staff-wrap">
-              <canvas id="canvas-piano-hero-staff"></canvas>
+              <div class="vex-score-host" id="canvas-piano-hero-staff" aria-label="ピアノ対話 リアルタイム大譜表"></div>
             </div>
 
             <div class="cand-cards-row" id="piano-cand-cards" style="margin-top:14px;">
@@ -443,7 +443,7 @@
             <div class="trace-grid">
               <div class="trace-stage" data-trace-slot="1">
                 <div class="trace-stage-head">
-                  <span class="trace-stage-code">1. L1_PERCEPTION</span>
+                  <span class="trace-stage-code">1. 音響・打鍵知覚</span>
                   <span class="trace-stage-meta" id="piano-tr-l1-meta">待機中</span>
                 </div>
                 <div class="trace-stage-body" id="piano-tr-l1-body">音名・打鍵分離・終止検知を待機しています。</div>
@@ -451,7 +451,7 @@
               </div>
               <div class="trace-stage" data-trace-slot="2">
                 <div class="trace-stage-head">
-                  <span class="trace-stage-code">2. TOKEN_ECON</span>
+                  <span class="trace-stage-code">2. 文脈トークン圧縮</span>
                   <span class="trace-stage-meta" id="piano-tr-tok-meta">-- → -- tok</span>
                 </div>
                 <div class="trace-stage-body" id="piano-tr-tok-body">圧縮文脈はターン実行後に表示されます。</div>
@@ -459,15 +459,15 @@
               </div>
               <div class="trace-stage full-span" data-trace-slot="3">
                 <div class="trace-stage-head">
-                  <span class="trace-stage-code">3. L2_LOGIC_CHAIN</span>
-                  <span class="trace-stage-meta" id="piano-tr-l2-meta">Act 1 / --</span>
+                  <span class="trace-stage-code">3. 和声・声部設計</span>
+                  <span class="trace-stage-meta" id="piano-tr-l2-meta">第1幕 / --</span>
                 </div>
                 <div class="trace-stage-body" id="piano-tr-l2-body">音楽的仮説（声部・和声機能・ペダル方針）はターン後に記録されます。</div>
-                <div class="trace-stage-sub" id="piano-tr-l2-sub">CC#64 / CC#67 方針待機</div>
+                <div class="trace-stage-sub" id="piano-tr-l2-sub">CC#67 / CC#64 方針待機</div>
               </div>
               <div class="trace-stage full-span" data-trace-slot="4">
                 <div class="trace-stage-head">
-                  <span class="trace-stage-code">4. L3_CANDIDATES</span>
+                  <span class="trace-stage-code">4. 4候補並列採点</span>
                   <span class="trace-stage-meta" id="piano-tr-l3-meta">4候補並列比較</span>
                 </div>
                 <div class="trace-cand-list">
@@ -479,7 +479,7 @@
               </div>
               <div class="trace-stage" data-trace-slot="5">
                 <div class="trace-stage-head">
-                  <span class="trace-stage-code">5. REALIZER_DIFF</span>
+                  <span class="trace-stage-code">5. 和声リアライザー補正</span>
                   <span class="trace-stage-meta" id="piano-tr-rz-meta">単音・不協和音補正</span>
                 </div>
                 <div class="trace-stage-body" id="piano-tr-rz-body">和声リアライザー差分を待機しています。</div>
@@ -487,7 +487,7 @@
               </div>
               <div class="trace-stage" data-trace-slot="6">
                 <div class="trace-stage-head">
-                  <span class="trace-stage-code">6. TIMING_BUDGET</span>
+                  <span class="trace-stage-code">6. 応答レイテンシ内訳</span>
                   <span class="trace-stage-meta" id="piano-tr-tm-meta">合計 -- ms</span>
                 </div>
                 <div class="trace-stage-body" id="piano-tr-tm-body">知覚 / RTT / GPU推論 / 先読み補正の内訳</div>
@@ -514,7 +514,7 @@
         <div class="notagen-form-grid">
           <div class="field-group span-2">
             <label class="field-label" for="inp-ng-prompt">楽曲コンセプト / 日本語演奏指示</label>
-            <input class="field" id="inp-ng-prompt" type="text" value="静かな問いかけから始まり、中盤で和声的に高揚し、ウナ・コルダで静かに閉じる作品" />
+            <textarea class="field field-textarea" id="inp-ng-prompt" rows="2">静かな問いかけから始まり、中盤で和声的に高揚し、ウナ・コルダで静かに閉じる作品</textarea>
           </div>
           <div class="field-group">
             <label class="field-label" for="sel-ng-backend">生成エンジン</label>
@@ -535,7 +535,7 @@
               <option value="Am">A minor（イ短調）</option>
               <option value="F">F major（ヘ長調）</option>
               <option value="C">C major（ハ長調）</option>
-              <option value="Eb">Eb major（変ホ長調）</option>
+              <option value="Eb">E♭ major（変ホ長調）</option>
             </select>
           </div>
           <div class="field-group">
@@ -574,8 +574,8 @@
           <pre class="abc-console" id="ng-abc-console" aria-live="polite">X:1
 T:公開デモ - 「一からライブ生成＆即時演奏」でストリーミング作曲を体験できます
 K:Dm
-[V:1] D2 F2 A2 G2 | ...
-[V:2] D,,4 A,,4 | ...</pre>
+[V:1] D2 F2 A2 G2 |
+[V:2] D,,4 A,,4 |</pre>
 
           <div class="pedal-gauges" aria-label="NotaGenライブ生成 デュアルペダル：左UNA CORDA・右DAMPER">
             <div class="pedal-box">
@@ -608,7 +608,7 @@ K:Dm
           </div>
 
           <div class="hero-staff-wrap">
-            <canvas id="canvas-notagen-hero"></canvas>
+            <div class="vex-score-host" id="canvas-notagen-hero" aria-label="NotaGen リアルタイム大譜表"></div>
           </div>
 
           <div class="monologue-hero" id="ng-commentary">上の「一からライブ生成＆即時演奏」を押すと、種モチーフから前楽節（半終止）→後楽節（完全終止）がABC記譜で逐次生成され、和声ガードを通して即座にWebAudioで演奏されます。</div>
@@ -658,7 +658,7 @@ K:Dm
               <div class="vu-box">
                 <span>出力</span>
                 <div class="vu-bar"><div class="vu-fill" id="vu-fill"></div></div>
-                <span id="vu-db">-inf dB</span>
+                <span id="vu-db">無音</span>
               </div>
             </div>
 
@@ -673,7 +673,7 @@ K:Dm
 
             <div class="mp3-deck-row">
               <div class="mp3-audio-wrap">
-                <span class="mono-sub" id="mp3-status">スタジオMP3待機</span>
+                <span class="mono-sub" id="mp3-status">高音質MP3待機</span>
                 <audio id="mp3-player" controls preload="auto"></audio>
               </div>
             </div>
@@ -694,7 +694,7 @@ K:Dm
             <div class="card">
               <div class="card-head">
                 <h3 class="panel-heading">ハーモニック X-Ray</h3>
-                <span class="mono-sub" id="xray-pedal">Pedal: L=0 R=0</span>
+                <span class="mono-sub" id="xray-pedal">左ペダル(67)=0 · 右ペダル(64)=0</span>
               </div>
               <div class="xray-top">
                 <div>
@@ -728,16 +728,16 @@ K:Dm
               <button class="tab-btn" id="tab-delib" type="button" role="tab" aria-selected="false" aria-controls="panel-delib">AI 4候補 並列採点・ボツ理由</button>
             </div>
             <div id="panel-score" role="tabpanel" aria-labelledby="tab-score">
-              <div class="score-canvas-wrap"><canvas id="score-canvas"></canvas></div>
+              <div class="score-canvas-wrap"><div class="vex-score-host" id="score-canvas" aria-label="四声リアルタイム大譜表"></div></div>
               <div class="composer-note" id="composer-note">大譜表上の音符・小節をクリックすると、その時刻からタイムマシン再生します。</div>
             </div>
             <div id="panel-delib" role="tabpanel" aria-labelledby="tab-delib" hidden>
               <div class="delib-memo" id="delib-memo">監査メモ読込中...</div>
               <div class="delib-grid" id="delib-grid">
-                <div class="cand-card adopted" data-delib-slot="0"><div class="cand-head"><span class="cand-title">案A</span><span class="cand-tag ok">--</span></div><canvas class="mini-canvas"></canvas></div>
-                <div class="cand-card rejected" data-delib-slot="1"><div class="cand-head"><span class="cand-title">案B</span><span class="cand-tag">--</span></div><canvas class="mini-canvas"></canvas></div>
-                <div class="cand-card rejected" data-delib-slot="2"><div class="cand-head"><span class="cand-title">案C</span><span class="cand-tag">--</span></div><canvas class="mini-canvas"></canvas></div>
-                <div class="cand-card rejected" data-delib-slot="3"><div class="cand-head"><span class="cand-title">案D</span><span class="cand-tag">--</span></div><canvas class="mini-canvas"></canvas></div>
+                <div class="cand-card adopted" data-delib-slot="0"><div class="cand-head"><span class="cand-title">案A</span><span class="cand-tag ok">--</span></div><div class="mini-canvas mini-score-host"></div></div>
+                <div class="cand-card rejected" data-delib-slot="1"><div class="cand-head"><span class="cand-title">案B</span><span class="cand-tag">--</span></div><div class="mini-canvas mini-score-host"></div></div>
+                <div class="cand-card rejected" data-delib-slot="2"><div class="cand-head"><span class="cand-title">案C</span><span class="cand-tag">--</span></div><div class="mini-canvas mini-score-host"></div></div>
+                <div class="cand-card rejected" data-delib-slot="3"><div class="cand-head"><span class="cand-title">案D</span><span class="cand-tag">--</span></div><div class="mini-canvas mini-score-host"></div></div>
               </div>
             </div>
           </div>
@@ -781,6 +781,8 @@ K:Dm
   <script>
     window.DISKLAVIER_LIVE_MODE = false;
   </script>
+  <script src="./vexflow-bravura.js"></script>
+  <script src="./score_engraver.js"></script>
   <script src="./app.js"></script>
 </body>
 </html>

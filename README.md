@@ -212,12 +212,18 @@ flowchart LR
 
 ---
 
-## 6. UI アートディレクション ＆ 画面キャプチャ（Playwright 全23状態監査済）
+## 6. UI アートディレクション ＆ 画面キャプチャ（Playwright 30状態×VexFlow大譜表監査済）
 
-`.agents/skills/anything-frontend-art-direction/` の題材起点設計手法・247作品の書体調査データ・4チェックリストを適用し、以下の書体階層と 5大舞台UI規約を全画面（`/studio`, `/stage`, `web-demo/`）で実現しています（根拠詳細: [docs/DESIGN_DIRECTION.md](docs/DESIGN_DIRECTION.md)）。
+`.agents/skills/anything-frontend-art-direction/` の題材起点設計手法・247作品の書体調査データ・4チェックリスト、および正規音楽出版（ヘンレ版／ベーレンライター版）の記譜規約を全画面（`/studio`, `/stage`, `web-demo/`）へ適用しています（根拠詳細: [docs/DESIGN_DIRECTION.md](docs/DESIGN_DIRECTION.md) / [監査ログ](docs/AUDIT_AND_IMPROVEMENT_LOG.md)）。
 
-- **書体階層**: タイトル・見出し **`Shippori Mincho` + `Cormorant Garamond`**（2案比較のうえ室内楽スコアと計器調和のため採用）、本文UI **`Noto Sans JP`**、数値テレメトリ **`JetBrains Mono`**（`tabular-nums` 等幅数字）。
-- **5大舞台制約 & A11y**: ①カード枠線・影ゼロ（下線1px＋余白）、②フラット単色グレー `#1C1D20`（`F10` 時 `#141517`）、③DOM順固定 `:nth-child` 極薄 SVG 幾何模様、④カード自動入替ゼロ（5秒監視 `CLS = 0`）、⑤最小可視フォント `>= 13.0px`（`.sr-only` 含む）＆ スマホ `390px`/`320px` 横溢 `0px`、スキップリンク・モーダルフォーカストラップ・`prefers-reduced-motion: reduce` 準拠。
+- **正規 VexFlow 4.2.5 (Bravura) 大譜表彫刻エンジン (`web-demo/vexflow-bravura.js` + `web-demo/score_engraver.js`)**:
+  - **大譜表 8規約準拠**: ト音/ヘ音記号の正規左ブレイス＋小節線接続、音部記号・調号・拍子記号右側の自動余白確保（Beat 1 干渉ゼロ）、MIDI→譜表・加線配置、楕円符頭・符尾方向・2度音程衝突回避・拍連桁、調性別の異名同音解決とト音/ヘ音独立臨時記号管理、4/4 小節厳密量子化、画面幅別の動的表示小節数（PC 3〜4小節 / スマホ 1〜2小節）、およびコード名・強弱記号・左ペダル(`Una Corda`)・右ペダル(`Ped.`)・棄却赤ペン添削（楕円マーカー＋専用理由レーン）の独立 Y軸レーン分離。
+- **書体階層**: タイトル・見出し **`Shippori Mincho` + `Cormorant Garamond`**（`lining-nums` 等高数字、2案比較のうえ室内楽スコアと計器調和のため採用）、本文UI **`Noto Sans JP`**、数値テレメトリ **`JetBrains Mono`**（`tabular-nums` 等幅数字）。
+- **5大舞台制約 & 衝突ゼロ監査**: ①カード枠線・影ゼロ（下線1px＋余白）、②フラット単色グレー `#1C1D20`（`F10` 時 `#141517`）、③DOM順固定 `:nth-child` 極薄 SVG 幾何模様、④カード自動入替ゼロ（5秒監視 `CLS = 0`）、⑤最小可視フォント `>= 13.0px`、WCAG AA コントラスト、DOM非祖先ペア重なり `0`、SVG内部文字・音符重なり `0`、生識別子露出 `0`、スマホ `390px`/`320px` 横溢 `0px`。
+
+| 正規 VexFlow 大譜表クローズアップ（採用案） | VexFlow 棄却案赤ペン添削（楕円＋専用理由レーン） |
+| :---: | :---: |
+| ![VexFlow Grand Staff Closeup](docs/images/audit_grand_staff_closeup.png) | ![VexFlow Rejected Staff Closeup](docs/images/audit_grand_staff_rejected_closeup.png) |
 
 | Studio Mode [1] チェロ対話 (1920×1080) | 6段階 論理思考トレース インスペクタ (1920×1080) |
 | :---: | :---: |
