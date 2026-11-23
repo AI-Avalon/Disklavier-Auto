@@ -275,6 +275,9 @@
     },
   };
 
+  let pieceAbortCtrl = null;
+  let lastFocusedBeforeHelp = null;
+
   // Offline / Static Demo Fallback Snapshot so Modes 1 & 2 look meaningful even offline
   function createDefaultOfflineStage(mode = "cello") {
     return {
@@ -286,6 +289,20 @@
       human_active_pitches: [],
       active_preset: "晩年ロマン派・静的Cantabile",
       turn_id: 1,
+      hybrid: {
+        mode: LIVE_MODE ? "MAC_LOCAL_ONLY" : "MAC_LOCAL_ONLY",
+        active_backend: LIVE_MODE ? "mac_local" : "webaudio_demo",
+        last_rtt_ms: 0.0,
+        failover_active: false,
+        failover_count: 0,
+      },
+      field_recorder: {
+        active: false,
+        session_id: "",
+        midi_in_count: 0,
+        midi_out_count: 0,
+        trace_count: 0,
+      },
       telemetry_hud: {
         parallel_compose_ms: 31.4,
         llm_ttft_ms: 282.0,
@@ -389,6 +406,99 @@
           ],
         },
       ],
+      latest_logic_trace: {
+        turn_id: 1,
+        L1_PERCEPTION: {
+          mode,
+          note_name: "D3",
+          midi_pitch: 50,
+          f0_hz: 146.83,
+          detected_chord: "Dm",
+          articulation: "Cantabile",
+          vibrato_cents: 14.0,
+          breath_gauge: 0.68,
+          turn_ready: true,
+          turn_reason: "フレーズ終止 (呼吸検知)",
+          nlms_erle_db: 15.2,
+          echo_suppressed_count: 0,
+          human_notes_pitches: ["D3", "F3", "A3"],
+        },
+        TOKEN_ECON: {
+          raw_tokens_est: 420,
+          compressed_tokens_est: 108,
+          tokens_saved: 312,
+          compression_ratio_pct: 74.3,
+          compact_context_preview: "key=Dm | motif=[D3,F3,A3] | art=Cantabile | act=1 | pedal=half_clear",
+        },
+        L2_LOGIC_CHAIN: {
+          act_number: 1,
+          act_label_ja: "第1幕",
+          phrase_function: "question_half_cadence",
+          hypothesis_ja: "第1幕の問いかけとして半終止(V)を開き、D3-F3-A3動機に対し右手F4-A4で余白を残して応答する（調性=Dm, スタンス=counterpoint, ボイシング=LH_open5th + RH_cantabile, ペダル=half_clear）",
+          interaction_stance: "counterpoint",
+          tonal_center: "Dm",
+          voicing_structure: "LH_open5th + RH_cantabile",
+          pedal_strategy: "half_clear",
+          damper_cc64_plan: [72, 64, 48],
+          una_corda_cc67_plan: [48, 52],
+          llm_source: "webaudio_demo",
+        },
+        L3_CANDIDATES: [
+          {
+            candidate_id: "A",
+            label_ja: "案A — 分散和音・4声対話",
+            adopted: true,
+            total_score_pct: 94.2,
+            scores: { consonance_pct: 96, polyphony_pct: 93, cantabile_pct: 94, pedal_sync_pct: 92 },
+            rejection_reason_ja: "採用（両手声部連結が滑らかでNLMS帯域と調和）",
+          },
+          {
+            candidate_id: "B",
+            label_ja: "案B — 密集テノール内声",
+            adopted: false,
+            total_score_pct: 74.8,
+            scores: { consonance_pct: 68, polyphony_pct: 80, cantabile_pct: 76, pedal_sync_pct: 75 },
+            rejection_reason_ja: "棄却: チェロ中音帯域と短2度衝突 (-19.4点)",
+          },
+          {
+            candidate_id: "C",
+            label_ja: "案C — 高域アルペジオ",
+            adopted: false,
+            total_score_pct: 70.4,
+            scores: { consonance_pct: 79, polyphony_pct: 62, cantabile_pct: 72, pedal_sync_pct: 68 },
+            rejection_reason_ja: "棄却: 左手バスの支え不足により安定度低下 (-23.8点)",
+          },
+          {
+            candidate_id: "D",
+            label_ja: "案D — 順次音階進行",
+            adopted: false,
+            total_score_pct: 56.2,
+            scores: { consonance_pct: 72, polyphony_pct: 41, cantabile_pct: 58, pedal_sync_pct: 54 },
+            rejection_reason_ja: "棄却: 単音律動偏向・動機回復不足 (-38.0点)",
+          },
+        ],
+        REALIZER_DIFF: {
+          raw_note_count: 8,
+          realized_note_count: 9,
+          monophonic_gaps_before_pct: 12.5,
+          monophonic_gaps_after_pct: 0.0,
+          mono_gaps_fixed_pct: 12.5,
+          vertical_clashes_before: 1,
+          vertical_clashes_after: 0,
+          dissonances_resolved: 1,
+          repair_pass_triggered: false,
+          pedal_events_added: 3,
+          summary_ja: "単音区間12.5%→0.0%・偶発的不協和1→0件（左5度保続補完・監査クリア）",
+        },
+        TIMING_BUDGET: {
+          perception_ms: 8.2,
+          network_rtt_ms: 0.0,
+          gpu_infer_ms: 31.4,
+          lookahead_ms: 14.0,
+          total_response_ms: 39.6,
+          backend_source: LIVE_MODE ? "mac_local" : "webaudio_demo",
+        },
+      },
     };
   }
 
@@ -414,9 +524,9 @@
     }
   }
 
-  async function fetchJson(url) {
+  async function fetchJson(url, options = {}) {
     try {
-      const res = await fetch(url);
+      const res = await fetch(url, options);
       if (!res.ok) return null;
       return await res.json();
     } catch (_) {
@@ -907,15 +1017,109 @@
     });
   }
 
+  function formatBackendLabel(backend, failoverActive = false) {
+    const b = String(backend || "mac_local");
+    if (b === "remote_rtx") return "自宅RTX 3070 (外部)";
+    if (b === "mac_local_failover" || failoverActive) return "Macローカル退避中";
+    if (b === "webaudio_demo") return "ブラウザWebAudio";
+    return "Macローカル";
+  }
+
+  function renderLogicTrace(prefix, trace) {
+    if (!trace || typeof trace !== "object") return;
+    const l1 = trace.L1_PERCEPTION || {};
+    const tok = trace.TOKEN_ECON || {};
+    const l2 = trace.L2_LOGIC_CHAIN || {};
+    const cands = Array.isArray(trace.L3_CANDIDATES) ? trace.L3_CANDIDATES : [];
+    const rz = trace.REALIZER_DIFF || {};
+    const tm = trace.TIMING_BUDGET || {};
+
+    const setTxt = (id, val) => {
+      const el = $(id);
+      if (el && val != null) el.textContent = String(val);
+    };
+
+    setTxt(`${prefix}-tr-l1-meta`, `${l1.note_name || "--"} (${Number(l1.f0_hz || 0).toFixed(1)} Hz) · ${l1.detected_chord || "--"}`);
+    const hNotes = Array.isArray(l1.human_notes_pitches) && l1.human_notes_pitches.length ? l1.human_notes_pitches.join("→") : "--";
+    setTxt(
+      `${prefix}-tr-l1-body`,
+      `検出動機: ${hNotes} / 奏法: ${l1.articulation || "--"} (Vib ${Math.round(l1.vibrato_cents || 0)} ct) / 呼吸: ${Math.round(Number(l1.breath_gauge || 0) * 100)}% (${l1.turn_reason || "--"})`
+    );
+    setTxt(
+      `${prefix}-tr-l1-sub`,
+      `NLMS ERLE: +${Number(l1.nlms_erle_db || 0).toFixed(1)} dB / 自己打鍵抑制: ${l1.echo_suppressed_count || 0}件`
+    );
+
+    const rawTok = Number(tok.raw_tokens_est || 0);
+    const compTok = Number(tok.compressed_tokens_est || 0);
+    const ratioPct = Number(tok.compression_ratio_pct || 0).toFixed(1);
+    setTxt(`${prefix}-tr-tok-meta`, `${rawTok} → ${compTok} tok`);
+    setTxt(`${prefix}-tr-tok-body`, tok.compact_context_preview || "圧縮文脈なし");
+    setTxt(`${prefix}-tr-tok-sub`, `節約トークン: ${tok.tokens_saved || Math.max(0, rawTok - compTok)} tok (${ratioPct}% 削減)`);
+
+    setTxt(`${prefix}-tr-l2-meta`, `${l2.act_label_ja || `第${l2.act_number || 1}幕`} / ${l2.tonal_center || "--"} (${l2.llm_source || "rule"})`);
+    setTxt(`${prefix}-tr-l2-body`, l2.hypothesis_ja || l2.monologue_ja || "仮説生成待機中");
+    const cc64 = Array.isArray(l2.damper_cc64_plan) && l2.damper_cc64_plan.length ? l2.damper_cc64_plan.join("/") : "--";
+    const cc67 = Array.isArray(l2.una_corda_cc67_plan) && l2.una_corda_cc67_plan.length ? l2.una_corda_cc67_plan.join("/") : "--";
+    setTxt(`${prefix}-tr-l2-sub`, `方針: ${l2.pedal_strategy || "--"} · CC#67=[${cc67}] · CC#64=[${cc64}]`);
+
+    const adoptedCand = cands.find((c) => c.adopted) || cands[0];
+    setTxt(
+      `${prefix}-tr-l3-meta`,
+      adoptedCand ? `採用: 案${adoptedCand.candidate_id} (${Number(adoptedCand.total_score_pct || 0).toFixed(1)}%)` : "4候補並列比較"
+    );
+    ["A", "B", "C", "D"].forEach((cid) => {
+      const row = $(`${prefix}-tr-c-${cid}`);
+      if (!row) return;
+      const item = cands.find((c) => String(c.candidate_id || "").toUpperCase() === cid);
+      if (!item) {
+        row.classList.remove("adopted");
+        row.textContent = `案${cid}: データなし`;
+        return;
+      }
+      const sc = item.scores || {};
+      row.classList.toggle("adopted", Boolean(item.adopted));
+      row.textContent = `案${cid} (${Number(item.total_score_pct || 0).toFixed(1)}%) [協和${sc.consonance_pct ?? "--"} / 多声${sc.polyphony_pct ?? "--"} / 歌唱${sc.cantabile_pct ?? "--"} / ペダル${sc.pedal_sync_pct ?? "--"}] — ${item.rejection_reason_ja || ""}`;
+    });
+
+    const fixedPct = Number(rz.mono_gaps_fixed_pct || 0).toFixed(1);
+    setTxt(
+      `${prefix}-tr-rz-meta`,
+      `単音補正 ${fixedPct}% · 衝突解除 ${rz.dissonances_resolved || 0}件`
+    );
+    setTxt(`${prefix}-tr-rz-body`, rz.summary_ja || "単音抜け・不協和音 0件");
+    setTxt(
+      `${prefix}-tr-rz-sub`,
+      `音符 ${rz.raw_note_count || 0}→${rz.realized_note_count || 0} / 単音率 ${Number(rz.monophonic_gaps_before_pct || 0).toFixed(1)}%→${Number(rz.monophonic_gaps_after_pct || 0).toFixed(1)}% / ペダル補完 +${rz.pedal_events_added || 0}点`
+    );
+
+    setTxt(`${prefix}-tr-tm-meta`, `合計 ${Number(tm.total_response_ms || 0).toFixed(1)} ms`);
+    setTxt(
+      `${prefix}-tr-tm-body`,
+      `L1知覚 ${Number(tm.perception_ms || 0).toFixed(1)} ms / RTT ${Number(tm.network_rtt_ms || 0).toFixed(1)} ms / GPU推論 ${Number(tm.gpu_infer_ms || 0).toFixed(1)} ms / 先読み ${Number(tm.lookahead_ms || 0).toFixed(1)} ms`
+    );
+    setTxt(`${prefix}-tr-tm-sub`, `実行バックエンド: ${formatBackendLabel(tm.backend_source)}`);
+  }
+
   function renderDiagnosticHud() {
     const s = state.stage || {};
     const th = s.telemetry_hud || {};
     const out = s.output || {};
+    const hyb = s.hybrid || {};
 
     const connEl = $("diag-conn-status");
     if (connEl) {
       if (!LIVE_MODE) connEl.textContent = "公開WebAudioデモ";
       else connEl.textContent = state.wsConnected ? "WS 60fps 稼働中" : "HTTP 同期";
+    }
+    const hybEl = $("diag-hybrid");
+    if (hybEl) {
+      hybEl.textContent = formatBackendLabel(hyb.active_backend, Boolean(hyb.failover_active));
+    }
+    const rttEl = $("diag-rtt");
+    if (rttEl) {
+      if (!LIVE_MODE) rttEl.textContent = "0 ms";
+      else rttEl.textContent = `${Number(hyb.last_rtt_ms || 0).toFixed(1)} ms`;
     }
     const parEl = $("diag-parallel");
     if (parEl && th.parallel_compose_ms != null) {
@@ -998,6 +1202,17 @@
         listenBtn.setAttribute("aria-pressed", ll ? "true" : "false");
         listenBtn.textContent = `リアルタイム即興待受: ${ll ? "ON" : "OFF"}`;
       }
+      const hybSel = $("sel-hybrid-mode");
+      if (hybSel && s.hybrid?.mode && document.activeElement !== hybSel) {
+        hybSel.value = s.hybrid.mode;
+      }
+      const recBtn = $("btn-field-record");
+      if (recBtn) {
+        const recActive = Boolean(s.field_recorder?.active);
+        recBtn.classList.toggle("vermilion", recActive);
+        recBtn.setAttribute("aria-pressed", recActive ? "true" : "false");
+        recBtn.textContent = recActive ? "黒箱記録: ON (保存中)" : "黒箱記録: OFF";
+      }
     }
 
     // Mode [1] Cello View
@@ -1026,6 +1241,7 @@
       }
       setPedalVisual("cello", out.pedal_cc67 ?? p.pedal_cc67, out.pedal_cc64 ?? p.pedal_cc64);
       renderCandidateCards("cello", "cello-cand-cards", "canvas-cello-hero-staff", "cello-hero-cand-label");
+      renderLogicTrace("cello", s.latest_logic_trace);
     }
 
     // Mode [2] Piano View
@@ -1049,6 +1265,7 @@
       setPedalVisual("piano", out.pedal_cc67 ?? p.pedal_cc67, out.pedal_cc64 ?? p.pedal_cc64);
       renderPianoKeyboard();
       renderCandidateCards("piano", "piano-cand-cards", "canvas-piano-hero-staff", "piano-hero-cand-label");
+      renderLogicTrace("piano", s.latest_logic_trace);
     }
 
     // Mode [3] NotaGen Live View
@@ -1135,10 +1352,14 @@
     ];
 
     const rootName = NOTE_NAMES[((root % 12) + 12) % 12] + "m";
+    const nextTurn = (state.stage?.turn_id || 0) + 1;
+    const nextAct = ((state.stage?.turn_id || 0) % 4) + 1;
+    const hNames = pitches.map(midiToName);
+    const monoMsg = `人間の入力モチーフ (${hNames.join("–")}) を検出し、${midiToName(bass)} バス支えと上声部 ${midiToName(third + 12)}–${midiToName(root + 14)} で応答。`;
     state.stage = {
       ...state.stage,
       mode: modeKey,
-      turn_id: (state.stage?.turn_id || 0) + 1,
+      turn_id: nextTurn,
       perception: {
         ...state.stage?.perception,
         f0_hz: midiToFreq(pitches[pitches.length - 1]),
@@ -1156,10 +1377,10 @@
         pedal_cc67: 44,
       },
       intent: {
-        act_number: ((state.stage?.turn_id || 0) % 4) + 1,
+        act_number: nextAct,
         tonal_center: rootName,
         chord_progression: [rootName, `${rootName}9`],
-        monologue_ja: `人間の入力モチーフ (${pitches.map(midiToName).join("–")}) を検出し、${midiToName(bass)} バス支えと上声部 ${midiToName(third + 12)}–${midiToName(root + 14)} で応答。`,
+        monologue_ja: monoMsg,
       },
       candidates: [
         {
@@ -1173,6 +1394,62 @@
         },
         ...(state.stage?.candidates || []).slice(1, 4),
       ],
+      latest_logic_trace: {
+        ...(state.stage?.latest_logic_trace || {}),
+        turn_id: nextTurn,
+        L1_PERCEPTION: {
+          mode: modeKey,
+          note_name: midiToName(pitches[pitches.length - 1]),
+          midi_pitch: pitches[pitches.length - 1],
+          f0_hz: Number(midiToFreq(pitches[pitches.length - 1]).toFixed(2)),
+          detected_chord: rootName,
+          articulation: "Cantabile",
+          vibrato_cents: 12.0,
+          breath_gauge: 0.88,
+          turn_ready: true,
+          turn_reason: "終止フレーズ確定",
+          nlms_erle_db: 15.6,
+          echo_suppressed_count: modeKey === "piano" ? pitches.length : 0,
+          human_notes_pitches: hNames,
+        },
+        TOKEN_ECON: {
+          raw_tokens_est: 440,
+          compressed_tokens_est: 104,
+          tokens_saved: 336,
+          compression_ratio_pct: 76.4,
+          compact_context_preview: `key=${rootName} | motif=[${hNames.join(",")}] | bass=${midiToName(bass)} | act=${nextAct}`,
+        },
+        L2_LOGIC_CHAIN: {
+          act_number: nextAct,
+          act_label_ja: `第${nextAct}幕`,
+          tonal_center: rootName,
+          pedal_strategy: "half_clear",
+          damper_cc64_plan: [74, 62, 48],
+          una_corda_cc67_plan: [44, 48],
+          llm_source: "webaudio_demo",
+          hypothesis_ja: monoMsg,
+        },
+        REALIZER_DIFF: {
+          raw_note_count: events.length - 1,
+          realized_note_count: events.length,
+          monophonic_gaps_before_pct: 10.0,
+          monophonic_gaps_after_pct: 0.0,
+          mono_gaps_fixed_pct: 10.0,
+          vertical_clashes_before: 0,
+          vertical_clashes_after: 0,
+          dissonances_resolved: 0,
+          pedal_events_added: 3,
+          summary_ja: `左手${midiToName(bass)}バスの5度保続を補完し単音率0.0%・衝突0件で通過`,
+        },
+        TIMING_BUDGET: {
+          perception_ms: 7.4,
+          network_rtt_ms: 0.0,
+          gpu_infer_ms: 29.8,
+          lookahead_ms: 12.0,
+          total_response_ms: 37.2,
+          backend_source: "webaudio_demo",
+        },
+      },
     };
     state.inspectedCand[modeKey] = "A";
     renderStageViews();
@@ -1653,11 +1930,19 @@
     state.selectedPieceMeta = meta;
     renderLibraryPieceList();
 
+    if (pieceAbortCtrl) {
+      try {
+        pieceAbortCtrl.abort();
+      } catch (_) {}
+    }
+    pieceAbortCtrl = typeof AbortController !== "undefined" ? new AbortController() : null;
+    const signal = pieceAbortCtrl ? pieceAbortCtrl.signal : undefined;
+
     const jsonUrl = LIVE_MODE
       ? `/api/pieces/${meta.id}`
       : `./data/pieces/${meta.id}.json`;
-    const piece = await fetchJson(jsonUrl);
-    if (!piece) return;
+    const piece = await fetchJson(jsonUrl, signal ? { signal } : {});
+    if (!piece || (signal && signal.aborted) || state.selectedPieceMeta?.id !== meta.id) return;
 
     state.pieceData = piece;
     state.libCursorSec = 0;
@@ -1837,14 +2122,75 @@
       $("btn-diag-toggle").setAttribute("aria-pressed", state.diagVisible ? "true" : "false");
     });
 
-    $("btn-help")?.addEventListener("click", () => {
-      if ($("help-modal")) $("help-modal").hidden = false;
-    });
-    $("btn-help-close")?.addEventListener("click", () => {
-      if ($("help-modal")) $("help-modal").hidden = true;
-    });
+    const openHelpModal = () => {
+      const modal = $("help-modal");
+      if (!modal) return;
+      lastFocusedBeforeHelp = document.activeElement;
+      modal.hidden = false;
+      requestAnimationFrame(() => {
+        $("btn-help-close")?.focus();
+      });
+    };
+    const closeHelpModal = () => {
+      const modal = $("help-modal");
+      if (!modal || modal.hidden) return;
+      modal.hidden = true;
+      if (lastFocusedBeforeHelp && document.contains(lastFocusedBeforeHelp) && typeof lastFocusedBeforeHelp.focus === "function") {
+        lastFocusedBeforeHelp.focus();
+      } else {
+        $("btn-help")?.focus();
+      }
+      lastFocusedBeforeHelp = null;
+    };
+
+    $("btn-help")?.addEventListener("click", openHelpModal);
+    $("btn-help-close")?.addEventListener("click", closeHelpModal);
     $("help-modal")?.addEventListener("click", (e) => {
-      if (e.target === $("help-modal")) $("help-modal").hidden = true;
+      if (e.target === $("help-modal")) closeHelpModal();
+    });
+    $("help-modal")?.addEventListener("keydown", (e) => {
+      if (e.key !== "Tab") return;
+      const modal = $("help-modal");
+      if (!modal || modal.hidden) return;
+      const focusables = Array.from(
+        modal.querySelectorAll('a[href], button:not([disabled]), input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])')
+      );
+      if (!focusables.length) return;
+      const first = focusables[0];
+      const last = focusables[focusables.length - 1];
+      if (e.shiftKey && document.activeElement === first) {
+        e.preventDefault();
+        last.focus();
+      } else if (!e.shiftKey && document.activeElement === last) {
+        e.preventDefault();
+        first.focus();
+      }
+    });
+
+    $("sel-hybrid-mode")?.addEventListener("change", (e) => {
+      if (LIVE_MODE) {
+        postJson("/api/stage/hybrid_mode", { mode: e.target.value }).then((res) => {
+          if (res?.hybrid && state.stage) {
+            state.stage.hybrid = res.hybrid;
+            renderStageViews();
+          }
+        });
+      }
+    });
+
+    $("btn-field-record")?.addEventListener("click", () => {
+      if (!LIVE_MODE) return;
+      const isActive = Boolean(state.stage?.field_recorder?.active);
+      const url = isActive ? "/api/stage/recorder/stop" : "/api/stage/recorder/start";
+      postJson(url, { label: "studio_session" }).then((res) => {
+        if (res && state.stage) {
+          state.stage.field_recorder = {
+            ...(state.stage.field_recorder || {}),
+            ...(res.field_recorder || res),
+          };
+          renderStageViews();
+        }
+      });
     });
 
     $("btn-proj-f10")?.addEventListener("click", () => toggleProjectionClean(true));
@@ -2107,6 +2453,26 @@
       seekLibraryTo(winStart + ratio * (winEnd - winStart));
     });
 
+    const switchTraceSubtab = (prefix, showTrace) => {
+      const scoreTab = $(`tab-${prefix}-score`);
+      const traceTab = $(`tab-${prefix}-trace`);
+      const scorePanel = $(`panel-${prefix}-score`);
+      const tracePanel = $(`panel-${prefix}-trace`);
+      if (scoreTab) scoreTab.setAttribute("aria-selected", showTrace ? "false" : "true");
+      if (traceTab) traceTab.setAttribute("aria-selected", showTrace ? "true" : "false");
+      if (scorePanel) scorePanel.hidden = showTrace;
+      if (tracePanel) tracePanel.hidden = !showTrace;
+      if (showTrace) {
+        renderLogicTrace(prefix, state.stage?.latest_logic_trace);
+      } else {
+        requestAnimationFrame(() => renderStageViews());
+      }
+    };
+    $("tab-cello-score")?.addEventListener("click", () => switchTraceSubtab("cello", false));
+    $("tab-cello-trace")?.addEventListener("click", () => switchTraceSubtab("cello", true));
+    $("tab-piano-score")?.addEventListener("click", () => switchTraceSubtab("piano", false));
+    $("tab-piano-trace")?.addEventListener("click", () => switchTraceSubtab("piano", true));
+
     $("tab-score")?.addEventListener("click", () => {
       $("tab-score").setAttribute("aria-selected", "true");
       $("tab-delib").setAttribute("aria-selected", "false");
@@ -2140,7 +2506,7 @@
       }
       if (e.key === "Escape") {
         if ($("help-modal") && !$("help-modal").hidden) {
-          $("help-modal").hidden = true;
+          closeHelpModal();
         } else {
           handlePanic();
         }

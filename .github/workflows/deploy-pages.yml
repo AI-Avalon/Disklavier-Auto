@@ -45,6 +45,7 @@ jobs:
             tests/test_phase1_security.py \
             tests/test_stage_system.py \
             tests/test_studio_overhaul.py \
+            tests/test_hybrid_and_trace.py \
             $( [ -f tests/test_parallel_and_notagen.py ] && echo tests/test_parallel_and_notagen.py || true )
 
       - name: Verify 100-piece musicality catalog and 10 showcase MP3/MIDI assets

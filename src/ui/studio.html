@@ -5,6 +5,9 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>DISKLAVIER STUDIO | リアルタイム並列対話作曲・NotaGen ライブ</title>
   <link rel="icon" href="/favicon.ico" />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:wght@600;700&family=JetBrains+Mono:wght@400;600&family=Noto+Sans+JP:wght@400;500;600;700&family=Shippori+Mincho:wght@600;700&display=swap" />
   <style>
     :root {
       --bg-stage: #1C1D20;
@@ -21,6 +24,7 @@
 </head>
 <body>
   <div class="studio-shell" id="studio-shell">
+    <a class="skip-link" href="#main-content">メインコンテンツへ移動</a>
     <button class="btn vermilion projection-exit-fab" id="btn-proj-exit" type="button">通常表示に戻る (F10)</button>
 
     <header class="topbar">
@@ -39,6 +43,13 @@
 
       <div class="topbar-right">
         <button class="conn-switch" id="btn-conn-mode" type="button" title="デモモードと実機本番モードを切り替えます">接続: デモ（仮想演奏）</button>
+        <label class="sr-only" for="sel-hybrid-mode">推論接続モード</label>
+        <select class="hybrid-select" id="sel-hybrid-mode" aria-label="推論接続モード" title="自宅RTX 3070外部接続 / M1 Mac自動退避を切替">
+          <option value="AUTO">AUTO: RTX優先→Mac退避</option>
+          <option value="REMOTE_RTX_ONLY">REMOTE RTX のみ</option>
+          <option value="MAC_LOCAL_ONLY">MAC LOCAL のみ</option>
+        </select>
+        <button class="btn compact" id="btn-field-record" type="button" aria-pressed="false" title="recordings/ へMIDI/音声/思考ログを同期記録">黒箱記録: OFF</button>
         <button class="btn compact active" id="btn-audio-monitor" type="button" aria-pressed="true">PC音声: ON</button>
         <button class="btn compact active" id="btn-diag-toggle" type="button" aria-pressed="true">技術指標</button>
         <button class="btn compact" id="btn-help" type="button" aria-label="操作ガイドを開く">操作ガイド (?)</button>
@@ -61,6 +72,8 @@
     <div class="diag-hud-bar" id="diag-hud-bar" aria-label="並列エンジン技術指標">
       <div class="diag-items">
         <span class="diag-item">状態: <strong id="diag-conn-status">接続待機中</strong></span>
+        <span class="diag-item">推論先: <strong id="diag-hybrid">Macローカル</strong></span>
+        <span class="diag-item">RTT: <strong id="diag-rtt">-- ms</strong></span>
         <span class="diag-item">4候補並列: <strong id="diag-parallel">-- ms</strong></span>
         <span class="diag-item">LLM応答(TTFT): <strong id="diag-llm">-- ms</strong></span>
         <span class="diag-item">先読み命中: <strong id="diag-speculative">0 / 0</strong></span>
@@ -70,6 +83,8 @@
         <span class="diag-item">VRAM(3070): <strong id="diag-vram">-- / 8.0 GB</strong></span>
       </div>
     </div>
+
+    <main id="main-content" tabindex="-1">
 
     <!-- ================================================================ -->
     <!-- MODE [1]: CELLO <-> DISKLAVIER REAL-TIME DIALOGUE                 -->
@@ -99,6 +114,7 @@
           <button class="btn" id="btn-cello-cal" type="button">2chエコー較正</button>
           <button class="btn" id="btn-cello-reset" type="button">第1幕へリセット</button>
           <button class="btn" id="btn-cello-save" type="button">演奏を保存 (MP3/MIDI/XML)</button>
+          <label class="sr-only" for="sel-cello-preset">演奏解釈プリセット</label>
           <select class="field" id="sel-cello-preset" aria-label="演奏解釈プリセット" style="width:auto;min-width:220px;">
             <option value="cello_low_legato">チェロ低音レガート・静的Cantabile</option>
             <option value="cello_leap_spiccato">チェロ跳躍スピッカート・対位法</option>
@@ -116,6 +132,7 @@
           </div>
 
           <div class="action-toolbar">
+            <label class="sr-only" for="inp-cello-directive">対話への指示</label>
             <input class="field" id="inp-cello-directive" type="text" placeholder="対話への指示（例：中音域で半歩引いて、左ペダルで支えて）" style="flex:1;min-width:180px;" />
             <button class="btn" id="btn-cello-directive" type="button">指示を反映</button>
           </div>
@@ -176,38 +193,100 @@
 
         <div class="card" style="display:flex;flex-direction:column;gap:14px;">
           <div class="card-head">
-            <h2 class="panel-heading">リアルタイム大譜表 ＆ 4候補比較</h2>
+            <div class="tablist" role="tablist" aria-label="譜面・論理思考トレース切替" style="margin-bottom:0;border-bottom:none;">
+              <button class="tab-btn" id="tab-cello-score" type="button" role="tab" aria-selected="true" aria-controls="panel-cello-score">リアルタイム大譜表 ＆ 4候補</button>
+              <button class="tab-btn" id="tab-cello-trace" type="button" role="tab" aria-selected="false" aria-controls="panel-cello-trace">論理思考トレース (6段階)</button>
+            </div>
             <div class="action-toolbar">
               <span class="mono-sub" id="cello-hero-cand-label">表示中: 採用候補</span>
               <button class="btn compact" id="btn-cello-audition" type="button">表示候補を試聴</button>
             </div>
           </div>
 
-          <div class="hero-staff-wrap">
-            <canvas id="canvas-cello-hero-staff"></canvas>
+          <div id="panel-cello-score" role="tabpanel" aria-labelledby="tab-cello-score">
+            <div class="hero-staff-wrap">
+              <canvas id="canvas-cello-hero-staff"></canvas>
+            </div>
+
+            <div class="cand-cards-row" id="cello-cand-cards" style="margin-top:14px;">
+              <button class="cand-pick-card adopted inspecting" type="button" data-candidate-id="A">
+                <div class="cand-pick-head"><span class="cand-pick-id">案A</span><span class="cand-pick-score">--%</span></div>
+                <div class="mono-sub cand-range">--</div>
+                <div class="cand-pick-reason">待機中</div>
+              </button>
+              <button class="cand-pick-card rejected" type="button" data-candidate-id="B">
+                <div class="cand-pick-head"><span class="cand-pick-id">案B</span><span class="cand-pick-score">--%</span></div>
+                <div class="mono-sub cand-range">--</div>
+                <div class="cand-pick-reason">待機中</div>
+              </button>
+              <button class="cand-pick-card rejected" type="button" data-candidate-id="C">
+                <div class="cand-pick-head"><span class="cand-pick-id">案C</span><span class="cand-pick-score">--%</span></div>
+                <div class="mono-sub cand-range">--</div>
+                <div class="cand-pick-reason">待機中</div>
+              </button>
+              <button class="cand-pick-card rejected" type="button" data-candidate-id="D">
+                <div class="cand-pick-head"><span class="cand-pick-id">案D</span><span class="cand-pick-score">--%</span></div>
+                <div class="mono-sub cand-range">--</div>
+                <div class="cand-pick-reason">待機中</div>
+              </button>
+            </div>
           </div>
 
-          <div class="cand-cards-row" id="cello-cand-cards">
-            <button class="cand-pick-card adopted inspecting" type="button" data-candidate-id="A">
-              <div class="cand-pick-head"><span class="cand-pick-id">案A</span><span class="cand-pick-score">--%</span></div>
-              <div class="mono-sub cand-range">--</div>
-              <div class="cand-pick-reason">待機中</div>
-            </button>
-            <button class="cand-pick-card rejected" type="button" data-candidate-id="B">
-              <div class="cand-pick-head"><span class="cand-pick-id">案B</span><span class="cand-pick-score">--%</span></div>
-              <div class="mono-sub cand-range">--</div>
-              <div class="cand-pick-reason">待機中</div>
-            </button>
-            <button class="cand-pick-card rejected" type="button" data-candidate-id="C">
-              <div class="cand-pick-head"><span class="cand-pick-id">案C</span><span class="cand-pick-score">--%</span></div>
-              <div class="mono-sub cand-range">--</div>
-              <div class="cand-pick-reason">待機中</div>
-            </button>
-            <button class="cand-pick-card rejected" type="button" data-candidate-id="D">
-              <div class="cand-pick-head"><span class="cand-pick-id">案D</span><span class="cand-pick-score">--%</span></div>
-              <div class="mono-sub cand-range">--</div>
-              <div class="cand-pick-reason">待機中</div>
-            </button>
+          <div class="trace-panel" id="panel-cello-trace" role="tabpanel" aria-labelledby="tab-cello-trace" hidden>
+            <div class="trace-grid">
+              <div class="trace-stage" data-trace-slot="1">
+                <div class="trace-stage-head">
+                  <span class="trace-stage-code">1. L1_PERCEPTION</span>
+                  <span class="trace-stage-meta" id="cello-tr-l1-meta">待機中</span>
+                </div>
+                <div class="trace-stage-body" id="cello-tr-l1-body">音名・F0・コード・奏法・呼吸検知を待機しています。</div>
+                <div class="trace-stage-sub" id="cello-tr-l1-sub">NLMS ERLE: -- dB</div>
+              </div>
+              <div class="trace-stage" data-trace-slot="2">
+                <div class="trace-stage-head">
+                  <span class="trace-stage-code">2. TOKEN_ECON</span>
+                  <span class="trace-stage-meta" id="cello-tr-tok-meta">-- → -- tok</span>
+                </div>
+                <div class="trace-stage-body" id="cello-tr-tok-body">圧縮文脈はターン実行後に表示されます。</div>
+                <div class="trace-stage-sub" id="cello-tr-tok-sub">節約率: --%</div>
+              </div>
+              <div class="trace-stage full-span" data-trace-slot="3">
+                <div class="trace-stage-head">
+                  <span class="trace-stage-code">3. L2_LOGIC_CHAIN</span>
+                  <span class="trace-stage-meta" id="cello-tr-l2-meta">Act 1 / --</span>
+                </div>
+                <div class="trace-stage-body" id="cello-tr-l2-body">音楽的仮説（声部・和声機能・ペダル方針）はターン後に記録されます。</div>
+                <div class="trace-stage-sub" id="cello-tr-l2-sub">CC#64 / CC#67 方針待機</div>
+              </div>
+              <div class="trace-stage full-span" data-trace-slot="4">
+                <div class="trace-stage-head">
+                  <span class="trace-stage-code">4. L3_CANDIDATES</span>
+                  <span class="trace-stage-meta" id="cello-tr-l3-meta">4候補並列比較</span>
+                </div>
+                <div class="trace-cand-list">
+                  <div class="trace-cand-row adopted" id="cello-tr-c-A">案A: 待機中</div>
+                  <div class="trace-cand-row" id="cello-tr-c-B">案B: 待機中</div>
+                  <div class="trace-cand-row" id="cello-tr-c-C">案C: 待機中</div>
+                  <div class="trace-cand-row" id="cello-tr-c-D">案D: 待機中</div>
+                </div>
+              </div>
+              <div class="trace-stage" data-trace-slot="5">
+                <div class="trace-stage-head">
+                  <span class="trace-stage-code">5. REALIZER_DIFF</span>
+                  <span class="trace-stage-meta" id="cello-tr-rz-meta">単音・不協和音補正</span>
+                </div>
+                <div class="trace-stage-body" id="cello-tr-rz-body">和声リアライザー差分を待機しています。</div>
+                <div class="trace-stage-sub" id="cello-tr-rz-sub">--</div>
+              </div>
+              <div class="trace-stage" data-trace-slot="6">
+                <div class="trace-stage-head">
+                  <span class="trace-stage-code">6. TIMING_BUDGET</span>
+                  <span class="trace-stage-meta" id="cello-tr-tm-meta">合計 -- ms</span>
+                </div>
+                <div class="trace-stage-body" id="cello-tr-tm-body">知覚 / RTT / GPU推論 / 先読み補正の内訳</div>
+                <div class="trace-stage-sub" id="cello-tr-tm-sub">推論先: --</div>
+              </div>
+            </div>
           </div>
         </div>
       </div>
@@ -261,8 +340,10 @@
         </div>
 
         <div class="action-toolbar">
+          <label class="sr-only" for="inp-piano-directive">AI応答への指示</label>
           <input class="field" id="inp-piano-directive" type="text" placeholder="AI応答への指示（例：高音域で透明なアルペジオで答えて、弱音で終止）" style="flex:1;min-width:220px;" />
           <button class="btn" id="btn-piano-directive" type="button">指示を反映</button>
+          <label class="sr-only" for="sel-piano-preset">ピアノ対話プリセット</label>
           <select class="field" id="sel-piano-preset" aria-label="ピアノ対話プリセット" style="width:auto;min-width:210px;">
             <option value="piano_chromatic_cadence">ピアノ半音階終止・半ペダル</option>
             <option value="overtone_mud_clearance">中音域倍音クリアランス・透明声部</option>
@@ -329,38 +410,100 @@
 
         <div class="card" style="display:flex;flex-direction:column;gap:14px;">
           <div class="card-head">
-            <h2 class="panel-heading">ピアノ対話 大譜表 ＆ 4候補比較</h2>
+            <div class="tablist" role="tablist" aria-label="ピアノ対話 譜面・論理思考トレース切替" style="margin-bottom:0;border-bottom:none;">
+              <button class="tab-btn" id="tab-piano-score" type="button" role="tab" aria-selected="true" aria-controls="panel-piano-score">ピアノ対話 大譜表 ＆ 4候補</button>
+              <button class="tab-btn" id="tab-piano-trace" type="button" role="tab" aria-selected="false" aria-controls="panel-piano-trace">論理思考トレース (6段階)</button>
+            </div>
             <div class="action-toolbar">
               <span class="mono-sub" id="piano-hero-cand-label">表示中: 採用候補</span>
               <button class="btn compact" id="btn-piano-audition" type="button">表示候補を試聴</button>
             </div>
           </div>
 
-          <div class="hero-staff-wrap">
-            <canvas id="canvas-piano-hero-staff"></canvas>
+          <div id="panel-piano-score" role="tabpanel" aria-labelledby="tab-piano-score">
+            <div class="hero-staff-wrap">
+              <canvas id="canvas-piano-hero-staff"></canvas>
+            </div>
+
+            <div class="cand-cards-row" id="piano-cand-cards" style="margin-top:14px;">
+              <button class="cand-pick-card adopted inspecting" type="button" data-candidate-id="A">
+                <div class="cand-pick-head"><span class="cand-pick-id">案A</span><span class="cand-pick-score">--%</span></div>
+                <div class="mono-sub cand-range">--</div>
+                <div class="cand-pick-reason">待機中</div>
+              </button>
+              <button class="cand-pick-card rejected" type="button" data-candidate-id="B">
+                <div class="cand-pick-head"><span class="cand-pick-id">案B</span><span class="cand-pick-score">--%</span></div>
+                <div class="mono-sub cand-range">--</div>
+                <div class="cand-pick-reason">待機中</div>
+              </button>
+              <button class="cand-pick-card rejected" type="button" data-candidate-id="C">
+                <div class="cand-pick-head"><span class="cand-pick-id">案C</span><span class="cand-pick-score">--%</span></div>
+                <div class="mono-sub cand-range">--</div>
+                <div class="cand-pick-reason">待機中</div>
+              </button>
+              <button class="cand-pick-card rejected" type="button" data-candidate-id="D">
+                <div class="cand-pick-head"><span class="cand-pick-id">案D</span><span class="cand-pick-score">--%</span></div>
+                <div class="mono-sub cand-range">--</div>
+                <div class="cand-pick-reason">待機中</div>
+              </button>
+            </div>
           </div>
 
-          <div class="cand-cards-row" id="piano-cand-cards">
-            <button class="cand-pick-card adopted inspecting" type="button" data-candidate-id="A">
-              <div class="cand-pick-head"><span class="cand-pick-id">案A</span><span class="cand-pick-score">--%</span></div>
-              <div class="mono-sub cand-range">--</div>
-              <div class="cand-pick-reason">待機中</div>
-            </button>
-            <button class="cand-pick-card rejected" type="button" data-candidate-id="B">
-              <div class="cand-pick-head"><span class="cand-pick-id">案B</span><span class="cand-pick-score">--%</span></div>
-              <div class="mono-sub cand-range">--</div>
-              <div class="cand-pick-reason">待機中</div>
-            </button>
-            <button class="cand-pick-card rejected" type="button" data-candidate-id="C">
-              <div class="cand-pick-head"><span class="cand-pick-id">案C</span><span class="cand-pick-score">--%</span></div>
-              <div class="mono-sub cand-range">--</div>
-              <div class="cand-pick-reason">待機中</div>
-            </button>
-            <button class="cand-pick-card rejected" type="button" data-candidate-id="D">
-              <div class="cand-pick-head"><span class="cand-pick-id">案D</span><span class="cand-pick-score">--%</span></div>
-              <div class="mono-sub cand-range">--</div>
-              <div class="cand-pick-reason">待機中</div>
-            </button>
+          <div class="trace-panel" id="panel-piano-trace" role="tabpanel" aria-labelledby="tab-piano-trace" hidden>
+            <div class="trace-grid">
+              <div class="trace-stage" data-trace-slot="1">
+                <div class="trace-stage-head">
+                  <span class="trace-stage-code">1. L1_PERCEPTION</span>
+                  <span class="trace-stage-meta" id="piano-tr-l1-meta">待機中</span>
+                </div>
+                <div class="trace-stage-body" id="piano-tr-l1-body">音名・打鍵分離・終止検知を待機しています。</div>
+                <div class="trace-stage-sub" id="piano-tr-l1-sub">自己打鍵キャンセル: 0件</div>
+              </div>
+              <div class="trace-stage" data-trace-slot="2">
+                <div class="trace-stage-head">
+                  <span class="trace-stage-code">2. TOKEN_ECON</span>
+                  <span class="trace-stage-meta" id="piano-tr-tok-meta">-- → -- tok</span>
+                </div>
+                <div class="trace-stage-body" id="piano-tr-tok-body">圧縮文脈はターン実行後に表示されます。</div>
+                <div class="trace-stage-sub" id="piano-tr-tok-sub">節約率: --%</div>
+              </div>
+              <div class="trace-stage full-span" data-trace-slot="3">
+                <div class="trace-stage-head">
+                  <span class="trace-stage-code">3. L2_LOGIC_CHAIN</span>
+                  <span class="trace-stage-meta" id="piano-tr-l2-meta">Act 1 / --</span>
+                </div>
+                <div class="trace-stage-body" id="piano-tr-l2-body">音楽的仮説（声部・和声機能・ペダル方針）はターン後に記録されます。</div>
+                <div class="trace-stage-sub" id="piano-tr-l2-sub">CC#64 / CC#67 方針待機</div>
+              </div>
+              <div class="trace-stage full-span" data-trace-slot="4">
+                <div class="trace-stage-head">
+                  <span class="trace-stage-code">4. L3_CANDIDATES</span>
+                  <span class="trace-stage-meta" id="piano-tr-l3-meta">4候補並列比較</span>
+                </div>
+                <div class="trace-cand-list">
+                  <div class="trace-cand-row adopted" id="piano-tr-c-A">案A: 待機中</div>
+                  <div class="trace-cand-row" id="piano-tr-c-B">案B: 待機中</div>
+                  <div class="trace-cand-row" id="piano-tr-c-C">案C: 待機中</div>
+                  <div class="trace-cand-row" id="piano-tr-c-D">案D: 待機中</div>
+                </div>
+              </div>
+              <div class="trace-stage" data-trace-slot="5">
+                <div class="trace-stage-head">
+                  <span class="trace-stage-code">5. REALIZER_DIFF</span>
+                  <span class="trace-stage-meta" id="piano-tr-rz-meta">単音・不協和音補正</span>
+                </div>
+                <div class="trace-stage-body" id="piano-tr-rz-body">和声リアライザー差分を待機しています。</div>
+                <div class="trace-stage-sub" id="piano-tr-rz-sub">--</div>
+              </div>
+              <div class="trace-stage" data-trace-slot="6">
+                <div class="trace-stage-head">
+                  <span class="trace-stage-code">6. TIMING_BUDGET</span>
+                  <span class="trace-stage-meta" id="piano-tr-tm-meta">合計 -- ms</span>
+                </div>
+                <div class="trace-stage-body" id="piano-tr-tm-body">知覚 / RTT / GPU推論 / 先読み補正の内訳</div>
+                <div class="trace-stage-sub" id="piano-tr-tm-sub">推論先: --</div>
+              </div>
+            </div>
           </div>
         </div>
       </div>
@@ -497,6 +640,7 @@ K:Dm
               <h2 class="panel-heading">厳選 100 作品カタログ</h2>
               <span class="mono-sub" id="catalog-stats">読込中...</span>
             </div>
+            <label class="sr-only" for="search-input">楽曲検索</label>
             <input class="field" id="search-input" type="search" placeholder="作品名・調性・IDで検索..." aria-label="楽曲検索" />
             <div class="filter-pills">
               <button class="btn compact filter-btn active" data-filter="all" type="button">全100曲</button>
@@ -505,6 +649,7 @@ K:Dm
               <button class="btn compact filter-btn" data-filter="piano" type="button">ピアノ共演</button>
             </div>
             <div class="filter-controls">
+              <label class="sr-only" for="style-select">様式フィルター</label>
               <select class="field" id="style-select" aria-label="様式フィルター">
                 <option value="all">全様式</option>
               </select>
@@ -610,6 +755,7 @@ K:Dm
         </div>
       </div>
     </section>
+    </main>
 
     <!-- Fixed Mobile Bottom Navigation Bar (56px height, >=48x48px tap targets) -->
     <nav class="mobile-bottom-nav" role="tablist" aria-label="モバイルモード切替">

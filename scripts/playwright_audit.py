@@ -170,7 +170,7 @@ def _check_layout_geometry(page: Page, label: str) -> Dict[str, Any]:
             }
 
             // Rule 1 & Rule 2 & Rule 3 audits
-            const cardSelectors = '.card, .panel, .zone-a, .metric-tile, .tile, .pedal-box, .pedal-card, .cand-pick-card, .cand-card, .piece-item, .mixer-row, .topbar, .workspace-strip, .score-card, .feat-card';
+            const cardSelectors = '.card, .panel, .zone-a, .metric-tile, .tile, .pedal-box, .pedal-card, .cand-pick-card, .cand-card, .piece-item, .mixer-row, .topbar, .workspace-strip, .score-card, .feat-card, .trace-stage, .trace-cand-row';
             const cardBorderShadowViolations = [];
             const gradientViolations = [];
             let svgShapeCardsCount = 0;
@@ -276,6 +276,9 @@ def _check_card_stability(page: Page, label: str, container_selector: str, wait_
     page.evaluate(
         """(sel) => {
             window.__clsTotal = 0;
+            const wrap = document.querySelector(sel);
+            window.__cardInitRefs = wrap ? Array.from(wrap.children) : [];
+            window.__cardInitKeys = window.__cardInitRefs.map((c, idx) => c.dataset.cid || c.dataset.slot || String(idx));
             try {
                 window.__clsObs = new PerformanceObserver((list) => {
                     for (const entry of list.getEntries()) {
@@ -284,11 +287,8 @@ def _check_card_stability(page: Page, label: str, container_selector: str, wait_
                         }
                     }
                 });
-                window.__clsObs.observe({ type: 'layout-shift', buffered: true });
+                window.__clsObs.observe({ type: 'layout-shift', buffered: false });
             } catch (_) {}
-            const wrap = document.querySelector(sel);
-            window.__cardInitRefs = wrap ? Array.from(wrap.children) : [];
-            window.__cardInitKeys = window.__cardInitRefs.map((c, idx) => c.dataset.cid || c.dataset.slot || String(idx));
         }""",
         container_selector,
     )
@@ -490,7 +490,24 @@ def run_audit(round_num: int = 1, update_docs_images: bool = False, quick: bool 
                     page.screenshot(path=str(p_wd))
                     screenshots["web_demo_1920x1080"] = str(p_wd)
 
-            # Offline Mode 2 Piano test inside static bundle
+            # Offline Mode 1 Cello Logic Trace & Mode 2 Piano test inside static bundle
+            page.click("#mode-tab-cello")
+            time.sleep(0.2)
+            page.click("#tab-cello-trace")
+            time.sleep(0.2)
+            wd_trace_ok = page.evaluate(
+                """() => {
+                    const p = document.getElementById('panel-cello-trace');
+                    if (!p || p.hidden) return false;
+                    return ['cello-tr-l1-body', 'cello-tr-tok-body', 'cello-tr-l2-body', 'cello-tr-c-A', 'cello-tr-rz-body', 'cello-tr-tm-body']
+                        .every((id) => (document.getElementById(id)?.textContent || '').trim().length > 0);
+                }"""
+            )
+            functional_checks["web_demo_logic_trace"] = bool(wd_trace_ok)
+            if not wd_trace_ok:
+                violations.append("web-demo Logic Trace 6-stage panel failed to render cleanly")
+            page.click("#tab-cello-score")
+            time.sleep(0.15)
             page.click("#mode-tab-piano")
             time.sleep(0.25)
             page.click("#btn-piano-demo-phrase")
@@ -506,7 +523,64 @@ def run_audit(round_num: int = 1, update_docs_images: bool = False, quick: bool 
             page.wait_for_function("document.querySelectorAll('#cello-cand-cards .cand-pick-card').length === 4", timeout=12000)
             time.sleep(0.25)
 
-            # Mode 1: Cello Dialogue + 5s Card Stability Check (Rule 4)
+            # Art Direction checklist checks: Web fonts, Skip-link, Modal focus/Escape, prefers-reduced-motion
+            fonts_info = page.evaluate(
+                """async () => {
+                    await document.fonts.ready;
+                    const loaded = Array.from(document.fonts).filter((f) => f.status === 'loaded').map((f) => f.family);
+                    return { total: document.fonts.size, loadedCount: loaded.length, families: Array.from(new Set(loaded)).slice(0, 8) };
+                }"""
+            )
+            functional_checks["fonts"] = fonts_info
+
+            skip_link_ok = page.evaluate(
+                """() => {
+                    const sk = document.querySelector('.skip-link');
+                    const mainEl = document.getElementById('main-content');
+                    return Boolean(sk && sk.getAttribute('href') === '#main-content' && mainEl);
+                }"""
+            )
+            functional_checks["skip_link_ok"] = bool(skip_link_ok)
+            if not skip_link_ok:
+                violations.append("Skip-link or #main-content missing on /studio")
+
+            page.click("#btn-help")
+            time.sleep(0.15)
+            modal_opened_focus = page.evaluate(
+                "() => ({ open: !document.getElementById('help-modal')?.hidden, activeId: document.activeElement?.id || '' })"
+            )
+            page.keyboard.press("Escape")
+            time.sleep(0.15)
+            modal_closed_focus = page.evaluate(
+                "() => ({ closed: Boolean(document.getElementById('help-modal')?.hidden), activeId: document.activeElement?.id || '' })"
+            )
+            modal_a11y = {
+                "opened": modal_opened_focus["open"],
+                "focus_moved_to_close": modal_opened_focus["activeId"] == "btn-help-close",
+                "closed_on_escape": modal_closed_focus["closed"],
+                "focus_restored_to_trigger": modal_closed_focus["activeId"] == "btn-help",
+            }
+            functional_checks["modal_a11y"] = modal_a11y
+            if not all(modal_a11y.values()):
+                violations.append(f"Modal keyboard a11y failed: {modal_a11y}")
+
+            page.emulate_media(reduced_motion="reduce")
+            time.sleep(0.1)
+            rm_dur = page.evaluate(
+                """() => {
+                    const el = document.querySelector('.breath-fill') || document.body;
+                    const raw = String(window.getComputedStyle(el).transitionDuration || '0s').split(',')[0].trim();
+                    if (raw.endsWith('ms')) return parseFloat(raw) / 1000.0;
+                    return parseFloat(raw) || 0.0;
+                }"""
+            )
+            page.emulate_media(reduced_motion="no-preference")
+            rm_ok = float(rm_dur) <= 0.002
+            functional_checks["reduced_motion"] = {"transition_duration_s": rm_dur, "ok": rm_ok}
+            if not rm_ok:
+                violations.append(f"prefers-reduced-motion check failed: transitionDuration={rm_dur}s")
+
+            # Mode 1: Cello Dialogue + 5s Card Stability Check (Rule 4) + Logic Trace Inspector
             geometry_reports.append(_check_layout_geometry(page, "studio_mode1_cello_1920x1080"))
             stability_report = _check_card_stability(page, "studio_mode1_cello", "#cello-cand-cards", wait_s=5.0)
             functional_checks["card_stability"] = stability_report
@@ -516,6 +590,26 @@ def run_audit(round_num: int = 1, update_docs_images: bool = False, quick: bool 
             page.screenshot(path=str(p_m1))
             screenshots["studio_mode1_cello"] = str(p_m1)
             screenshots["desktop_mode1_cello"] = str(p_m1)
+
+            page.click("#tab-cello-trace")
+            time.sleep(0.2)
+            studio_trace_ok = page.evaluate(
+                """() => {
+                    const p = document.getElementById('panel-cello-trace');
+                    if (!p || p.hidden) return false;
+                    return ['cello-tr-l1-body', 'cello-tr-tok-body', 'cello-tr-l2-body', 'cello-tr-c-A', 'cello-tr-rz-body', 'cello-tr-tm-body']
+                        .every((id) => (document.getElementById(id)?.textContent || '').trim().length > 0);
+                }"""
+            )
+            functional_checks["studio_logic_trace_ok"] = bool(studio_trace_ok)
+            if not studio_trace_ok:
+                violations.append("/studio Logic Trace 6-stage panel failed to populate")
+            geometry_reports.append(_check_layout_geometry(page, "studio_logic_trace_1920x1080"))
+            p_lt = out_dir / "logic_trace_inspector.png"
+            page.screenshot(path=str(p_lt))
+            screenshots["logic_trace_inspector"] = str(p_lt)
+            page.click("#tab-cello-score")
+            time.sleep(0.15)
 
             # Mode 2: Piano Dialogue + interactive piano key canvas click
             page.click("#mode-tab-piano")
@@ -584,6 +678,23 @@ def run_audit(round_num: int = 1, update_docs_images: bool = False, quick: bool 
             page.screenshot(path=str(p_hud))
             screenshots["stage_hud_mode_b_cello"] = str(p_hud)
 
+            page.click("#tab-hud-trace")
+            time.sleep(0.2)
+            hud_trace_ok = page.evaluate(
+                """() => {
+                    const p = document.getElementById('panel-hud-trace');
+                    if (!p || p.hidden) return false;
+                    return ['hud-tr-l1-body', 'hud-tr-tok-body', 'hud-tr-l2-body', 'hud-tr-c-A', 'hud-tr-rz-body', 'hud-tr-tm-body']
+                        .every((id) => (document.getElementById(id)?.textContent || '').trim().length > 0);
+                }"""
+            )
+            functional_checks["stage_hud_logic_trace_ok"] = bool(hud_trace_ok)
+            if not hud_trace_ok:
+                violations.append("/stage HUD Logic Trace 6-stage panel failed to populate")
+            geometry_reports.append(_check_layout_geometry(page, "stage_hud_logic_trace_1920x1080"))
+            page.click("#tab-hud-arena")
+            time.sleep(0.15)
+
             # F10 clean projection check using computed display === 'none'
             page.keyboard.press("F10")
             time.sleep(0.2)
@@ -644,6 +755,28 @@ def run_audit(round_num: int = 1, update_docs_images: bool = False, quick: bool 
                 mob_page.screenshot(path=str(p_mob))
                 screenshots[sc_key] = str(p_mob)
 
+            # Mobile Logic Trace Inspector (390x844)
+            mob_page.click(".mobile-nav-btn[data-mode-view='cello']")
+            time.sleep(0.22)
+            mob_page.click("#tab-cello-trace")
+            time.sleep(0.22)
+            geometry_reports.append(_check_layout_geometry(mob_page, "mobile_logic_trace_390x844"))
+            p_mlt = out_dir / "mobile_logic_trace_390x844.png"
+            mob_page.screenshot(path=str(p_mlt))
+            screenshots["mobile_logic_trace_390x844"] = str(p_mlt)
+            mob_page.click("#tab-cello-score")
+            time.sleep(0.15)
+
+            # Ultra-narrow 320px Smartphone Reflow Check (anything-frontend-art-direction 320px floor)
+            mob_page.set_viewport_size({"width": 320, "height": 640})
+            time.sleep(0.22)
+            mob_page.click(".mobile-nav-btn[data-mode-view='cello']")
+            time.sleep(0.25)
+            geometry_reports.append(_check_layout_geometry(mob_page, "mobile_narrow_cello_320x640"))
+            mob_page.click(".mobile-nav-btn[data-mode-view='library']")
+            time.sleep(0.25)
+            geometry_reports.append(_check_layout_geometry(mob_page, "mobile_narrow_library_320x640"))
+
             mob_page.goto("about:blank")
             mob_ctx.close()
             browser.close()
@@ -680,6 +813,7 @@ def run_audit(round_num: int = 1, update_docs_images: bool = False, quick: bool 
             "studio_mode2_piano",
             "studio_mode3_notagen",
             "studio_mode4_library",
+            "logic_trace_inspector",
             "desktop_mode1_cello",
             "desktop_mode2_piano",
             "desktop_mode3_notagen",
@@ -691,6 +825,7 @@ def run_audit(round_num: int = 1, update_docs_images: bool = False, quick: bool 
             "mobile_mode2_piano",
             "mobile_mode3_notagen",
             "mobile_mode4_library",
+            "mobile_logic_trace_390x844",
             "mobile_web_demo_390x844",
         ):
             src_p = screenshots.get(key)

@@ -148,6 +148,7 @@ class CandidatePhrase:
     blueprint_source: str = "rtx3070_transformer"
     chord_timeline: List[Dict[str, Any]] = field(default_factory=list)
     beauty_summary: Dict[str, Any] = field(default_factory=dict)
+    realizer_diff: Dict[str, Any] = field(default_factory=dict)
 
 
 @dataclass
@@ -1092,6 +1093,7 @@ class MultipleCandidateComposer:
             )
 
         note_init = [e for e in evs if int(e.get("pitch", 0) or 0) > 0]
+        raw_note_count = len(note_init)
         max_t_init = max(
             (float(e.get("onset_s", 0.0)) + float(e.get("duration_s", 0.3)) for e in note_init),
             default=bar_dur_cur * 2.0,
@@ -1117,6 +1119,12 @@ class MultipleCandidateComposer:
             },
         ]
         public_cand_tl = [{k: v for k, v in seg.items() if k != "_spec"} for seg in cand_tl]
+        clashes_before = HarmonicBeautyRealizer.count_vertical_clashes(note_init, cand_tl)
+        pre_audit_rep = BeautyHarmonyAuditor.audit_piece(
+            note_init, cand_tl, c64, c67, tonality=intent.tonal_center
+        )
+        mono_before_pct = float(pre_audit_rep.mono_ratio_pct)
+        repair_pass_triggered = False
 
         audit = MusicalityCritic.audit_candidate(
             evs,
@@ -1128,24 +1136,27 @@ class MultipleCandidateComposer:
             macro_plan=macro_dict,
         )
 
-        if cid != "D" and not audit.passed:
-            evs, c64, c67 = self._repair_to_polyphonic_standard(
-                evs, human_notes, intent, audit, macro_plan=macro_dict
-            )
-            repaired_notes = HarmonicBeautyRealizer.resolve_vertical_clashes(
-                [e for e in evs if int(e.get("pitch", 0) or 0) > 0], cand_tl
-            )
+        if cid != "D" and (not audit.passed or clashes_before > 0):
+            repair_pass_triggered = True
+            if not audit.passed:
+                evs, c64, c67 = self._repair_to_polyphonic_standard(
+                    evs, human_notes, intent, audit, macro_plan=macro_dict
+                )
+            notes_only_cur = [e for e in evs if int(e.get("pitch", 0) or 0) > 0]
+            cc_only_cur = [e for e in evs if int(e.get("pitch", 0) or 0) <= 0]
+            repaired_notes = HarmonicBeautyRealizer.resolve_vertical_clashes(notes_only_cur, cand_tl)
             repaired_notes = HarmonicBeautyRealizer.resolve_vertical_clashes(repaired_notes, cand_tl)
-            rep_end = max(
-                (float(e.get("onset_s", 0.0)) + float(e.get("duration_s", 0.3)) for e in repaired_notes),
-                default=bar_dur_cur * 2.0,
-            )
-            cc_evs_rep, c64, c67 = HarmonicBeautyRealizer.build_chord_synced_pedals(
-                cand_tl,
-                [{"act": act_num_cur, "start_s": 0.0, "end_s": rep_end + 0.25}],
-                rep_end + 0.25,
-            )
-            evs = repaired_notes + cc_evs_rep
+            if not cc_only_cur:
+                rep_end = max(
+                    (float(e.get("onset_s", 0.0)) + float(e.get("duration_s", 0.3)) for e in repaired_notes),
+                    default=bar_dur_cur * 2.0,
+                )
+                cc_only_cur, c64, c67 = HarmonicBeautyRealizer.build_chord_synced_pedals(
+                    cand_tl,
+                    [{"act": act_num_cur, "start_s": 0.0, "end_s": rep_end + 0.25}],
+                    rep_end + 0.25,
+                )
+            evs = repaired_notes + cc_only_cur
             audit = MusicalityCritic.audit_candidate(
                 evs,
                 human_notes=human_notes,
@@ -1169,6 +1180,29 @@ class MultipleCandidateComposer:
         b_rep = BeautyHarmonyAuditor.audit_piece(
             note_only, cand_tl, c64, c67, tonality=intent.tonal_center
         )
+        clashes_after = HarmonicBeautyRealizer.count_vertical_clashes(note_only, cand_tl)
+        mono_after_pct = float(b_rep.mono_ratio_pct)
+        pedal_events_added = sum(1 for e in evs if int(e.get("control", 0) or 0) in (64, 67))
+        dissonances_resolved = max(0, clashes_before - clashes_after)
+        mono_fixed_pct = round(max(0.0, mono_before_pct - mono_after_pct), 1)
+        realizer_diff = {
+            "raw_note_count": raw_note_count,
+            "realized_note_count": len(note_only),
+            "monophonic_gaps_before_pct": round(mono_before_pct, 1),
+            "monophonic_gaps_after_pct": round(mono_after_pct, 1),
+            "mono_gaps_fixed_pct": mono_fixed_pct,
+            "vertical_clashes_before": int(clashes_before),
+            "vertical_clashes_after": int(clashes_after),
+            "dissonances_resolved": int(dissonances_resolved),
+            "repair_pass_triggered": bool(repair_pass_triggered),
+            "pedal_events_added": int(pedal_events_added),
+            "summary_ja": (
+                f"単音区間 {mono_before_pct:.1f}%→{mono_after_pct:.1f}% / "
+                f"垂直衝突 {clashes_before}→{clashes_after}件 / "
+                f"両ペダルCC {pedal_events_added}点同期"
+                + (" (再補修適用)" if repair_pass_triggered else "")
+            ),
+        }
 
         cand = CandidatePhrase(
             candidate_id=cid,
@@ -1199,6 +1233,7 @@ class MultipleCandidateComposer:
                 "avg_polyphony": b_rep.avg_polyphony,
                 "mono_ratio_pct": b_rep.mono_ratio_pct,
             },
+            realizer_diff=realizer_diff,
         )
         elapsed_ms = round((time.perf_counter() - t_start) * 1000.0, 2)
         return cand, elapsed_ms

@@ -958,7 +958,15 @@ class HarmonicBeautyRealizer:
                             p_vic = int(out[victim]["pitch"])
                             lo_r = 34 if str(out[victim].get("hand", "")) == "lh" else 58
                             hi_r = 60 if str(out[victim].get("hand", "")) == "lh" else 84
-                            others = [int(out[k]["pitch"]) for k in active_idxs if k != victim]
+                            v_on = float(out[victim].get("onset_s", 0.0))
+                            v_off = v_on + float(out[victim].get("duration_s", 0.3))
+                            others = [
+                                int(out[k]["pitch"])
+                                for k, n_other in enumerate(out)
+                                if k != victim
+                                and float(n_other.get("onset_s", 0.0)) < v_off - 0.01
+                                and (float(n_other.get("onset_s", 0.0)) + float(n_other.get("duration_s", 0.3))) > v_on + 0.01
+                            ]
                             best_p = p_vic
                             best_cost = 9999
                             for cand in range(lo_r, hi_r + 1):
@@ -980,6 +988,57 @@ class HarmonicBeautyRealizer:
             t_cur += 0.05
 
         return out
+
+    @staticmethod
+    def count_vertical_clashes(
+        notes: List[Dict[str, Any]],
+        chord_timeline: List[Dict[str, Any]],
+        suspension_windows: Optional[List[Tuple[float, float, int]]] = None,
+    ) -> int:
+        """Counts unjustified vertical dissonant intervals across 50ms slices."""
+        note_evs = [n for n in notes if int(n.get("pitch", n.get("note", 0)) or 0) > 0]
+        if len(note_evs) < 2 or not chord_timeline:
+            return 0
+        susp_wins = suspension_windows or []
+        parsed_segs: List[Tuple[float, ChordSpec]] = []
+        for seg in chord_timeline:
+            sp = seg.get("_spec")
+            if not isinstance(sp, ChordSpec):
+                sp = parse_chord_symbol(str(seg.get("chord", "Dm9")))
+            parsed_segs.append((float(seg.get("start_s", 0.0)), sp))
+
+        def _chord_at(t_s: float) -> ChordSpec:
+            chosen = parsed_segs[0][1]
+            for st_s, sp in parsed_segs:
+                if st_s <= t_s + 1e-4:
+                    chosen = sp
+                else:
+                    break
+            return chosen
+
+        end_t = max(float(n.get("onset_s", 0.0)) + float(n.get("duration_s", 0.3)) for n in note_evs)
+        clashes = 0
+        t_cur = 0.0
+        while t_cur < end_t:
+            ch = _chord_at(t_cur)
+            active = [
+                int(n.get("pitch", n.get("note", 0)))
+                for n in note_evs
+                if float(n.get("onset_s", 0.0)) <= t_cur + 0.015 < (float(n.get("onset_s", 0.0)) + float(n.get("duration_s", 0.3)))
+            ]
+            for a_pos in range(len(active)):
+                for b_pos in range(a_pos + 1, len(active)):
+                    pa, pb = active[a_pos], active[b_pos]
+                    if pa == pb:
+                        continue
+                    p_lo, p_hi = (pa, pb) if pa < pb else (pb, pa)
+                    diff = p_hi - p_lo
+                    iv = diff % 12
+                    if iv in (1, 6, 11) or (p_lo < 52 and 0 < diff < 5) or (iv == 2 and diff <= 2):
+                        if not _is_justified_tension(p_lo, p_hi, t_cur, ch, susp_wins):
+                            clashes += 1
+            t_cur += 0.05
+        return clashes
 
     @staticmethod
     def build_chord_synced_pedals(

@@ -492,6 +492,7 @@ class MusicalIntentEngine:
         self.last_ttft_ms: float = 0.0
         self.last_validator_rewrites: int = 0
         self.last_token_stats: Dict[str, Any] = dict(self.economizer.last_stats)
+        self.last_compact_prompt: str = ""
 
     def _chat_with_ttft(
         self,
@@ -688,6 +689,7 @@ class MusicalIntentEngine:
             macro_form_state=macro_dict,
         )
         self.last_token_stats = dict(self.economizer.last_stats)
+        self.last_compact_prompt = econ.compact_prompt
 
         if not self.use_ollama or not use_llm_design or not human_notes:
             return base
@@ -793,6 +795,7 @@ class MusicalIntentEngine:
             macro_form_state=macro_dict,
         )
         self.last_token_stats = dict(self.economizer.last_stats)
+        self.last_compact_prompt = econ.compact_prompt
 
         if not self.use_ollama:
             self.last_source = "rule_fallback"

@@ -95,6 +95,7 @@ def main() -> int:
         "tests/test_phase1_security.py",
         "tests/test_stage_system.py",
         "tests/test_studio_overhaul.py",
+        "tests/test_hybrid_and_trace.py",
     ]
     if (ROOT / "tests" / "test_parallel_and_notagen.py").exists():
         test_files = [*test_files, "tests/test_parallel_and_notagen.py"]

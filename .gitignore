@@ -32,4 +32,11 @@ data/midi/
 *.gguf
 *.safetensors
 config.local.yaml
+recordings/
+data/telemetry/logic_trace_live.jsonl
+data/telemetry/remote_gpu_token.txt
+data/telemetry/active_stage_url.txt
+data/telemetry/production_readiness_report.json
+.env.mac
+.env.remote
 

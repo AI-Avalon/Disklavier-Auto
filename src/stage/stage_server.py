@@ -15,6 +15,7 @@ from __future__ import annotations
 import argparse
 import asyncio
 from contextlib import asynccontextmanager
+from dataclasses import asdict
 import json
 import os
 from pathlib import Path
@@ -24,7 +25,7 @@ import subprocess
 import sys
 import threading
 import time
-from typing import Any, Dict, List, Optional, Set
+from typing import Any, Dict, List, Optional, Set, Tuple
 
 from fastapi import APIRouter, FastAPI, Request, WebSocket, WebSocketDisconnect
 from fastapi.responses import FileResponse, HTMLResponse, JSONResponse, Response
@@ -36,6 +37,8 @@ from src.stage.co_composition_architect import CoCompositionArchitect
 from src.stage.config_scanner import DEFAULT_CONFIG_PATH, scan_ollama_environment
 from src.stage.corpus_phrase_model import CorpusPhraseModelManager
 from src.stage.favicon import PIANO_FAVICON_ICO_BYTES
+from src.stage.field_recorder import FieldSessionRecorder
+from src.stage.hybrid_client import HybridInferenceClient
 from src.stage.layer1_perception import (
     CelloAcousticPerception,
     EchoSuppressionLedger,
@@ -45,14 +48,16 @@ from src.stage.layer1_perception import (
     VerbalDirectiveRecognizer,
     midi_to_note_name,
 )
-from src.stage.layer2_intent_llm import MusicalIntentEngine
+from src.stage.layer2_intent_llm import MusicalIntentEngine, MusicalIntentSchema
 from src.stage.layer3_candidate_composer import (
     CandidatePhrase,
+    CompositionTurnResult,
     MultipleCandidateComposer,
     ZeroConfigCorpusLoader,
 )
 from src.stage.layer5_disklavier_output import DisklavierStageOutputLayer
 from src.stage.local_audio_synth import LocalAudioSynthesizer
+from src.stage.logic_trace import LogicTraceLogger, build_logic_trace
 from src.stage.notagen_live_engine import NotaGenLiveEngine
 from src.stage.parallel_pipeline import (
     AudioRenderWorker,
@@ -247,6 +252,17 @@ class NotaGenStartReq(BaseModel):
     blocking: bool = False
 
 
+class HybridModeReq(BaseModel):
+    mode: Optional[str] = None
+    remote_url: Optional[str] = None
+    api_token: Optional[str] = None
+    timeout_ms: Optional[int] = None
+
+
+class RecorderStartReq(BaseModel):
+    label: str = "field_test"
+
+
 class StageOrchestrator:
     """
     Runs the full L1 -> L2 Policy -> L3 4-Candidate Scoring -> L2 Deliberation Trace
@@ -418,6 +434,19 @@ class StageOrchestrator:
         )
         self.perception_worker.set_mode(self.mode)
 
+        # Hybrid Mac <-> Home RTX Client, 6-Stage Logic Trace Logger & Blackbox Field Recorder
+        self._open_hardware: bool = bool(open_hardware)
+        self._write_live_trace: bool = bool(
+            open_hardware or os.environ.get("DISKLAVIER_WRITE_LIVE_TRACE") == "1"
+        )
+        self.logic_trace_logger = LogicTraceLogger()
+        self.field_recorder = FieldSessionRecorder()
+        self.hybrid_client = HybridInferenceClient(
+            network_event_cb=self.field_recorder.record_network_event,
+        )
+        if open_hardware and (self.production_mode or os.environ.get("DISKLAVIER_FIELD_RECORD") == "1"):
+            self.field_recorder.start(label="prod" if self.production_mode else "stage")
+
         # Optional live audio capture stream (Steinberg UR22mkII for Mode B production)
         self._audio_in_stream: Any = None
         if open_hardware and self.production_mode:
@@ -454,6 +483,7 @@ class StageOrchestrator:
                 mic_ch = indata[:, 0].copy()
                 ref_ch = indata[:, 1].copy() if indata.shape[1] >= 2 else None
                 self.perception_worker.push_audio_block(mic_ch, ref_ch)
+                self.field_recorder.record_audio_block(mic_ch, ref_ch, sample_rate=44100)
 
             self._audio_in_stream = sd.InputStream(
                 device=int(dev_idx),
@@ -517,30 +547,31 @@ class StageOrchestrator:
     def _on_hardware_midi_in(self, msg: Any) -> None:
         now = time.perf_counter()
         if msg.type == "note_on" and msg.velocity > 0:
-            self.perception_worker.push_midi_event(
-                {
-                    "type": "note_on",
-                    "pitch": int(msg.note),
-                    "velocity": int(msg.velocity),
-                    "ts": now,
-                    "from_browser": False,
-                }
-            )
+            ev = {
+                "type": "note_on",
+                "pitch": int(msg.note),
+                "velocity": int(msg.velocity),
+                "ts": now,
+                "from_browser": False,
+            }
+            self.field_recorder.record_midi("in", ev)
+            self.perception_worker.push_midi_event(ev)
         elif msg.type == "note_off" or (msg.type == "note_on" and msg.velocity == 0):
-            self.perception_worker.push_midi_event(
-                {"type": "note_off", "pitch": int(msg.note), "ts": now}
-            )
+            ev = {"type": "note_off", "pitch": int(msg.note), "ts": now}
+            self.field_recorder.record_midi("in", ev)
+            self.perception_worker.push_midi_event(ev)
         elif msg.type == "control_change":
-            self.perception_worker.push_midi_event(
-                {
-                    "type": "control_change",
-                    "control": int(msg.control),
-                    "value": int(msg.value),
-                    "ts": now,
-                }
-            )
+            ev = {
+                "type": "control_change",
+                "control": int(msg.control),
+                "value": int(msg.value),
+                "ts": now,
+            }
+            self.field_recorder.record_midi("in", ev)
+            self.perception_worker.push_midi_event(ev)
 
     def _on_l5_midi_event(self, payload: Dict[str, Any]) -> None:
+        self.field_recorder.record_midi("out", payload)
         if payload.get("type") == "note_on":
             with self._strikes_lock:
                 self.recent_strikes.append(
@@ -586,22 +617,47 @@ class StageOrchestrator:
             "monitor_audio": self.monitor_audio,
         }
 
+    def set_hybrid_mode(
+        self,
+        mode: Optional[str] = None,
+        remote_url: Optional[str] = None,
+        api_token: Optional[str] = None,
+        timeout_ms: Optional[int] = None,
+    ) -> Dict[str, Any]:
+        status = self.hybrid_client.configure(
+            mode=mode,
+            remote_url=remote_url,
+            api_token=api_token,
+            timeout_ms=timeout_ms,
+        )
+        return {"ok": True, "hybrid": status}
+
+    def probe_hybrid_remote(self) -> Dict[str, Any]:
+        res = self.hybrid_client.probe_health()
+        return {**res, "hybrid": self.hybrid_client.get_status()}
+
+    def start_field_recording(self, label: str = "field_test") -> Dict[str, Any]:
+        return {"ok": True, **self.field_recorder.start(label=label)}
+
+    def stop_field_recording(self) -> Dict[str, Any]:
+        return self.field_recorder.stop()
+
     def push_browser_human_note(
         self, pitch: int, velocity: int = 76, duration_s: float = 0.35, from_browser: bool = True
     ) -> Dict[str, Any]:
         now = time.perf_counter()
         p = max(21, min(108, int(pitch)))
         v = max(20, min(108, int(velocity)))
-        self.perception_worker.push_midi_event(
-            {
-                "type": "note_on",
-                "pitch": p,
-                "velocity": v,
-                "duration_s": float(duration_s),
-                "ts": now,
-                "from_browser": bool(from_browser),
-            }
-        )
+        ev = {
+            "type": "note_on",
+            "pitch": p,
+            "velocity": v,
+            "duration_s": float(duration_s),
+            "ts": now,
+            "from_browser": bool(from_browser),
+        }
+        self.field_recorder.record_midi("in", ev)
+        self.perception_worker.push_midi_event(ev)
         return {"ok": True, "pitch": p, "note_name": midi_to_note_name(p)}
 
     def push_human_phrase_and_reply(
@@ -736,6 +792,7 @@ class StageOrchestrator:
             self.architect.reset()
             self.latest_macro_state = self.architect.get_macro_state_snapshot()
             self.latest_synthesized_work = None
+        self.logic_trace_logger.clear()
         self.speculative_worker.clear()
         self.audio_synth.stop_audio()
         self.output_layer.panic()
@@ -953,11 +1010,16 @@ class StageOrchestrator:
                 snap.verbal_directive = str(hints["raw_text"])
 
         # Step 0: Macro-Form 4-Act Architecture Planning & Voice-Leading Bridge
+        t_perc0 = time.perf_counter()
         macro_plan = self.architect.plan_turn_architecture(
             human_notes=human_notes,
             directive_hints=hints,
             mode=snap.mode,
             explicit_retake=is_retake_req,
+        )
+        perception_ms = max(
+            float(self.perception_worker.last_latency_ms or 0.0),
+            round((time.perf_counter() - t_perc0) * 1000.0, 2),
         )
 
         # Worker 5: Check Speculative Pre-Generation Cache before heavy recomputation
@@ -965,55 +1027,160 @@ class StageOrchestrator:
         if not is_retake_req and not use_virtual_human:
             spec_draft = self.speculative_worker.try_consume(snap.mode, human_notes, hints)
 
+        backend_source = "mac_local"
+        network_rtt_ms = 0.0
+        gpu_infer_ms = 0.0
+        token_stats_turn: Dict[str, Any] = dict(self.intent_engine.last_token_stats)
+        compact_prompt_turn = self.intent_engine.last_compact_prompt
+        llm_source_turn = self.intent_engine.last_source
+        validator_rewrites_turn = self.intent_engine.last_validator_rewrites
+        speculative_hit = False
+
         if spec_draft is not None:
-            policy_intent = spec_draft.policy_intent
+            speculative_hit = True
             turn_res = spec_draft.turn_result
             final_intent = spec_draft.final_intent
             adopted = turn_res.adopted_candidate
             rejected = [c for c in turn_res.candidates if not c.adopted]
             self.worker_metrics.speculative_hits = self.speculative_worker.hits
             self.worker_metrics.speculative_saved_ms = self.speculative_worker.last_saved_ms
+            gpu_infer_ms = float(getattr(turn_res, "parallel_compose_ms", 0.0) or 0.0)
+            token_stats_turn = dict(self.intent_engine.last_token_stats)
+            compact_prompt_turn = self.intent_engine.last_compact_prompt
+            llm_source_turn = self.intent_engine.last_source
+            validator_rewrites_turn = self.intent_engine.last_validator_rewrites
         else:
             self.worker_metrics.speculative_misses = self.speculative_worker.misses
-            # Ensure VRAM headroom for Ollama if NotaGen was previously resident
-            if self.intent_engine.use_ollama:
-                self.vram_manager.acquire_for("ollama", required_gb=3.4)
 
-            # Worker 3: Async Ollama policy design concurrently with corpus retrieval
-            policy_fut = self.async_llm_worker.submit_llm(
-                self.intent_engine.decide_policy,
-                snap,
-                human_notes,
-                hints,
-                self.corpus_loader.retrieve_voicing_references(tension=0.5, momentum=0.5, top_k=3),
-                True,
-                macro_plan,
-            )
-            policy_intent = policy_fut.result()
+            def _local_deliberate() -> Dict[str, Any]:
+                t_loc0 = time.perf_counter()
+                if self.intent_engine.use_ollama:
+                    self.vram_manager.acquire_for("ollama", required_gb=3.4)
 
-            # Worker 4: 4-Candidate Parallel Composer + Masterwork Audit Pool
-            turn_res = self.composer.compose_turn(
-                human_notes,
-                policy_intent,
-                human_mode=snap.mode,
-                macro_plan=macro_plan,
-                parallel=True,
-            )
+                policy_fut = self.async_llm_worker.submit_llm(
+                    self.intent_engine.decide_policy,
+                    snap,
+                    human_notes,
+                    hints,
+                    self.corpus_loader.retrieve_voicing_references(tension=0.5, momentum=0.5, top_k=3),
+                    True,
+                    macro_plan,
+                )
+                loc_policy = policy_fut.result()
+
+                loc_turn = self.composer.compose_turn(
+                    human_notes,
+                    loc_policy,
+                    human_mode=snap.mode,
+                    macro_plan=macro_plan,
+                    parallel=True,
+                )
+
+                memo_fut = self.async_llm_worker.submit_llm(
+                    self.intent_engine.finalize_deliberation_monologue,
+                    snap,
+                    human_notes,
+                    loc_policy,
+                    loc_turn,
+                    hints,
+                    loc_turn.corpus_refs_used,
+                    macro_plan,
+                )
+                loc_final = memo_fut.result()
+                return {
+                    "source": "local",
+                    "policy_intent": loc_policy,
+                    "turn_res": loc_turn,
+                    "final_intent": loc_final,
+                    "gpu_infer_ms": round((time.perf_counter() - t_loc0) * 1000.0, 2),
+                }
+
+            if self.hybrid_client.should_try_remote():
+                remote_payload = {
+                    "mode": snap.mode,
+                    "turn_id": int(macro_plan.turn_number),
+                    "perception": asdict(snap),
+                    "human_notes": human_notes,
+                    "directive_hints": hints,
+                    "macro_plan": asdict(macro_plan),
+                    "explicit_retake": is_retake_req,
+                    "use_ollama": self.intent_engine.use_ollama,
+                }
+                delib_out = self.hybrid_client.deliberate_with_failover(remote_payload, _local_deliberate)
+            else:
+                delib_out = _local_deliberate()
+                delib_out["backend_source"] = "mac_local"
+                delib_out["network_rtt_ms"] = 0.0
+
+            backend_source = str(delib_out.get("backend_source") or "mac_local")
+            network_rtt_ms = float(delib_out.get("network_rtt_ms") or 0.0)
+
+            if delib_out.get("source") == "remote_rtx":
+                final_intent = MusicalIntentSchema.model_validate(delib_out["intent"])
+                hydrated_cands: List[CandidatePhrase] = []
+                for rc in delib_out.get("candidates") or []:
+                    hydrated_cands.append(
+                        CandidatePhrase(
+                            candidate_id=str(rc.get("candidate_id", "A")),
+                            label_ja=str(rc.get("label_ja", "")),
+                            strategy=str(rc.get("strategy", "contrary_open_polyphony")),
+                            events=list(rc.get("events") or []),
+                            total_score=float(rc.get("total_score", 0.9)),
+                            subscores=dict(rc.get("subscores") or {}),
+                            subscores_pct=dict(rc.get("subscores_pct") or {}),
+                            adopted=bool(rc.get("adopted", False)),
+                            rejection_tag_ja=str(rc.get("rejection_tag_ja", "")),
+                            symusic_note_count=int(rc.get("symusic_note_count", 0)),
+                            pitch_range_str=str(rc.get("pitch_range_str", "--")),
+                            sample_notes_str=str(rc.get("sample_notes_str", "--")),
+                            problem_note_indices=list(rc.get("problem_note_indices") or []),
+                            rejection_detail=dict(rc.get("rejection_detail") or {}),
+                            audit_passed=bool(rc.get("audit_passed", True)),
+                            pedal_cc64_curve=list(rc.get("pedal_cc64_curve") or []),
+                            pedal_cc67_curve=list(rc.get("pedal_cc67_curve") or []),
+                            masterwork_total=float(rc.get("masterwork_total", 88.0)),
+                            masterwork_pct=dict(rc.get("masterwork_pct") or {}),
+                            lh_idiom=str(rc.get("lh_idiom", "arpeggio_root_5th_10th")),
+                            blueprint_source=str(rc.get("blueprint_source", "remote_rtx")),
+                            chord_timeline=list(rc.get("chord_timeline") or []),
+                            beauty_summary=dict(rc.get("beauty_summary") or {}),
+                            realizer_diff=dict(rc.get("realizer_diff") or {}),
+                        )
+                    )
+                adopted_c = next((c for c in hydrated_cands if c.adopted), hydrated_cands[0])
+                r_timing = delib_out.get("timing") or {}
+                turn_res = CompositionTurnResult(
+                    turn_id=int(macro_plan.turn_number),
+                    intent=final_intent,
+                    candidates=hydrated_cands,
+                    adopted_candidate=adopted_c,
+                    corpus_source="remote_rtx",
+                    corpus_refs_used=[],
+                    parallel_compose_ms=float(r_timing.get("parallel_compose_ms", 0.0)),
+                    sum_worker_ms=float(r_timing.get("sum_worker_ms", 0.0)),
+                    parallel_speedup_ratio=float(r_timing.get("parallel_speedup_ratio", 1.0)),
+                )
+                gpu_infer_ms = float(r_timing.get("gpu_infer_ms", 0.0))
+                token_stats_turn = dict(delib_out.get("token_stats") or {})
+                compact_prompt_turn = str(delib_out.get("compact_prompt") or "")
+                llm_source_turn = str(delib_out.get("llm_source") or "remote_rtx")
+                validator_rewrites_turn = int(delib_out.get("validator_rewrites") or 0)
+                self.intent_engine.last_source = llm_source_turn
+                self.intent_engine.last_latency_ms = float(r_timing.get("llm_latency_ms", 0.0))
+                self.intent_engine.last_ttft_ms = float(r_timing.get("llm_ttft_ms", 0.0))
+                self.intent_engine.last_token_stats = dict(token_stats_turn)
+                self.intent_engine.last_compact_prompt = compact_prompt_turn
+            else:
+                turn_res = delib_out["turn_res"]
+                final_intent = delib_out["final_intent"]
+                gpu_infer_ms = float(delib_out.get("gpu_infer_ms", 0.0))
+                token_stats_turn = dict(self.intent_engine.last_token_stats)
+                compact_prompt_turn = self.intent_engine.last_compact_prompt
+                llm_source_turn = self.intent_engine.last_source
+                validator_rewrites_turn = self.intent_engine.last_validator_rewrites
+
             adopted = turn_res.adopted_candidate
             rejected = [c for c in turn_res.candidates if not c.adopted]
-
-            # Worker 3: Async grounded performer deliberation memo strictly from L1 & L3 results
-            memo_fut = self.async_llm_worker.submit_llm(
-                self.intent_engine.finalize_deliberation_monologue,
-                snap,
-                human_notes,
-                policy_intent,
-                turn_res,
-                hints,
-                turn_res.corpus_refs_used,
-                macro_plan,
-            )
-            final_intent = memo_fut.result()
 
         with self._lock:
             self.worker_metrics.parallel_compose_ms = getattr(turn_res, "parallel_compose_ms", 0.0)
@@ -1219,6 +1386,39 @@ class StageOrchestrator:
                 self.motif_edges = [
                     e for e in self.motif_edges if e["source"] in keep_ids and e["target"] in keep_ids
                 ]
+            turn_wall_ms = float(self.worker_metrics.last_turn_wall_ms)
+            lookahead_samples = [
+                self.output_layer.offset_ms(int(e["pitch"]), int(e.get("velocity", 64)))
+                for e in (adopted.events or [])[:6]
+                if int(e.get("pitch", 0) or 0) > 0
+            ]
+            avg_lookahead_ms = round(
+                sum(lookahead_samples) / max(1, len(lookahead_samples)), 2
+            ) if lookahead_samples else 24.0
+
+        trace = build_logic_trace(
+            turn_id=macro_plan.turn_number,
+            mode=snap.mode,
+            perception=snap,
+            human_notes=human_notes,
+            intent=final_intent,
+            candidates=turn_res.candidates,
+            token_stats=token_stats_turn,
+            compact_prompt=compact_prompt_turn,
+            llm_source=llm_source_turn,
+            validator_rewrites=validator_rewrites_turn,
+            timing_budget={
+                "perception_ms": perception_ms,
+                "network_rtt_ms": network_rtt_ms,
+                "gpu_infer_ms": gpu_infer_ms,
+                "lookahead_ms": avg_lookahead_ms,
+                "total_response_ms": turn_wall_ms,
+                "backend_source": backend_source,
+                "speculative_hit": speculative_hit,
+            },
+        )
+        self.logic_trace_logger.record(trace, write_disk=self._write_live_trace)
+        self.field_recorder.record_logic_trace(trace)
 
         return self.get_hud_state()
 
@@ -1374,6 +1574,7 @@ class StageOrchestrator:
                     "blueprint_source": c.blueprint_source,
                     "chord_timeline": c.chord_timeline,
                     "beauty_summary": c.beauty_summary,
+                    "realizer_diff": c.realizer_diff,
                 }
                 for c in self.latest_candidates
             ]
@@ -1501,12 +1702,18 @@ class StageOrchestrator:
                     "nodes": list(self.motif_nodes),
                     "edges": list(self.motif_edges),
                 },
+                "latest_logic_trace": self.logic_trace_logger.get_latest(),
+                "logic_trace_history": self.logic_trace_logger.get_history(limit=8),
+                "hybrid": self.hybrid_client.get_status(),
+                "field_recorder": self.field_recorder.get_status(),
             }
 
     def get_broadcast_signature(self) -> Tuple[Any, ...]:
         """Lightweight fingerprint to avoid redundant 60fps JSON serialization when state is idle."""
         out_tel = self.output_layer.get_telemetry()
         ng = self.notagen_engine
+        hyb = self.hybrid_client.get_status()
+        rec = self.field_recorder.get_status()
         with self._lock:
             return (
                 self.turn_revision,
@@ -1524,6 +1731,10 @@ class StageOrchestrator:
                 out_tel.pedal_cc67,
                 ng.status,
                 ng.bars_completed,
+                hyb.get("mode"),
+                hyb.get("active_backend"),
+                hyb.get("failover_count"),
+                rec.get("active"),
             )
 
     def close(self) -> None:
@@ -1554,6 +1765,14 @@ class StageOrchestrator:
             self.inport = None
         self.audio_synth.close()
         self.output_layer.close()
+        try:
+            self.field_recorder.stop()
+        except Exception:
+            pass
+        try:
+            self.hybrid_client.close()
+        except Exception:
+            pass
         if self.obsidian_brain is not None:
             try:
                 self.obsidian_brain.close()
@@ -1785,6 +2004,49 @@ def build_stage_router(orch: StageOrchestrator, broadcaster: StageWSBroadcaster)
     @router.post("/api/stage/connection_mode")
     async def api_stage_connection_mode(req: ConnectionModeReq) -> JSONResponse:
         return JSONResponse(orch.set_connection_mode(req.production_mode))
+
+    @router.get("/api/stage/logic_trace")
+    async def api_stage_logic_trace() -> JSONResponse:
+        return JSONResponse(
+            {
+                "ok": True,
+                "latest": orch.logic_trace_logger.get_latest(),
+                "history": orch.logic_trace_logger.get_history(limit=12),
+            }
+        )
+
+    @router.get("/api/stage/hybrid_status")
+    async def api_stage_hybrid_status() -> JSONResponse:
+        return JSONResponse({"ok": True, "hybrid": orch.hybrid_client.get_status()})
+
+    @router.post("/api/stage/hybrid_mode")
+    async def api_stage_hybrid_mode(req: HybridModeReq) -> JSONResponse:
+        return JSONResponse(
+            orch.set_hybrid_mode(
+                mode=req.mode,
+                remote_url=req.remote_url,
+                api_token=req.api_token,
+                timeout_ms=req.timeout_ms,
+            )
+        )
+
+    @router.post("/api/stage/hybrid_probe")
+    async def api_stage_hybrid_probe() -> JSONResponse:
+        res = await asyncio.to_thread(orch.probe_hybrid_remote)
+        return JSONResponse(res)
+
+    @router.get("/api/stage/recorder/status")
+    async def api_stage_recorder_status() -> JSONResponse:
+        return JSONResponse({"ok": True, "field_recorder": orch.field_recorder.get_status()})
+
+    @router.post("/api/stage/recorder/start")
+    async def api_stage_recorder_start(req: Optional[RecorderStartReq] = None) -> JSONResponse:
+        label = req.label if req is not None else "field_test"
+        return JSONResponse(orch.start_field_recording(label=label))
+
+    @router.post("/api/stage/recorder/stop")
+    async def api_stage_recorder_stop() -> JSONResponse:
+        return JSONResponse(orch.stop_field_recording())
 
     @router.get("/api/notagen/status")
     async def api_notagen_status() -> JSONResponse:
