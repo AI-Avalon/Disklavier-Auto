@@ -2,7 +2,7 @@
 set -euo pipefail
 
 cd "$(dirname "$0")"
-export PATH="/opt/homebrew/bin:/usr/local/bin:$PATH"
+export PATH="/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin:$PATH"
 export PYTHONUTF8=1
 
 if [ ! -f ".venv/bin/python" ]; then
@@ -10,13 +10,15 @@ if [ ! -f ".venv/bin/python" ]; then
   exit 1
 fi
 
-# Optional local overrides from .env.mac
-if [ -f ".env.mac" ]; then
-  set -a
-  # shellcheck disable=SC1091
-  source ".env.mac"
-  set +a
-fi
+# Optional local overrides (.env.remote -> .env.mac -> config.remote.env)
+for _env_file in ".env.remote" ".env.mac" "config.remote.env"; do
+  if [ -f "$_env_file" ]; then
+    set -a
+    # shellcheck disable=SC1090
+    source "$_env_file"
+    set +a
+  fi
+done
 
 HOST="127.0.0.1"
 PORT="${DISKLAVIER_STAGE_PORT:-8000}"
@@ -62,7 +64,7 @@ else
   export DISKLAVIER_STAGE_PRODUCTION=0
   export DISKLAVIER_STAGE_DEMO=1
   export DISKLAVIER_MONITOR_AUDIO=1
-  SRV_ARGS="--demo"
+  SRV_ARGS="--demo --monitor-audio"
   URL_SUFFIX="/studio?demo=1"
 fi
 
@@ -123,24 +125,40 @@ if command -v ollama >/dev/null 2>&1; then
   fi
 fi
 
+SRV_PID=""
 cleanup() {
+  if [ -n "${SRV_PID:-}" ] && kill -0 "$SRV_PID" 2>/dev/null; then
+    kill -TERM "$SRV_PID" 2>/dev/null || true
+    wait "$SRV_PID" 2>/dev/null || true
+  fi
   echo ""
   echo "[CLEANUP] Sending Disklavier PANIC All-Notes-Off..."
   python -c "from src.stage.layer5_disklavier_output import DisklavierStageOutputLayer; out = DisklavierStageOutputLayer(port_name='Disklavier', start_worker=False); out.panic(); out.close()" || true
 }
-trap cleanup EXIT INT TERM
+trap cleanup EXIT
+trap 'exit 130' INT
+trap 'exit 143' TERM
 
 # Open browser asynchronously once server responds
-(
-  for _ in $(seq 1 30); do
-    if curl -fsS "http://127.0.0.1:${BIND_PORT}/api/stage/state" >/dev/null 2>&1; then
-      if command -v open >/dev/null 2>&1; then
-        open "http://127.0.0.1:${BIND_PORT}${URL_SUFFIX}" || true
+if [ "${DISKLAVIER_NO_BROWSER:-0}" != "1" ]; then
+  (
+    for _ in $(seq 1 30); do
+      if curl -fsS "http://127.0.0.1:${BIND_PORT}/api/stage/state" >/dev/null 2>&1; then
+        if command -v open >/dev/null 2>&1; then
+          open "http://127.0.0.1:${BIND_PORT}${URL_SUFFIX}" || true
+        fi
+        break
       fi
-      break
-    fi
-    sleep 0.3
-  done
-) &
+      sleep 0.3
+    done
+  ) &
+fi
 
-exec python -m src.stage.stage_server --host "$HOST" --port "$BIND_PORT" $SRV_ARGS
+set +e
+python -m src.stage.stage_server --host "$HOST" --port "$BIND_PORT" $SRV_ARGS &
+SRV_PID=$!
+wait "$SRV_PID"
+SRV_ERR=$?
+SRV_PID=""
+set -e
+exit "$SRV_ERR"

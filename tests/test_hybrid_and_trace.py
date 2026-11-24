@@ -341,6 +341,28 @@ def test_art_direction_skill_design_doc_and_launchers() -> None:
         raw = sh.read_bytes()
         assert b"\r\n" not in raw, f"CRLF line ending in {sh.name}"
 
+    # 5. Mac Finder .command launchers and gitignored config.remote.env template
+    for cname in (
+        "Mac_1_Check_RTX.command",
+        "Mac_2_Start_Demo_with_RTX.command",
+        "Mac_3_Start_Stage_Production.command",
+    ):
+        cpath = REPO_ROOT / cname
+        assert cpath.exists(), f"Missing macOS launcher: {cname}"
+        raw_c = cpath.read_bytes()
+        assert b"\r\n" not in raw_c, f"CRLF line ending in {cname}"
+        txt_c = raw_c.decode("utf-8")
+        assert txt_c.startswith("#!/usr/bin/env bash"), f"Missing bash shebang in {cname}"
+        assert 'cd "$(dirname "$0")"' in txt_c, f"Missing repo root cd in {cname}"
+        assert "config.remote.env" in txt_c, f"Missing config.remote.env loader in {cname}"
+        assert "DISKLAVIER_API_TOKEN=" not in txt_c, f"Hardcoded token assignment in {cname}"
+
+    gitignore_lines = (REPO_ROOT / ".gitignore").read_text(encoding="utf-8").splitlines()
+    assert "config.remote.env" in gitignore_lines
+    ex_path = REPO_ROOT / "config.remote.env.example"
+    assert ex_path.exists()
+    assert "<YOUR_DISKLAVIER_API_TOKEN>" in ex_path.read_text(encoding="utf-8")
+
 
 def test_wiki_pages_present() -> None:
     wiki_dir = REPO_ROOT / "docs" / "wiki"

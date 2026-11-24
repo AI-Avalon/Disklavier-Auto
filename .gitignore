@@ -39,4 +39,5 @@ data/telemetry/active_stage_url.txt
 data/telemetry/production_readiness_report.json
 .env.mac
 .env.remote
+config.remote.env
 

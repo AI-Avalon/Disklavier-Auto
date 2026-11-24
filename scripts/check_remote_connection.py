@@ -268,12 +268,47 @@ def run_diagnostics(
     return report
 
 
+def _load_local_remote_env() -> None:
+    """Load default connection settings from local gitignored env files if not already set."""
+    allowed_keys = {
+        "DISKLAVIER_REMOTE_URL",
+        "DISKLAVIER_API_TOKEN",
+        "DISKLAVIER_REMOTE_TIMEOUT_MS",
+        "DISKLAVIER_REMOTE_HOST",
+        "DISKLAVIER_HYBRID_MODE",
+    }
+    loaded: Dict[str, str] = {}
+    for fname in (".env.remote", ".env.mac", "config.remote.env"):
+        env_path = ROOT / fname
+        if not env_path.is_file():
+            continue
+        try:
+            for raw_line in env_path.read_text(encoding="utf-8").splitlines():
+                line = raw_line.strip()
+                if not line or line.startswith("#") or "=" not in line:
+                    continue
+                if line.startswith("export "):
+                    line = line[len("export "):].strip()
+                key, val = line.split("=", 1)
+                key = key.strip()
+                val = val.strip()
+                if len(val) >= 2 and ((val[0] == '"' and val[-1] == '"') or (val[0] == "'" and val[-1] == "'")):
+                    val = val[1:-1]
+                if key in allowed_keys:
+                    loaded[key] = val
+        except Exception:
+            pass
+    for key, val in loaded.items():
+        os.environ.setdefault(key, val)
+
+
 def main() -> int:
+    _load_local_remote_env()
     parser = argparse.ArgumentParser(description="Check connection to Home RTX 3070 Remote GPU Server")
     parser.add_argument("--url", default=os.environ.get("DISKLAVIER_REMOTE_URL", "http://127.0.0.1:8090"))
     parser.add_argument("--token", default=os.environ.get("DISKLAVIER_API_TOKEN", ""))
     parser.add_argument("--pings", type=int, default=5)
-    parser.add_argument("--timeout-ms", type=int, default=1800)
+    parser.add_argument("--timeout-ms", type=int, default=int(os.environ.get("DISKLAVIER_REMOTE_TIMEOUT_MS") or 1800))
     parser.add_argument("--quick", action="store_true")
     parser.add_argument("--skip-failover", action="store_true")
     parser.add_argument("--json", action="store_true")

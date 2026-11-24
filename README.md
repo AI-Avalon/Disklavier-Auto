@@ -75,19 +75,29 @@ start_remote_gpu_host.bat
    ./setup_mac.sh
    ```
    *(PortAudio 不足時は事前に `brew install portaudio` を実行してください)*
-2. **実機機材結線（YAMAHA Disklavier ＋ Steinberg UR22）**:
+2. **接続設定のローカル保存（`config.remote.env`, `.gitignore` 除外）**:
+   ```bash
+   cp config.remote.env.example config.remote.env
+   chmod 600 config.remote.env
+   ```
+   `config.remote.env` 内に自宅の `DISKLAVIER_REMOTE_URL` と `DISKLAVIER_API_TOKEN` を記載しておくと、CLI や Finder 用 `.command` ランチャーが自動で読み込みます（機密トークンを含むため Git 管理外）。
+3. **実機機材結線（YAMAHA Disklavier ＋ Steinberg UR22）**:
    - **YAMAHA Disklavier 本体メニュー**: **`Delay In = OFF`** に設定（L5 の物理ソレノイド着火先読み `offset_ms` による精密同期のため必須）。
    - **USB-MIDI**: M1 Mac ⇔ Disklavier を直結（`CoreMIDI` で認識）。
    - **UR22 Ch1 (48V ON)**: AKG C519ML（チェロ収音）、**UR22 Ch2**: ピアノ回り込み参照信号。
-3. **外部接続 ＆ RTT・認証・フェイルオーバー事前診断**:
+4. **Finder ダブルクリック起動（`.command` ランチャー一式）**:
+   - **`Mac_1_Check_RTX.command`**: Tailscale 疎通・`check_remote_connection.py`・Mac 上の CoreMIDI / CoreAudio デバイス一覧を一括確認（異常時は診断表示後に一時停止）。
+   - **`Mac_2_Start_Demo_with_RTX.command`**: Disklavier 未接続のまま自宅 RTX と繋ぎ、Mac スピーカー発音＋論理思考トレース画面（`/studio?demo=1`）をブラウザ起動。
+   - **`Mac_3_Start_Stage_Production.command`**: 舞台本番用（`--mode AUTO --production` で実機 Disklavier + UR22 + 黒箱録画 ON、リモート RTX 優先＆断線時 Mac 自動フェイルオーバー）。
+5. **外部接続 ＆ RTT・認証・フェイルオーバー事前診断（CLI 直接実行）**:
    ```bash
    source .venv/bin/activate
    python3 scripts/check_remote_connection.py \
      --url "http://<自宅TAILSCALE_IP>:8090" \
      --token "<DISKLAVIER_API_TOKEN>"
    ```
-   Ping RTT (min/avg/P95)、Bearer `401/200` 認証、実推論 `/api/v1/infer/deliberate` E2E 遅延、`WS /ws/v1/stream_compose`、およびタイムアウト退避を一発で PASS/FAIL 判定します（高速確認は `--quick`）。
-4. **舞台本番起動（ポート自動回避・CoreMIDI自動検出・黒箱記録 ON）**:
+   （`config.remote.env` 保存済みなら引数なしで `python3 scripts/check_remote_connection.py` のみでも実行可）Ping RTT (min/avg/P95)、Bearer `401/200` 認証、実推論 `/api/v1/infer/deliberate` E2E 遅延、`WS /ws/v1/stream_compose`、およびタイムアウト退避を一発で PASS/FAIL 判定します（高速確認は `--quick`）。
+6. **舞台本番起動（CLI 直接実行・ポート自動回避・CoreMIDI自動検出・黒箱記録 ON）**:
    ```bash
    ./start_mac_stage.sh \
      --remote-url "http://<自宅TAILSCALE_IP>:8090" \
@@ -261,6 +271,8 @@ flowchart LR
 
 ## 8. クイックトラブルシューティング ＆ 全テストコマンド
 
+- **Tailscale `ping` は通るのに TCP `:8090` だけタイムアウトする**: 自宅 Windows 側の Windows Defender ファイアウォール（特にパブリックプロファイル扱いになった Tailscale ネットワーク）で TCP 8090 受信が遮断されている可能性が高いです。管理者 PowerShell で以下を実行して許可してください:
+  `New-NetFirewallRule -DisplayName "Disklavier Remote GPU 8090" -Direction Inbound -Protocol TCP -LocalPort 8090 -Action Allow`
 - **大学Wi-Fi等で Tailscale VPN に繋がらない**: 自宅 PC 側で `start_external_tunnel.bat` を実行し、表示される `https://*.trycloudflare.com` URL へ切り替えてください。
 - **実機 Disklavier の発音が約 0.5 秒遅れる**: Disklavier 本体の設定メニューで必ず **`Delay In = OFF`** に設定してください。
 - **初回 LLM 応答だけ遅い**: 演奏前に一度 `scripts/check_remote_connection.py` を走らせると Ollama モデルが VRAM 常駐 (`OLLAMA_KEEP_ALIVE=-1`) され、2回目以降はウォーム TTFT ~`53 ms` になります。
